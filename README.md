@@ -10,7 +10,7 @@
 - Composability: Should be completely configurable without editing code; disabling components, enabling features. Hot-reload possibility.
 
 ## Rationale
-<sub>written by: @lyssieth</sub>
+<sub>written by: [@lyssieth](https://github.com/lyssieth)</sub>
 
 Originally I started out with OpenClaw, because... well, it was The Thing. But I quickly ran into issues. I wanted my agent to be able to edit files in its workspace without being able to hit everything else on my system. I wanted to add custom tools, abilities, etc. And OpenClaw was very obtuse about it.
 
