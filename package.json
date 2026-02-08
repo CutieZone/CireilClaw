@@ -1,11 +1,9 @@
 {
   "name": "cireilclaw",
-  "module": "index.ts",
+  "module": "src/cli.ts",
   "type": "module",
   "private": true,
-  "devDependencies": {
-    "@types/bun": "latest"
-  },
+  "devDependencies": {},
   "peerDependencies": {
     "typescript": "^5"
   }
