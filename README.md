@@ -5,11 +5,12 @@
 ## Core Tenets
 
 - Safety: Principle of Least Privilege, Separation of Concerns, and [`bubblewrap`](https://github.com/containers/bubblewrap).
-- Sanity: Debuggable, non-obtuse code, with useful comments. Comments are generally meant to explain *why*, not *what* or *how*; the latter two are the code's job.
+- Sanity: Debuggable, non-obtuse code, with useful comments. Comments are generally meant to explain _why_, not _what_ or _how_; the latter two are the code's job.
 - Speedy: Should run well even in a limited environment
 - Composability: Should be completely configurable without editing code; disabling components, enabling features. Hot-reload possibility.
 
 ## Rationale
+
 <sub>written by: [@lyssieth](https://github.com/lyssieth)</sub>
 
 Originally I started out with OpenClaw, because... well, it was The Thing. But I quickly ran into issues. I wanted my agent to be able to edit files in its workspace without being able to hit everything else on my system. I wanted to add custom tools, abilities, etc. And OpenClaw was very obtuse about it.
