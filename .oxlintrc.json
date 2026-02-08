@@ -1,0 +1,68 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "eslint",
+    "import",
+    "promise",
+    "typescript",
+    "unicorn"
+  ],
+  "categories": {
+    "correctness": "warn",
+    "nursery": "warn",
+    "pedantic": "warn",
+    "perf": "warn",
+    "restriction": "warn",
+    "style": "warn",
+    "suspicious": "warn"
+  },
+  "rules": {
+    "import/no-named-export": "off",
+    "import/no-relative-parent-imports": "off",
+    "import/max-dependencies": "off",
+    "import/prefer-default-export": "off",
+    "import/no-nodejs-modules": "off",
+    "eslint/no-duplicate-imports": "off",
+    "eslint/func-style": [
+      "error",
+      "declaration"
+    ],
+    "eslint/max-statements": "off",
+    "eslint/max-lines-per-function": "off",
+    "eslint/max-params": "off",
+    "eslint/no-plusplus": "off",
+    "eslint/capitalized-comments": "off",
+    "eslint/no-continue": "off",
+    "eslint/complexity": "off",
+    "eslint/max-depth": "off",
+    "eslint/no-inline-comments": "off",
+    "eslint/no-undefined": "off",
+    "eslint/no-magic-numbers": "off",
+    "eslint/no-ternary": "off",
+    "eslint/max-lines": "off",
+    "eslint/no-await-in-loop": "off",
+    "unicorn/switch-case-braces": "off",
+    "unicorn/no-useless-undefined": "off",
+    "promise/avoid-new": "off",
+    "eslint/no-console": [
+      "error",
+      {
+        "allow": [
+          "debug",
+          "info",
+          "warn",
+          "error",
+          "trace"
+        ]
+      }
+    ],
+    "eslint/sort-imports": "off",
+    "promise/always-return": "off",
+    "promise/prefer-await-to-callbacks": "off"
+  },
+  "env": {
+    "builtin": true,
+    "es2024": true,
+    "node": true
+  }
+}
