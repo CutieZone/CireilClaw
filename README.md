@@ -4,7 +4,7 @@
 
 ## Core Tenets
 
-- Safety: Principle of Least Privilege, Separation of Concerns, and `bubblewrap`.
+- Safety: Principle of Least Privilege, Separation of Concerns, and [`bubblewrap`](https://github.com/containers/bubblewrap).
 - Sanity: Debuggable, non-obtuse code, with useful comments. Comments are generally meant to explain *why*, not *what* or *how*; the latter two are the code's job.
 - Speedy: Should run well even in a limited environment
 - Composability: Should be completely configurable without editing code; disabling components, enabling features. Hot-reload possibility.
