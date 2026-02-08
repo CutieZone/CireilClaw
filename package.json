@@ -1,9 +1,18 @@
 {
   "name": "cireilclaw",
-  "module": "src/cli.ts",
-  "type": "module",
   "private": true,
-  "devDependencies": {},
+  "type": "module",
+  "module": "src/cli.ts",
+  "scripts": {
+    "lint": "oxlint --type-aware .",
+    "lint:fix": "oxlint --type-aware --fix .",
+    "format": "oxfmt --write ."
+  },
+  "devDependencies": {
+    "oxfmt": "^0.28.0",
+    "oxlint": "^1.43.0",
+    "oxlint-tsgolint": "^0.11.5"
+  },
   "peerDependencies": {
     "typescript": "^5"
   }

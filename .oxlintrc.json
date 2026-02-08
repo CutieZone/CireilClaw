@@ -1,12 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": [
-    "eslint",
-    "import",
-    "promise",
-    "typescript",
-    "unicorn"
-  ],
+  "plugins": ["eslint", "import", "promise", "typescript", "unicorn"],
   "categories": {
     "correctness": "warn",
     "nursery": "warn",
@@ -23,10 +17,7 @@
     "import/prefer-default-export": "off",
     "import/no-nodejs-modules": "off",
     "eslint/no-duplicate-imports": "off",
-    "eslint/func-style": [
-      "error",
-      "declaration"
-    ],
+    "eslint/func-style": ["error", "declaration"],
     "eslint/max-statements": "off",
     "eslint/max-lines-per-function": "off",
     "eslint/max-params": "off",
@@ -47,13 +38,7 @@
     "eslint/no-console": [
       "error",
       {
-        "allow": [
-          "debug",
-          "info",
-          "warn",
-          "error",
-          "trace"
-        ]
+        "allow": ["debug", "info", "warn", "error", "trace"]
       }
     ],
     "eslint/sort-imports": "off",
