@@ -1,3 +1,4 @@
+import { watcher } from "$/config/index.js";
 import color from "$/output/colors.js";
 import { config, debug, error, info, warning } from "$/output/log.js";
 import ora from "ora";
@@ -13,4 +14,25 @@ export async function run(flags: Flags): Promise<void> {
   info("Initializing", color.keyword("cireilclaw"));
   warning("We're not", color.number("100%"), "sure that this works.");
   error("Cuteness overload");
+
+  const sc = new AbortController();
+
+  const watchers = await watcher(sc.signal);
+
+  const spin = ora({
+    discardStdin: false,
+    text: "Waiting for file changes...",
+  });
+
+  process.once("SIGINT", () => {
+    spin.succeed("Done listening~");
+    sc.abort("SIGINT");
+    process.exit(0);
+  });
+
+  spin.start();
+
+  for await (const message of watchers) {
+    info("Got change", color.keyword(message.eventType), "for path", color.path(message.filename));
+  }
 }
