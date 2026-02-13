@@ -12,6 +12,11 @@ interface UserMessage extends BaseMessage {
   content: UserContent | UserContent[];
 }
 
+interface SystemMessage extends BaseMessage {
+  role: "system";
+  content: TextContent;
+}
+
 interface ToolMessage extends BaseMessage {
   role: "toolResponse";
   content: ToolResponseContent;
@@ -24,6 +29,6 @@ interface AssistantMessage extends BaseMessage {
   content: AssistantContent | AssistantContent[];
 }
 
-type Message = UserMessage | ToolMessage | AssistantMessage;
+type Message = UserMessage | ToolMessage | AssistantMessage | SystemMessage;
 
-export type { UserMessage, ToolMessage, AssistantMessage, Message };
+export type { UserMessage, ToolMessage, AssistantMessage, Message, SystemMessage };

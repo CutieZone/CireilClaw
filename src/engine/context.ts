@@ -5,5 +5,5 @@ export interface Context {
   messages: Message[];
   systemPrompt: string;
   sessionId: string;
-  tools?: Tool[];
+  tools: Tool[];
 }
