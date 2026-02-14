@@ -1,14 +1,17 @@
 import type { EngineConfig } from "$/config/index.js";
+import type { Session } from "$/harness/session.js";
 
 import { Engine } from "$/engine/index.js";
 
 export class Agent {
   private _engine: Engine;
   private _slug: string;
+  private _sessions: Map<string, Session>;
 
-  constructor(slug: string, cfg: EngineConfig) {
+  constructor(slug: string, cfg: EngineConfig, sessions: Map<string, Session>) {
     this._engine = new Engine(cfg);
     this._slug = slug;
+    this._sessions = sessions;
   }
 
   get engine(): Engine {
@@ -21,5 +24,9 @@ export class Agent {
 
   get slug(): string {
     return this._slug;
+  }
+
+  get sessions(): Map<string, Session> {
+    return this._sessions;
   }
 }

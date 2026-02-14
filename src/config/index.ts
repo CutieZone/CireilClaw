@@ -1,12 +1,12 @@
 import type { FileChangeInfo } from "node:fs/promises";
 import type { TomlTable } from "smol-toml";
 
-import color from "$/output/colors.js";
+import colors from "$/output/colors.js";
+import { root } from "$/util/paths.js";
 import merge from "fast-merge-async-iterators";
 import { existsSync } from "node:fs";
 import { readdir, readFile, watch } from "node:fs/promises";
 import path from "node:path";
-import { env } from "node:process";
 import { parse } from "smol-toml";
 import * as vb from "valibot";
 
@@ -18,14 +18,24 @@ const EngineConfigSchema = vb.strictObject({
 
 type EngineConfig = vb.InferOutput<typeof EngineConfigSchema>;
 
-function root(): string {
-  const home = env.HOME;
+const ToolsConfigSchema = vb.record(
+  vb.pipe(vb.string(), vb.nonEmpty()),
+  vb.exactOptional(vb.boolean(), true),
+);
 
-  if (home === undefined) {
-    throw new Error("$HOME variable not available");
+type ToolsConfig = vb.InferOutput<typeof ToolsConfigSchema>;
+
+async function loadTools(agentSlug: string): Promise<ToolsConfig> {
+  const file = path.join(root(), "agents", agentSlug, "config", "tools.toml");
+
+  if (existsSync(file)) {
+    const data = await readFile(file, { encoding: "utf8" });
+    const obj = parse(data);
+
+    return vb.parse(ToolsConfigSchema, obj);
   }
 
-  return path.join(home, ".cireilclaw");
+  throw new Error(`Tools config at path ${colors.path(file)} does not exist.`);
 }
 
 /**
@@ -42,7 +52,7 @@ async function loadEngine(agentSlug?: string): Promise<EngineConfig> {
 
       obj = parse(data);
     } else {
-      throw new Error(`Could not find config file at path: ${color.path(file)}`);
+      throw new Error(`Could not find config file at path: ${colors.path(file)}`);
     }
   } else {
     const file = path.join(root(), "agents", agentSlug, "config", "engine.toml");
@@ -52,7 +62,7 @@ async function loadEngine(agentSlug?: string): Promise<EngineConfig> {
 
       obj = parse(data);
     } else {
-      throw new Error(`Could not find config file at path: ${color.path(file)}`);
+      throw new Error(`Could not find config file at path: ${colors.path(file)}`);
     }
   }
 
@@ -93,5 +103,5 @@ async function watcher(signal: AbortSignal): Promise<Watchers> {
   return merge.default("iters-close-wait", globalConfigWatcher, ...agentsWatchers);
 }
 
-export { EngineConfigSchema, loadEngine, watcher };
-export type { EngineConfig, Watchers };
+export { EngineConfigSchema, ToolsConfigSchema, loadEngine, loadTools, watcher };
+export type { EngineConfig, ToolsConfig, Watchers };

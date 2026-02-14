@@ -33,6 +33,8 @@
     "eslint/no-ternary": "off",
     "eslint/max-lines": "off",
     "eslint/no-await-in-loop": "off",
+    "eslint/max-classes-per-file": "off",
+    "eslint/no-warning-comments": "off",
     "unicorn/switch-case-braces": "off",
     "unicorn/no-useless-undefined": "off",
     "eslint/no-console": [

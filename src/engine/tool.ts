@@ -1,6 +1,6 @@
-import type { AnySchema } from "valibot";
+import type { GenericSchema } from "valibot";
 
-interface Tool<TParameters extends AnySchema = AnySchema> {
+interface Tool<TParameters = GenericSchema> {
   name: string;
   description: string;
   parameters: TParameters;
