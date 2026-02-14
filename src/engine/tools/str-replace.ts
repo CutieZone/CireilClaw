@@ -23,7 +23,8 @@ export const strReplace: ToolDef = {
     "- Errors if old_text appears multiple times (be more specific)\n" +
     "- Errors if old_text is not found\n" +
     "- Shows context around the replacement on success\n\n" +
-    "For creating new files or rewriting entire files, use the `write` tool instead.",
+    "For creating new files or rewriting entire files, use the `write` tool instead.\n" +
+    "To delete single lines, the old_text should be contest with the line included, and new_text without the lines to delete.",
   async execute(input: unknown): Promise<Record<string, unknown>> {
     try {
       const data = vb.parse(Schema, input);
@@ -65,15 +66,17 @@ export const strReplace: ToolDef = {
       const newContent = content.replace(data.old_text, data.new_text);
       await writeFile(path, newContent, "utf8");
 
-      // Find line numbers for context
-      const oldLineIndex = content.slice(0, content.indexOf(data.old_text)).split("\n").length;
+      // Find line numbers for context (from new content)
+      // Use the position of old_text in the original content to find the right spot
+      const oldTextPos = content.indexOf(data.old_text);
+      const lineIndex = newContent.slice(0, oldTextPos).split("\n").length;
       const contextLines = 2;
-      const oldLines = content.split("\n");
-      const contextStart = Math.max(0, oldLineIndex - contextLines - 1);
-      const contextEnd = Math.min(oldLines.length, oldLineIndex + contextLines);
+      const newLines = newContent.split("\n");
+      const contextStart = Math.max(0, lineIndex - contextLines - 1);
+      const contextEnd = Math.min(newLines.length, lineIndex + contextLines);
 
       return {
-        context: oldLines.slice(contextStart, contextEnd).join("\n"),
+        context: newLines.slice(contextStart, contextEnd).join("\n"),
         success: true,
       };
     } catch (error: unknown) {
