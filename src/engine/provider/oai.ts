@@ -31,7 +31,9 @@ function translateContent(
       };
     case "toolCall":
     case "toolResponse":
-      throw new Error("Unimplemented");
+      throw new Error(
+        `Content type '${content.type}' should not be translated via translateContent - handled separately in translateMsg`,
+      );
   }
 }
 
@@ -157,11 +159,17 @@ export async function generate(
   }
 
   if (reason !== "tool_calls") {
-    throw new Error("Was expecting `tool_calls`, but didn't get it");
+    throw new Error(
+      `Expected 'tool_calls' finish reason (tool_choice is required), got '${reason ?? "unknown"}'`,
+    );
   }
 
   if (choice.message.tool_calls === undefined) {
-    throw new Error("Was expecting any tool calls, but got undefined");
+    throw new Error("Expected tool calls, but got undefined");
+  }
+
+  if (choice.message.tool_calls.length === 0) {
+    throw new Error("Expected at least one tool call, but got empty array");
   }
 
   return {

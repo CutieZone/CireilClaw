@@ -79,10 +79,11 @@ async function watcher(signal: AbortSignal): Promise<Watchers> {
   });
 
   const agentsWatchers = agentsFiles
-    .filter((entry) => entry.isDirectory() && entry.name.endsWith("/config"))
-    .map((entry) => path.join(entry.parentPath, entry.name))
-    .map((entry) =>
-      watch(entry, {
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => path.join(entry.parentPath, entry.name, "config"))
+    .filter((configPath) => existsSync(configPath))
+    .map((configPath) =>
+      watch(configPath, {
         encoding: "utf8",
         recursive: true,
         signal: signal,

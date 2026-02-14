@@ -48,17 +48,14 @@ export class Engine {
       tools: await buildTools(session),
     };
 
-    let resp: Message | undefined = undefined;
-
     switch (this._type) {
       case "openai":
-        resp = await generate(context, this.apiBase, this._apiKey, this.model);
-        break;
+        return generate(context, this.apiBase, this._apiKey, this.model);
 
-      default:
-        throw new Error("unimplemented");
+      default: {
+        const _exhaustive: never = this._type;
+        throw new Error(`Unsupported provider type: ${String(_exhaustive)}`);
+      }
     }
-
-    throw new Error("unimplemented");
   }
 }
