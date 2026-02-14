@@ -1,13 +1,14 @@
 import { watcher } from "$/config/index.js";
 import color from "$/output/colors.js";
 import { config, debug, error, info, warning } from "$/output/log.js";
+import { buildCommand } from "@stricli/core";
 import ora from "ora";
 
 interface Flags {
   logLevel: "error" | "warning" | "info" | "debug";
 }
 
-export async function run(flags: Flags): Promise<void> {
+async function run(flags: Flags): Promise<void> {
   config.level = flags.logLevel;
 
   debug("Beep boop~");
@@ -36,3 +37,20 @@ export async function run(flags: Flags): Promise<void> {
     info("Got change", color.keyword(message.eventType), "for path", color.path(message.filename));
   }
 }
+
+export const runCommand = buildCommand({
+  docs: {
+    brief: "bwbwb",
+  },
+  func: run,
+  parameters: {
+    flags: {
+      logLevel: {
+        brief: "Which log level to use",
+        default: "debug",
+        kind: "enum",
+        values: ["error", "warning", "info", "debug"],
+      },
+    },
+  },
+});

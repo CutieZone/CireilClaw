@@ -1,24 +1,5 @@
-import { buildApplication, buildCommand, buildRouteMap } from "@stricli/core";
-
-const runCommand = buildCommand({
-  docs: {
-    brief: "bwbwb",
-  },
-  loader: async () => {
-    const run = await import("$/cli/run-command.js");
-    return run.run;
-  },
-  parameters: {
-    flags: {
-      logLevel: {
-        brief: "",
-        default: "debug",
-        kind: "enum",
-        values: ["error", "warning", "info", "debug"],
-      },
-    },
-  },
-});
+import { runCommand } from "$/cli/run-command.js";
+import { buildApplication, buildRouteMap } from "@stricli/core";
 
 const routes = buildRouteMap({
   defaultCommand: "run",
