@@ -152,8 +152,6 @@ async function handleMessageCreate(
   ownerId: string,
   msg: DiscordMessage,
 ): Promise<void> {
-  debug("Message received", colors.keyword(msg.author.username), colors.keyword(msg.channelID));
-
   // Only respond to the configured owner.
   if (msg.author.id !== ownerId) {
     return;
@@ -206,7 +204,6 @@ async function handleMessageCreate(
 
   // Push user message into history.
   const formatted = formatUserMessage(msg);
-  debug("Incoming message", colors.keyword(sessionId), formatted);
   session.history.push({
     content: { content: formatted, type: "text" },
     role: "user",

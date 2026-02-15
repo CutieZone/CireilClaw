@@ -17,6 +17,29 @@ import { readFile, stat } from "node:fs/promises";
 
 import { toolRegistry } from "./tools/index.js";
 
+const MAX_TURNS = 30;
+
+function truncateToTurns(messages: Message[], maxTurns: number): Message[] {
+  const turns: Message[][] = [];
+
+  for (const msg of messages) {
+    // Start a new turn on user messages, or if we're just beginning
+    if (msg.role === "user" || turns.length === 0) {
+      turns.push([msg]);
+    } else {
+      // Associate with the current turn (assistant or toolResponse)
+      const currentTurn = turns.at(-1);
+      if (currentTurn !== undefined) {
+        currentTurn.push(msg);
+      }
+    }
+  }
+
+  // Keep only the last maxTurns
+  const truncated = turns.slice(-maxTurns);
+  return truncated.flat();
+}
+
 function squashMessages(messages: Message[]): Message[] {
   const result: Message[] = [];
 
@@ -155,9 +178,20 @@ export class Engine {
 
     debug("Turn start", colors.keyword(agentSlug), colors.keyword(session.id()));
 
+    if (session.history.length > MAX_TURNS * 3) {
+      debug(
+        "Truncating history",
+        colors.number(session.history.length),
+        "messages to last",
+        colors.number(MAX_TURNS),
+        "turns",
+      );
+    }
+
     for (;;) {
       const prompt = await buildSystemPrompt(agentSlug, session);
-      const messages = squashMessages([...session.history, ...session.pendingToolMessages]);
+      const history = truncateToTurns(session.history, MAX_TURNS);
+      const messages = squashMessages([...history, ...session.pendingToolMessages]);
 
       const context: Context = {
         messages,
@@ -196,9 +230,9 @@ export class Engine {
           throw new Error(`Unknown tool: ${colors.keyword(call.name)}`);
         }
 
-        debug("Tool call", colors.keyword(call.name), JSON.stringify(call.input));
+        debug("Tool call", colors.keyword(call.name));
         const result = await def.execute(call.input, ctx);
-        debug("Tool result", colors.keyword(call.name), JSON.stringify(result));
+        debug("Tool result", colors.keyword(call.name));
 
         const response: ToolMessage = {
           content: { id: call.id, name: call.name, output: result, type: "toolResponse" },
