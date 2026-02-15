@@ -76,11 +76,15 @@ async function buildSystemPrompt(agentSlug: string, session: Session): Promise<s
   ];
 
   if (session.channel === "discord") {
-    lines.push(
-      `The channel id is: ${session.channelId}`,
-      `The guild id is: ${session.guildId}`,
-      `This is considered a ${session.isNsfw === true ? "NSFW" : "SFW"} session`,
-    );
+    lines.push(`The channel id is: ${session.channelId}`);
+    if (session.guildId !== undefined) {
+      lines.push(`The guild id is: ${session.guildId}`);
+      lines.push(
+        `This is considered a ${session.isNsfw === true ? "NSFW" : "SFW"} session`,
+      );
+    } else {
+      lines.push("SFW/NSFW depending on the user");
+    }
   } else {
     throw new Error(`Unimplemented channel: ${session.channel}`);
   }
@@ -237,9 +241,9 @@ export class Engine {
           throw new Error(`Unknown tool: ${colors.keyword(call.name)}`);
         }
 
-        debug("Tool call", colors.keyword(call.name));
+        debug("Tool call", colors.keyword(call.name), call);
         const result = await def.execute(call.input, ctx);
-        debug("Tool result", colors.keyword(call.name));
+        debug("Tool result", colors.keyword(call.name), result);
 
         const response: ToolMessage = {
           content: { id: call.id, name: call.name, output: result, type: "toolResponse" },

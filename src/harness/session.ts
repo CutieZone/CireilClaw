@@ -17,7 +17,7 @@ class DiscordSession extends BaseSession {
 
   readonly channelId: string;
   readonly guildId?: string;
-  readonly isNsfw?: boolean;
+  isNsfw?: boolean;
 
   typingInterval?: NodeJS.Timeout = undefined;
 
