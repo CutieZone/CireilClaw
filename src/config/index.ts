@@ -19,9 +19,24 @@ const EngineConfigSchema = vb.strictObject({
 
 type EngineConfig = vb.InferOutput<typeof EngineConfigSchema>;
 
+const ExecToolConfigSchema = vb.strictObject({
+  binaries: vb.array(vb.pipe(vb.string(), vb.nonEmpty())),
+  enabled: vb.exactOptional(vb.boolean(), true),
+  timeout: vb.exactOptional(vb.pipe(vb.number(), vb.integer(), vb.minValue(1000)), 60_000),
+});
+
+type ExecToolConfig = vb.InferOutput<typeof ExecToolConfigSchema>;
+
+const ToolConfigSchema = vb.union([
+  vb.boolean(),
+  ExecToolConfigSchema,
+]);
+
+type ToolConfig = vb.InferOutput<typeof ToolConfigSchema>;
+
 const ToolsConfigSchema = vb.record(
   vb.pipe(vb.string(), vb.nonEmpty()),
-  vb.exactOptional(vb.boolean(), true),
+  vb.exactOptional(ToolConfigSchema, true),
 );
 
 type ToolsConfig = vb.InferOutput<typeof ToolsConfigSchema>;
@@ -187,7 +202,9 @@ async function loadAgents(): Promise<string[]> {
 
 export {
   EngineConfigSchema,
+  ExecToolConfigSchema,
   IntegrationsConfigSchema,
+  ToolConfigSchema,
   ToolsConfigSchema,
   loadAgents,
   loadChannel,
@@ -196,4 +213,4 @@ export {
   loadTools,
   watcher,
 };
-export type { EngineConfig, IntegrationsConfig, ToolsConfig, Watchers };
+export type { EngineConfig, ExecToolConfig, IntegrationsConfig, ToolConfig, ToolsConfig, Watchers };

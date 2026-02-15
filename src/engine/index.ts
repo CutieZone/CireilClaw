@@ -134,14 +134,21 @@ async function buildTools(agentSlug: string, _session: Session): Promise<Tool[]>
 
   const tools: Tool[] = [];
 
-  for (const [tool, enabled] of cfg) {
+  for (const [tool, setting] of cfg) {
     const def = toolRegistry[tool];
 
     if (def === undefined) {
       throw new Error(`Tried to enable invalid tool ${colors.keyword(tool)}: does not exist`);
     }
 
-    if (!enabled) {
+    const enabledByValue = typeof setting === "boolean" && setting;
+    const enabledByKey =
+      typeof setting === "object" &&
+      "enabled" in setting &&
+      typeof setting.enabled === "boolean" &&
+      setting.enabled;
+
+    if (!(enabledByValue || enabledByKey)) {
       continue;
     }
 
