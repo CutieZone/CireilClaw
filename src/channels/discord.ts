@@ -194,14 +194,8 @@ async function handleMessageCreate(
         : undefined;
     session = new DiscordSession(msg.channelID, msg.guildID ?? undefined, isNsfw);
     agent.sessions.set(sessionId, session);
-  } else if (session.guildId !== undefined) {
-    // Update NSFW status on every message for guild channels.
-    const isNsfw =
-      msg.channel !== undefined && "nsfw" in msg.channel
-        ? (msg.channel as { nsfw?: boolean }).nsfw
-        : undefined;
-
-    session.isNsfw = isNsfw ?? false;
+  } else if (msg.channel !== undefined && "nsfw" in msg.channel) {
+    session.isNsfw = (msg.channel as { nsfw: boolean }).nsfw;
   }
 
   if (!(session instanceof DiscordSession)) {
