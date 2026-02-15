@@ -7,9 +7,9 @@ import { readFile } from "node:fs/promises";
 import { format, join } from "node:path";
 import { parse } from "smol-toml";
 
-type Frontmatter = Omit<MemoryBlock, "content" | "label">;
+type Frontmatter = Omit<MemoryBlock, "content" | "label" | "metadata">;
 
-const labels = ["core", "person", "identity", "long-term", "soul"] as const;
+const labels = ["person", "identity", "long-term", "soul"] as const;
 type BlockLabel = (typeof labels)[number];
 
 async function loadBlocks(slug: string): Promise<Record<BlockLabel, MemoryBlock>> {
@@ -50,7 +50,9 @@ async function loadBlocks(slug: string): Promise<Record<BlockLabel, MemoryBlock>
         description: frontmatter.description,
         filePath: `/blocks/${label}`,
         label,
-        metadata: frontmatter.metadata,
+        metadata: {
+          chars_current: content.length - tomlData.length - 6, // `+++`s
+        },
       });
     } else {
       throw new Error(
@@ -84,4 +86,4 @@ async function loadBaseInstructions(slug: string): Promise<string> {
 }
 
 export type { Frontmatter, BlockLabel };
-export { loadBlocks, loadBaseInstructions };
+export { labels as blockLabels, loadBlocks, loadBaseInstructions };
