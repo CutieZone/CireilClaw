@@ -17,7 +17,7 @@ class DiscordSession extends BaseSession {
 
   readonly channelId: string;
   readonly guildId?: string;
-  isNsfw?: boolean;
+  isNsfw: boolean;
 
   typingInterval?: NodeJS.Timeout = undefined;
 
@@ -25,7 +25,7 @@ class DiscordSession extends BaseSession {
     super();
     this.channelId = channelId;
     this.guildId = guildId;
-    this.isNsfw = isNsfw;
+    this.isNsfw = isNsfw ?? false;
   }
 
   override id(): string {

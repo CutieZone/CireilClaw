@@ -77,13 +77,10 @@ async function buildSystemPrompt(agentSlug: string, session: Session): Promise<s
 
   if (session.channel === "discord") {
     lines.push(`The channel id is: ${session.channelId}`);
-    if (session.guildId !== undefined) {
-      lines.push(`The guild id is: ${session.guildId}`);
-      lines.push(
-        `This is considered a ${session.isNsfw === true ? "NSFW" : "SFW"} session`,
-      );
-    } else {
+    if (session.guildId === undefined) {
       lines.push("SFW/NSFW depending on the user");
+    } else {
+      lines.push(`This is considered a ${session.isNsfw ? "NSFW" : "SFW"} session`);
     }
   } else {
     throw new Error(`Unimplemented channel: ${session.channel}`);

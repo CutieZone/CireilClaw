@@ -7,7 +7,7 @@ import type {
 
 import { loadChannel } from "$/config/index.js";
 import { saveSession } from "$/db/sessions.js";
-import { DiscordSession } from "$/harness/session.js";
+import { DiscordSession, MatrixSession } from "$/harness/session.js";
 import colors from "$/output/colors.js";
 import { debug, info, warning } from "$/output/log.js";
 import { createRequire } from "node:module";
@@ -181,8 +181,13 @@ async function handleMessageCreate(
       : `discord:${msg.channelID}|${msg.guildID}`;
 
   let session = agent.sessions.get(sessionId);
+  if (session instanceof MatrixSession) {
+    throw new TypeError("invalid session type: expected discord, got matrix");
+  }
+
   if (session === undefined) {
     const { DiscordSession } = await import("$/harness/session.js");
+
     const isNsfw =
       msg.channel !== undefined && "nsfw" in msg.channel
         ? (msg.channel as { nsfw?: boolean }).nsfw
@@ -195,7 +200,8 @@ async function handleMessageCreate(
       msg.channel !== undefined && "nsfw" in msg.channel
         ? (msg.channel as { nsfw?: boolean }).nsfw
         : undefined;
-    session.isNsfw = isNsfw;
+
+    session.isNsfw = isNsfw ?? false;
   }
 
   if (!(session instanceof DiscordSession)) {
