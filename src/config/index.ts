@@ -72,6 +72,28 @@ async function loadEngine(agentSlug?: string): Promise<EngineConfig> {
   return cfg;
 }
 
+const IntegrationsConfigSchema = vb.strictObject({
+  brave: vb.exactOptional(
+    vb.strictObject({
+      apiKey: vb.pipe(vb.string(), vb.nonEmpty()),
+    }),
+  ),
+});
+type IntegrationsConfig = vb.InferOutput<typeof IntegrationsConfigSchema>;
+
+async function loadIntegrations(): Promise<IntegrationsConfig> {
+  const file = path.join(root(), "config", "integrations.toml");
+
+  if (!existsSync(file)) {
+    return {};
+  }
+
+  const data = await readFile(file, { encoding: "utf8" });
+  const obj = parse(data);
+
+  return vb.parse(IntegrationsConfigSchema, obj);
+}
+
 const DiscordSchema = vb.strictObject({
   ownerId: vb.pipe(vb.string(), vb.nonEmpty(), vb.regex(/[0-9]+/)),
   token: vb.pipe(vb.string(), vb.nonEmpty()),
@@ -165,11 +187,13 @@ async function loadAgents(): Promise<string[]> {
 
 export {
   EngineConfigSchema,
+  IntegrationsConfigSchema,
   ToolsConfigSchema,
   loadAgents,
   loadChannel,
   loadEngine,
+  loadIntegrations,
   loadTools,
   watcher,
 };
-export type { EngineConfig, ToolsConfig, Watchers };
+export type { EngineConfig, IntegrationsConfig, ToolsConfig, Watchers };

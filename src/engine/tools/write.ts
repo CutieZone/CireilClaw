@@ -11,12 +11,12 @@ const Schema = vb.strictObject({
   path: vb.pipe(
     vb.string(),
     vb.nonEmpty(),
-    vb.custom((input: string) => {
-      if (input.startsWith("/blocks/") && !input.endsWith(".md")) {
-        return "Files in /blocks/ must end with .md extension";
+    vb.custom((input: unknown) => {
+      if (typeof input === "string" && input.startsWith("/blocks/") && !input.endsWith(".md")) {
+        return false;
       }
       return true;
-    }),
+    }, "Files in /blocks/ must end with .md extension"),
   ),
 });
 
