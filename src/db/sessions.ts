@@ -212,6 +212,7 @@ function _flushSession(agentSlug: string, session: Session): void {
     .onConflictDoUpdate({
       set: {
         history: historyJson,
+        meta: JSON.stringify(meta),
         openedFiles: JSON.stringify([...session.openedFiles]),
       },
       target: sessions.id,
