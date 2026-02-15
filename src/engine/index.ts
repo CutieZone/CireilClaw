@@ -1,18 +1,43 @@
 import type { EngineConfig } from "$/config/index.js";
+import type { ToolCallContent } from "$/engine/content.js";
 import type { Context } from "$/engine/context.js";
-import type { Message } from "$/engine/message.js";
+import type { AssistantMessage, Message, ToolMessage } from "$/engine/message.js";
 import type { ProviderKind } from "$/engine/provider/index.js";
 import type { Tool } from "$/engine/tool.js";
+import type { ToolContext } from "$/engine/tools/tool-def.js";
 import type { Session } from "$/harness/session.js";
 
 import { loadTools } from "$/config/index.js";
 import { generate } from "$/engine/provider/oai.js";
 import colors from "$/output/colors.js";
+import { debug } from "$/output/log.js";
 import { loadBlocks, loadBaseInstructions } from "$/util/load.js";
 import { sandboxToReal } from "$/util/paths.js";
 import { readFile, stat } from "node:fs/promises";
 
 import { toolRegistry } from "./tools/index.js";
+
+function squashMessages(messages: Message[]): Message[] {
+  const result: Message[] = [];
+
+  for (const msg of messages) {
+    const last = result.at(-1);
+
+    if (last?.role === "user" && msg.role === "user") {
+      const prev = Array.isArray(last.content) ? last.content : [last.content];
+      const cur = Array.isArray(msg.content) ? msg.content : [msg.content];
+      result.splice(-1, 1, { content: [...prev, ...cur], role: "user" });
+    } else if (last?.role === "assistant" && msg.role === "assistant") {
+      const prev = Array.isArray(last.content) ? last.content : [last.content];
+      const cur = Array.isArray(msg.content) ? msg.content : [msg.content];
+      result.splice(-1, 1, { content: [...prev, ...cur], role: "assistant" });
+    } else {
+      result.push(msg);
+    }
+  }
+
+  return result;
+}
 
 async function buildSystemPrompt(agentSlug: string, session: Session): Promise<string> {
   const baseInstructions = await loadBaseInstructions(agentSlug);
@@ -68,7 +93,7 @@ async function buildSystemPrompt(agentSlug: string, session: Session): Promise<s
     lines.push("<opened_files>", "These are your currently open files:", "");
 
     for (const file of session.openedFiles) {
-      const realPath = sandboxToReal(file);
+      const realPath = sandboxToReal(file, agentSlug);
       const content = await readFile(realPath, "utf8");
       const { size } = await stat(realPath);
 
@@ -124,23 +149,74 @@ export class Engine {
     return this._model;
   }
 
-  async generate(session: Session, agentSlug: string): Promise<Message> {
-    const prompt = await buildSystemPrompt(agentSlug, session);
+  async runTurn(session: Session, agentSlug: string): Promise<void> {
+    const tools = await buildTools(agentSlug, session);
+    const ctx: ToolContext = { agentSlug, session };
 
-    const context: Context = {
-      messages: session.history,
-      sessionId: session.id(),
-      systemPrompt: prompt,
-      tools: await buildTools(agentSlug, session),
-    };
+    debug("Turn start", colors.keyword(agentSlug), colors.keyword(session.id()));
 
-    switch (this._type) {
-      case "openai":
-        return generate(context, this.apiBase, this._apiKey, this.model);
+    for (;;) {
+      const prompt = await buildSystemPrompt(agentSlug, session);
+      const messages = squashMessages([...session.history, ...session.pendingToolMessages]);
 
-      default: {
-        const _exhaustive: never = this._type;
-        throw new Error(`Unsupported provider type: ${String(_exhaustive)}`);
+      const context: Context = {
+        messages,
+        sessionId: session.id(),
+        systemPrompt: prompt,
+        tools,
+      };
+
+      let assistantMsg: AssistantMessage | undefined = undefined;
+      switch (this._type) {
+        case "openai":
+          assistantMsg = await generate(context, this._apiBase, this._apiKey, this._model);
+          break;
+
+        default: {
+          const _exhaustive: never = this._type;
+          throw new Error(`Unsupported provider type: ${String(_exhaustive)}`);
+        }
+      }
+
+      // Pending messages have been sent to the API in this call — commit them to history.
+      session.history.push(...session.pendingToolMessages);
+      session.pendingToolMessages.length = 0;
+
+      session.history.push(assistantMsg);
+
+      const toolCalls = (
+        Array.isArray(assistantMsg.content) ? assistantMsg.content : [assistantMsg.content]
+      ).filter((it): it is ToolCallContent => it.type === "toolCall");
+
+      let done = false;
+
+      for (const call of toolCalls) {
+        const def = toolRegistry[call.name];
+        if (def === undefined) {
+          throw new Error(`Unknown tool: ${colors.keyword(call.name)}`);
+        }
+
+        debug("Tool call", colors.keyword(call.name), JSON.stringify(call.input));
+        const result = await def.execute(call.input, ctx);
+        debug("Tool result", colors.keyword(call.name), JSON.stringify(result));
+
+        const response: ToolMessage = {
+          content: { id: call.id, name: call.name, output: result, type: "toolResponse" },
+          role: "toolResponse",
+        };
+        session.pendingToolMessages.push(response);
+
+        if (call.name === "respond" && result["final"] !== false) {
+          done = true;
+        }
+      }
+
+      if (done) {
+        // Prune: the respond tool's own response is the last thing in pending — flush it.
+        session.history.push(...session.pendingToolMessages);
+        session.pendingToolMessages.length = 0;
+        debug("Turn end", colors.keyword(agentSlug), colors.keyword(session.id()));
+        return;
       }
     }
   }

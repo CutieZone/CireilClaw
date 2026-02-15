@@ -1,3 +1,4 @@
+import type { ChannelType } from "$/harness/session.js";
 import type { FileChangeInfo } from "node:fs/promises";
 import type { TomlTable } from "smol-toml";
 
@@ -6,7 +7,7 @@ import { root } from "$/util/paths.js";
 import merge from "fast-merge-async-iterators";
 import { existsSync } from "node:fs";
 import { readdir, readFile, watch } from "node:fs/promises";
-import path from "node:path";
+import path, { join } from "node:path";
 import { parse } from "smol-toml";
 import * as vb from "valibot";
 
@@ -71,6 +72,54 @@ async function loadEngine(agentSlug?: string): Promise<EngineConfig> {
   return cfg;
 }
 
+const DiscordSchema = vb.strictObject({
+  ownerId: vb.pipe(vb.string(), vb.nonEmpty(), vb.regex(/[0-9]+/)),
+  token: vb.pipe(vb.string(), vb.nonEmpty()),
+});
+type DiscordConfig = vb.InferOutput<typeof DiscordSchema>;
+const MatrixSchema = vb.strictObject({});
+type MatrixConfig = vb.InferOutput<typeof MatrixSchema>;
+
+interface ChannelConfigMap {
+  discord: DiscordConfig;
+  matrix: MatrixConfig;
+}
+
+async function loadChannel<Key extends ChannelType>(
+  channel: Key,
+  agentSlug?: string,
+): Promise<ChannelConfigMap[Key]> {
+  const origin = root();
+  let path: string | undefined = undefined;
+  let schema: vb.GenericSchema | undefined = undefined;
+
+  // oxlint-disable-next-line typescript/switch-exhaustiveness-check
+  switch (channel) {
+    case "discord":
+      path = join(origin, "config", "channels", `${channel}.toml`);
+      schema = DiscordSchema;
+      break;
+
+    default:
+      throw new Error(`Channel ${channel} is unimplemented.`);
+  }
+
+  if (!existsSync(path) && agentSlug !== undefined) {
+    const maybe = join(origin, "agents", agentSlug, "config", "channels", `${channel}.toml`);
+    if (existsSync(maybe)) {
+      path = maybe;
+    } else {
+      throw new Error(`No channel config found for ${channel}.`);
+    }
+  }
+
+  const tomlData = await readFile(path, "utf8");
+  const obj = parse(tomlData);
+
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return vb.parse(schema, obj) as ChannelConfigMap[Key];
+}
+
 type Watchers = AsyncIterableIterator<FileChangeInfo<string>>;
 async function watcher(signal: AbortSignal): Promise<Watchers> {
   const globalConfigWatcher = watch(path.join(root(), "config"), {
@@ -103,5 +152,24 @@ async function watcher(signal: AbortSignal): Promise<Watchers> {
   return merge.default("iters-close-wait", globalConfigWatcher, ...agentsWatchers);
 }
 
-export { EngineConfigSchema, ToolsConfigSchema, loadEngine, loadTools, watcher };
+async function loadAgents(): Promise<string[]> {
+  const agentsDir = path.join(root(), "agents");
+
+  if (!existsSync(agentsDir)) {
+    return [];
+  }
+
+  const entries = await readdir(agentsDir, { encoding: "utf8", withFileTypes: true });
+  return entries.filter((it) => it.isDirectory()).map((it) => it.name);
+}
+
+export {
+  EngineConfigSchema,
+  ToolsConfigSchema,
+  loadAgents,
+  loadChannel,
+  loadEngine,
+  loadTools,
+  watcher,
+};
 export type { EngineConfig, ToolsConfig, Watchers };

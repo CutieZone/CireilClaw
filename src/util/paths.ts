@@ -12,8 +12,12 @@ function root(): string {
   return join(home, ".cireilclaw");
 }
 
-function sandboxToReal(path: string): string {
-  const origin = root();
+function agentRoot(agentSlug: string): string {
+  return join(root(), "agents", agentSlug);
+}
+
+function sandboxToReal(path: string, agentSlug: string): string {
+  const origin = agentRoot(agentSlug);
 
   let sandboxPath = "";
   let expectedSubdir: "blocks" | "memories" | "skills" | "workspace" | undefined = undefined;
@@ -77,9 +81,9 @@ function sandboxToReal(path: string): string {
   return fullResolved;
 }
 
-function sanitizeError(err: unknown, origin: string): string {
+function sanitizeError(err: unknown, agentSlug: string): string {
   const msg = err instanceof Error ? err.message : String(err);
-  return msg.replaceAll(origin, "<sandbox>");
+  return msg.replaceAll(agentRoot(agentSlug), "<sandbox>");
 }
 
-export { sandboxToReal, sanitizeError, root };
+export { sandboxToReal, sanitizeError, agentRoot, root };

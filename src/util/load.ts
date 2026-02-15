@@ -9,7 +9,7 @@ import { parse } from "smol-toml";
 
 type Frontmatter = Omit<MemoryBlock, "content" | "label" | "metadata">;
 
-const labels = ["person", "identity", "long-term", "soul"] as const;
+const labels = ["person", "identity", "long-term", "soul", "style-notes"] as const;
 type BlockLabel = (typeof labels)[number];
 
 async function loadBlocks(slug: string): Promise<Record<BlockLabel, MemoryBlock>> {
@@ -48,7 +48,7 @@ async function loadBlocks(slug: string): Promise<Record<BlockLabel, MemoryBlock>
       files.set(label, {
         content,
         description: frontmatter.description,
-        filePath: `/blocks/${label}`,
+        filePath: `/blocks/${label}.md`,
         label,
         metadata: {
           chars_current: content.length - tomlData.length - 6, // `+++`s

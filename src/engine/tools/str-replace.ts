@@ -1,6 +1,6 @@
-import type { ToolDef } from "$/engine/tools/tool-def.js";
+import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 
-import { root, sandboxToReal, sanitizeError } from "$/util/paths.js";
+import { sandboxToReal, sanitizeError } from "$/util/paths.js";
 import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import * as vb from "valibot";
@@ -25,11 +25,11 @@ export const strReplace: ToolDef = {
     "- Shows context around the replacement on success\n\n" +
     "For creating new files or rewriting entire files, use the `write` tool instead.\n" +
     "To delete single lines, the old_text should be contest with the line included, and new_text without the lines to delete.",
-  async execute(input: unknown): Promise<Record<string, unknown>> {
+  async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     try {
       const data = vb.parse(Schema, input);
 
-      const path = sandboxToReal(data.path);
+      const path = sandboxToReal(data.path, ctx.agentSlug);
       if (!existsSync(path)) {
         return {
           error: `File at ${data.path} does not exist.`,
@@ -90,7 +90,7 @@ export const strReplace: ToolDef = {
       }
 
       return {
-        error: sanitizeError(error, root()),
+        error: sanitizeError(error, ctx.agentSlug),
         hint: "Report this to the user, do not continue",
         message: "Error occurred during tool execution.",
         success: false,

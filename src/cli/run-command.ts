@@ -1,8 +1,13 @@
-import { watcher } from "$/config/index.js";
+import { Agent } from "$/agent/index.js";
+import { startDiscord } from "$/channels/discord.js";
+import { loadAgents, loadEngine, watcher } from "$/config/index.js";
+import { initDb } from "$/db/index.js";
+import { flushAllSessions, loadSessions } from "$/db/sessions.js";
+import { Harness } from "$/harness/index.js";
 import color from "$/output/colors.js";
-import { config, debug, error, info, warning } from "$/output/log.js";
+import { config, info } from "$/output/log.js";
+import { onShutdown, registerSigint } from "$/util/shutdown.js";
 import { buildCommand } from "@stricli/core";
-import ora from "ora";
 
 interface Flags {
   logLevel: "error" | "warning" | "info" | "debug";
@@ -11,36 +16,42 @@ interface Flags {
 async function run(flags: Flags): Promise<void> {
   config.level = flags.logLevel;
 
-  debug("Beep boop~");
   info("Initializing", color.keyword("cireilclaw"));
-  warning("We're not", color.number("100%"), "sure that this works.");
-  error("Cuteness overload");
+
+  initDb();
 
   const sc = new AbortController();
 
-  const watchers = await watcher(sc.signal);
-
-  const spin = ora({
-    discardStdin: false,
-    text: "Waiting for file changes...",
-  });
-
-  process.once("SIGINT", () => {
-    spin.succeed("Done listening~");
+  registerSigint();
+  onShutdown(() => {
+    info("Shutting down...");
+    flushAllSessions();
     sc.abort("SIGINT");
-    process.exit(0);
   });
 
-  spin.start();
+  const slugs = await loadAgents();
+  const agents = new Map<string, Agent>();
 
-  for await (const message of watchers) {
-    info("Got change", color.keyword(message.eventType), "for path", color.path(message.filename));
+  for (const slug of slugs) {
+    const cfg = await loadEngine(slug);
+    const sessions = loadSessions(slug);
+    agents.set(slug, new Agent(slug, cfg, sessions));
+    info("Loaded agent", color.keyword(slug));
+  }
+
+  const watchers = await watcher(sc.signal);
+  const harness = Harness.init(agents, watchers);
+
+  await startDiscord(harness);
+
+  for await (const message of harness.watcher) {
+    info("Config change", color.keyword(message.eventType), color.path(message.filename ?? ""));
   }
 }
 
 export const runCommand = buildCommand({
   docs: {
-    brief: "bwbwb",
+    brief: "Start the agent harness",
   },
   func: run,
   parameters: {

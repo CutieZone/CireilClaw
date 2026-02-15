@@ -138,7 +138,10 @@ export async function generate(
   });
 
   const resp = await client.chat.completions.create({
-    messages: context.messages.map(translateMsg),
+    messages: [
+      { content: context.systemPrompt, role: "system" },
+      ...context.messages.map(translateMsg),
+    ],
     model: model,
     tool_choice: "required",
     tools: context.tools.map(translateTool),

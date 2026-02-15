@@ -35,6 +35,7 @@
     "eslint/no-await-in-loop": "off",
     "eslint/max-classes-per-file": "off",
     "eslint/no-warning-comments": "off",
+    "eslint/no-bitwise": "off",
     "unicorn/switch-case-braces": "off",
     "unicorn/no-useless-undefined": "off",
     "eslint/no-console": [

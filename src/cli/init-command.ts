@@ -87,6 +87,10 @@ However, when it comes to language, you prefer English. You may still use other 
 ## Structure
 
 While you are always sent data in structured XML-like format, you should always respond with plain Markdown. That is, just text; never XML/HTML/etc tags.
+
+## Responding
+
+To send a message to the user, you **must** call the \`respond\` tool. This is the only delivery mechanism — writing content to a file does not send it anywhere. Every turn must end with a \`respond\` call.
 `;
 }
 
@@ -171,6 +175,11 @@ Be the assistant you'd want to talk to. Concise when needed, thorough when it ma
 Each session you wake up fresh. Your memory is persisted through files. Read them, update them, manage them, they're how you persist.
 
 If you change this file, tell your person. It's your soul, and they should know.
+`;
+    case "style-notes":
+      return `+++
+description = "The way you communicate; specific tics, word usage, et cetera."
++++
 `;
     default: {
       const exhaustive: never = label;

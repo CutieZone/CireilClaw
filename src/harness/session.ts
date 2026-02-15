@@ -53,4 +53,5 @@ class MatrixSession extends BaseSession {
 
 type Session = DiscordSession | MatrixSession;
 
-export type { DiscordSession, Session };
+export { DiscordSession, MatrixSession };
+export type { Session, ChannelType };

@@ -12,21 +12,32 @@
   },
   "dependencies": {
     "@inquirer/prompts": "^8.2.1",
+    "@noble/hashes": "^2.0.1",
     "@stricli/core": "^1.2.5",
     "@valibot/to-json-schema": "^1.5.0",
+    "better-sqlite3": "^12.6.2",
     "chalk": "^5.6.2",
+    "drizzle-orm": "^0.45.1",
     "fast-merge-async-iterators": "^1.1.1",
+    "oceanic.js": "^1.13.0",
     "openai": "^6.22.0",
     "ora": "^9.3.0",
     "smol-toml": "^1.6.0",
     "valibot": "^1.2.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.2.3",
+    "drizzle-kit": "^0.31.9",
     "oxfmt": "^0.32.0",
     "oxlint": "^1.47.0",
     "oxlint-tsgolint": "^0.12.2",
     "tsx": "^4.21.0",
     "typescript": "^5"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3"
+    ]
   }
 }
