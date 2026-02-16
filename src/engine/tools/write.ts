@@ -24,6 +24,7 @@ export const write: ToolDef = {
   description:
     "Create or overwrite a file with the given content. " +
     "Parent directories are created automatically. " +
+    "Files under /blocks/ must have a .md extension. " +
     "For surgical edits to existing files, prefer `str-replace` instead.",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     try {

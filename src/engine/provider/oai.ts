@@ -26,7 +26,7 @@ function translateContent(
       };
     case "image":
       return {
-        image_url: { url: encode(content.data) },
+        image_url: { url: `data:${content.mediaType};base64,${encode(content.data)}` },
         type: "image_url",
       };
     case "toolCall":

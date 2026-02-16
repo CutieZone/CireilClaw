@@ -8,7 +8,8 @@ const Schema = vb.strictObject({
 
 export const closeFile: ToolDef = {
   description:
-    "Remove a file from the context window. Its contents will no longer appear in the system prompt.",
+    "Remove a file from the context window. Its contents will no longer appear in the system prompt. " +
+    "Use this once you are done editing a file to free up context space.",
   // oxlint-disable-next-line typescript/require-await
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     try {

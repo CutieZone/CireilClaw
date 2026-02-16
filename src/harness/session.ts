@@ -1,3 +1,4 @@
+import type { ImageContent } from "$/engine/content.js";
 import type { Message } from "$/engine/message.js";
 
 type ChannelType = "discord" | "matrix";
@@ -8,6 +9,8 @@ abstract class BaseSession {
   history: Message[] = new Array<Message>();
   openedFiles: Set<string> = new Set<string>();
   pendingToolMessages: Message[] = new Array<Message>();
+  // Images queued by tools (e.g. read) to be injected as a user message before the next generation.
+  pendingImages: ImageContent[] = new Array<ImageContent>();
 
   abstract id(): string;
 }

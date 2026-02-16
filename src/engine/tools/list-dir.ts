@@ -9,7 +9,9 @@ const Schema = vb.strictObject({
 });
 
 export const listDir: ToolDef = {
-  description: "List the contents of a directory within the sandbox.",
+  description:
+    "List the contents of a directory within the sandbox. " +
+    "Valid roots are: /workspace/, /memories/, /blocks/, /skills/.",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     try {
       const data = vb.parse(Schema, input);

@@ -197,6 +197,14 @@ export class Engine {
     }
 
     for (;;) {
+      // If tools queued images in the previous iteration, inject them as a user
+      // message AFTER pending tool responses. The OAI API only allows images in
+      // user-role messages, and they must come after the matching tool responses.
+      if (session.pendingImages.length > 0) {
+        const images = session.pendingImages.splice(0);
+        session.pendingToolMessages.push({ content: images, role: "user" });
+      }
+
       const prompt = await buildSystemPrompt(agentSlug, session);
       const history = truncateToTurns(session.history, MAX_TURNS);
       const messages = squashMessages([...history, ...session.pendingToolMessages]);

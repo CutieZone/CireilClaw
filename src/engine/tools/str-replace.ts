@@ -24,7 +24,7 @@ export const strReplace: ToolDef = {
     "- Errors if old_text is not found\n" +
     "- Shows context around the replacement on success\n\n" +
     "For creating new files or rewriting entire files, use the `write` tool instead.\n" +
-    "To delete single lines, the old_text should be contest with the line included, and new_text without the lines to delete.",
+    "To delete lines, include them in old_text with surrounding context, and omit them from new_text.",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     try {
       const data = vb.parse(Schema, input);

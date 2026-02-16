@@ -36,7 +36,8 @@ function hasApiKey(
 
 export const braveSearch: ToolDef = {
   description:
-    "Search the web using Brave Search. Returns a list of results with title, description, and URL.",
+    "Search the web using Brave Search. Returns a list of results with title, snippet, and URL — not full page content. " +
+    "To read a page in full you must fetch its URL separately.",
   async execute(input: unknown, _ctx: ToolContext): Promise<Record<string, unknown>> {
     try {
       const data = vb.parse(Schema, input);

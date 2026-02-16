@@ -27,10 +27,7 @@ const ExecToolConfigSchema = vb.strictObject({
 
 type ExecToolConfig = vb.InferOutput<typeof ExecToolConfigSchema>;
 
-const ToolConfigSchema = vb.union([
-  vb.boolean(),
-  ExecToolConfigSchema,
-]);
+const ToolConfigSchema = vb.union([vb.boolean(), ExecToolConfigSchema]);
 
 type ToolConfig = vb.InferOutput<typeof ToolConfigSchema>;
 

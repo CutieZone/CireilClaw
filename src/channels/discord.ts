@@ -1,3 +1,4 @@
+import type { ImageContent, TextContent } from "$/engine/content.js";
 import type { Harness } from "$/harness/index.js";
 import type {
   Client as OceanicClient,
@@ -24,16 +25,46 @@ const { Client, Intents } = createRequire(import.meta.url)(
 const CHUNK_LIMIT = 1800;
 const TYPING_INTERVAL_MS = 5000;
 
+// Media types supported by OpenAI's vision API.
+const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
+
 // Wraps an incoming Discord message's content with sender metadata so the
 // agent has full context about who sent what and when, without needing to
 // parse it out of the message history separately.
-function formatUserMessage(msg: DiscordMessage): string {
+function formatUserMessage(msg: DiscordMessage): TextContent {
   const { username } = msg.author;
   const { id } = msg.author;
   const displayName = msg.member?.nick ?? msg.author.globalName ?? username;
   const timestamp = msg.createdAt.toISOString();
 
-  return `<msg from="${username} <${id}>" displayName="${displayName}" timestamp="${timestamp}">${msg.content}</msg>`;
+  return {
+    content: `<msg from="${username} <${id}>" displayName="${displayName}" timestamp="${timestamp}">${msg.content}</msg>`,
+    type: "text",
+  };
+}
+
+// Fetches image attachments from a Discord message, filtering to types
+// supported by the vision API and silently dropping any that fail to fetch.
+async function fetchAttachmentImages(msg: DiscordMessage): Promise<ImageContent[]> {
+  const images: ImageContent[] = [];
+  for (const attachment of msg.attachments.values()) {
+    const mediaType = attachment.contentType?.split(";")[0]?.trim();
+    if (mediaType === undefined || !SUPPORTED_IMAGE_TYPES.has(mediaType)) {
+      continue;
+    }
+    try {
+      const response = await fetch(attachment.url);
+      const data = await response.arrayBuffer();
+      images.push({ data, mediaType, type: "image" });
+    } catch (error) {
+      warning(
+        "Failed to fetch attachment:",
+        attachment.url,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  }
+  return images;
 }
 
 // Split a response on newline boundaries while respecting CHUNK_LIMIT.
@@ -160,8 +191,13 @@ async function handleMessageCreate(
   if (msg.author.bot) {
     return;
   }
-  // Ignore empty messages.
-  if (msg.content.trim().length === 0) {
+  // Ignore messages with no text and no image attachments.
+  const hasImages = msg.attachments.some(
+    (attachment) =>
+      attachment.contentType !== undefined &&
+      SUPPORTED_IMAGE_TYPES.has(attachment.contentType.split(";")[0]?.trim() ?? ""),
+  );
+  if (msg.content.trim().length === 0 && !hasImages) {
     return;
   }
 
@@ -209,10 +245,11 @@ async function handleMessageCreate(
     return;
   }
 
-  // Push user message into history.
-  const formatted = formatUserMessage(msg);
+  // Push user message into history, including any image attachments.
+  const textContent = formatUserMessage(msg);
+  const imageContents = await fetchAttachmentImages(msg);
   session.history.push({
-    content: { content: formatted, type: "text" },
+    content: imageContents.length > 0 ? [textContent, ...imageContents] : textContent,
     role: "user",
   });
 
