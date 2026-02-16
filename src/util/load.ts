@@ -3,7 +3,7 @@ import type { MemoryBlock } from "$/engine/block.js";
 import colors from "$/output/colors.js";
 import { root } from "$/util/paths.js";
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { format, join } from "node:path";
 import { parse } from "smol-toml";
 
@@ -85,5 +85,62 @@ async function loadBaseInstructions(slug: string): Promise<string> {
   );
 }
 
-export type { Frontmatter, BlockLabel };
-export { labels as blockLabels, loadBlocks, loadBaseInstructions };
+interface Skill {
+  slug: string;
+  summary: string;
+  whenToUse: string;
+}
+
+interface SkillFrontmatter {
+  summary: string;
+  when_to_use: string;
+}
+
+async function loadSkills(agentSlug: string): Promise<Skill[]> {
+  const skillsPath = join(root(), "agents", agentSlug, "skills");
+
+  if (!existsSync(skillsPath)) {
+    return [];
+  }
+
+  const entries = await readdir(skillsPath);
+  const skills: Skill[] = [];
+
+  for (const entry of entries) {
+    if (!entry.endsWith(".md")) {
+      continue;
+    }
+
+    const slug = entry.slice(0, -3);
+    const filePath = join(skillsPath, entry);
+    const content = await readFile(filePath, { encoding: "utf8" });
+
+    if (content.indexOf("+++", 0) !== 0) {
+      throw new Error(
+        `Skill file ${colors.keyword(slug)} at path ${colors.path(filePath)} has an invalid frontmatter (expected TOML, but file does not start with '${colors.keyword("+++")}')`,
+      );
+    }
+
+    const ending = content.indexOf("+++", 3);
+    if (ending === -1) {
+      throw new Error(
+        `Skill file ${colors.keyword(slug)} at path ${colors.path(filePath)} has an invalid frontmatter (expected closing '${colors.keyword("+++")}', but none found)`,
+      );
+    }
+
+    const tomlData = content.slice(3, ending);
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const frontmatter = parse(tomlData) as SkillFrontmatter;
+
+    skills.push({
+      slug,
+      summary: frontmatter.summary,
+      whenToUse: frontmatter.when_to_use,
+    });
+  }
+
+  return skills;
+}
+
+export type { Frontmatter, BlockLabel, Skill };
+export { labels as blockLabels, loadBlocks, loadBaseInstructions, loadSkills };

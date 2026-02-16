@@ -21,7 +21,8 @@ const IMAGE_EXT_TO_MEDIA_TYPE: Record<string, string> = {
 
 export const read: ToolDef = {
   description:
-    "Read the full contents of a file within the sandbox. Image files (.jpg, .jpeg, .png, .gif, .webp) are loaded visually and displayed to you in the next turn.",
+    "Read the full contents of a file within the sandbox. Image files (.jpg, .jpeg, .png, .gif, .webp) are loaded visually and displayed to you in the next turn.\n" +
+    "To edit skills, prefer using exec with cat to read, and your normal editing tools for writing. To read a skill by slug, use read-skill instead.",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     try {
       const data = vb.parse(Schema, input);
@@ -31,11 +32,21 @@ export const read: ToolDef = {
       const mediaType = IMAGE_EXT_TO_MEDIA_TYPE[extname(data.path).toLowerCase()];
       if (mediaType !== undefined) {
         const buf = await readFile(realPath);
-        const data = await toWebp(
+        const webp = await toWebp(
           buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
         );
-        ctx.session.pendingImages.push({ data, mediaType: "image/webp", type: "image" });
-        return { mediaType, path: data.path, size, success: true, type: "image" };
+        ctx.session.pendingImages.push({
+          data: webp,
+          mediaType: "image/webp",
+          type: "image",
+        });
+        return {
+          mediaType,
+          path: data.path,
+          size,
+          success: true,
+          type: "image",
+        };
       }
 
       const content = await readFile(realPath, "utf8");

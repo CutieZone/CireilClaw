@@ -66,7 +66,7 @@ function buildCommonArgs(home: string, agentSlug: string): string[] {
     "--bind",
     join(home, ".cireilclaw", "agents", agentSlug, "memories"),
     "/memories",
-    "--ro-bind",
+    "--bind",
     join(home, ".cireilclaw", "agents", agentSlug, "skills"),
     "/skills",
     "--tmpfs",

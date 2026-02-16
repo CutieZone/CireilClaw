@@ -11,7 +11,7 @@ import { loadTools } from "$/config/index.js";
 import { generate } from "$/engine/provider/oai.js";
 import colors from "$/output/colors.js";
 import { debug } from "$/output/log.js";
-import { loadBlocks, loadBaseInstructions } from "$/util/load.js";
+import { loadBlocks, loadBaseInstructions, loadSkills } from "$/util/load.js";
 import { sandboxToReal } from "$/util/paths.js";
 import { readFile, stat } from "node:fs/promises";
 
@@ -112,6 +112,23 @@ async function buildSystemPrompt(agentSlug: string, session: Session): Promise<s
   }
 
   lines.push("</memory_blocks>");
+
+  const skills = await loadSkills(agentSlug);
+
+  if (skills.length > 0) {
+    lines.push("<skills>");
+
+    for (const skill of skills) {
+      lines.push(
+        `<skill slug="${skill.slug}">`,
+        `<summary>${skill.summary}</summary>`,
+        `<when>${skill.whenToUse}</when>`,
+        `</skill>`,
+      );
+    }
+
+    lines.push("</skills>");
+  }
 
   if (session.openedFiles.size > 0) {
     lines.push("<opened_files>", "These are your currently open files:", "");
@@ -251,7 +268,12 @@ export class Engine {
         debug("Tool result", colors.keyword(call.name), result);
 
         const response: ToolMessage = {
-          content: { id: call.id, name: call.name, output: result, type: "toolResponse" },
+          content: {
+            id: call.id,
+            name: call.name,
+            output: result,
+            type: "toolResponse",
+          },
           role: "toolResponse",
         };
         session.pendingToolMessages.push(response);

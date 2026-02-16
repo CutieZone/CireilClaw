@@ -5,6 +5,7 @@ import { closeFile } from "$/engine/tools/close-file.js";
 import { exec } from "$/engine/tools/exec.js";
 import { listDir } from "$/engine/tools/list-dir.js";
 import { openFile } from "$/engine/tools/open-file.js";
+import { skill as readSkill } from "$/engine/tools/read-skill.js";
 import { read } from "$/engine/tools/read.js";
 import { respond } from "$/engine/tools/respond.js";
 import { strReplace } from "$/engine/tools/str-replace.js";
@@ -17,6 +18,7 @@ export const toolRegistry: Record<string, ToolDef> = {
   "list-dir": listDir,
   "open-file": openFile,
   read,
+  "read-skill": readSkill,
   respond,
   "str-replace": strReplace,
   write,
