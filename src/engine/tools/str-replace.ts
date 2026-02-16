@@ -16,15 +16,17 @@ export const strReplace: ToolDef = {
   name: "str-replace",
   parameters: Schema,
   description:
-    "Replace a single occurrence of text in a file with exact string matching.\n\n" +
-    "This tool is ideal for precise, surgical edits. The old_text must match EXACTLY (including whitespace, indentation).\n\n" +
-    "Behavior:\n" +
-    "- Finds and replaces exactly one occurrence\n" +
-    "- Errors if old_text appears multiple times (be more specific)\n" +
-    "- Errors if old_text is not found\n" +
-    "- Shows context around the replacement on success\n\n" +
-    "For creating new files or rewriting entire files, use the `write` tool instead.\n" +
-    "To delete lines, include them in old_text with surrounding context, and omit them from new_text.",
+    "Find and replace exactly one occurrence of a literal string in an existing file.\n\n" +
+    "Both `old_text` and `new_text` must be non-empty. The match is exact — whitespace, indentation, and newlines all matter. On success, returns a few lines of context around the replacement.\n\n" +
+    "Error conditions:\n" +
+    "- `old_text` not found in the file → include more surrounding context to verify your match.\n" +
+    "- `old_text` found more than once → include additional surrounding lines to disambiguate.\n\n" +
+    "Tips:\n" +
+    "- To delete lines, set `new_text` to the surrounding context with the target lines removed.\n" +
+    "- Use `read` or `open-file` first to see the current file contents and craft an accurate match.\n\n" +
+    "When NOT to use:\n" +
+    "- Creating new files or rewriting an entire file — use `write` instead.\n" +
+    "- The file doesn't exist yet — use `write` instead.",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     try {
       const data = vb.parse(Schema, input);

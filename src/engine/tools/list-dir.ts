@@ -10,8 +10,9 @@ const Schema = vb.strictObject({
 
 export const listDir: ToolDef = {
   description:
-    "List the contents of a directory within the sandbox. " +
-    "Valid roots are: /workspace/, /memories/, /blocks/, /skills/.",
+    "List the files and subdirectories at the given sandbox path. Returns each entry's name and type (file, directory, or symlink).\n\n" +
+    "Allowed path roots: /workspace/, /memories/, /blocks/, /skills/.\n\n" +
+    "Use this to explore directory structure before reading or writing specific files.",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     try {
       const data = vb.parse(Schema, input);

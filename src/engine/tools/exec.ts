@@ -16,7 +16,15 @@ function isExecConfig(value: unknown): value is vb.InferOutput<typeof ExecToolCo
 
 export const exec: ToolDef = {
   description:
-    "Execute a command in a sandboxed environment. Only commands in the configured binaries list are allowed. Commands run with /workspace as the working directory.",
+    "Run a shell command inside a bubblewrap sandbox. The working directory is /workspace.\n\n" +
+    "Only binaries explicitly listed in the agent's tools.toml [exec] config are available — all other commands will fail. Returns stdout, stderr, and exit code.\n\n" +
+    "When to use:\n" +
+    "- Running build tools, linters, formatters, scripts, or other CLI programs.\n" +
+    "- Performing operations that cannot be expressed with the other file tools (e.g., grep, git, compilation).\n\n" +
+    "Constraints:\n" +
+    "- Network access and filesystem access outside the sandbox are restricted.\n" +
+    "- Commands that exceed the configured timeout are killed automatically.\n\n" +
+    "Tip: Run `ls /bin` to see which binaries are available in the sandbox.",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     try {
       const data = vb.parse(Schema, input);

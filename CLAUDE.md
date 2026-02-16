@@ -39,6 +39,7 @@ CLI (`@stricli/core`) → Config (TOML) → Harness (multi-channel) → Agent (p
 ### Turn Execution
 
 Each agent turn:
+
 1. Loads config (engine settings, tool toggles)
 2. Builds system prompt from core instructions + memory blocks + skills + opened files
 3. Runs tool loop with OpenAI-compatible API
