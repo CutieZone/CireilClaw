@@ -93,7 +93,7 @@ interface Skill {
 
 interface SkillFrontmatter {
   summary: string;
-  when_to_use: string;
+  whenToUse: string;
 }
 
 async function loadSkills(agentSlug: string): Promise<Skill[]> {
@@ -135,7 +135,7 @@ async function loadSkills(agentSlug: string): Promise<Skill[]> {
     skills.push({
       slug,
       summary: frontmatter.summary,
-      whenToUse: frontmatter.when_to_use,
+      whenToUse: frontmatter.whenToUse,
     });
   }
 
