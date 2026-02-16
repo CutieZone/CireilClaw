@@ -11,6 +11,7 @@ import { saveSession } from "$/db/sessions.js";
 import { DiscordSession, MatrixSession } from "$/harness/session.js";
 import colors from "$/output/colors.js";
 import { debug, info, warning } from "$/output/log.js";
+import { toWebp } from "$/util/image.js";
 import { createRequire } from "node:module";
 
 // oceanic.js's ESM shim breaks under tsx's module loader (.default.default chain
@@ -54,8 +55,9 @@ async function fetchAttachmentImages(msg: DiscordMessage): Promise<ImageContent[
     }
     try {
       const response = await fetch(attachment.url);
-      const data = await response.arrayBuffer();
-      images.push({ data, mediaType, type: "image" });
+      const raw = await response.arrayBuffer();
+      const data = await toWebp(raw);
+      images.push({ data, mediaType: "image/webp", type: "image" });
     } catch (error) {
       warning(
         "Failed to fetch attachment:",
@@ -248,6 +250,7 @@ async function handleMessageCreate(
   // Push user message into history, including any image attachments.
   const textContent = formatUserMessage(msg);
   const imageContents = await fetchAttachmentImages(msg);
+  const historyLengthBeforeTurn = session.history.length;
   session.history.push({
     content: imageContents.length > 0 ? [textContent, ...imageContents] : textContent,
     role: "user",
@@ -268,7 +271,13 @@ async function handleMessageCreate(
   try {
     await agent.engine.runTurn(session, agent.slug);
   } catch (error) {
+    // Roll back any history entries added during this failed turn so that the
+    // next message doesn't see a stranded user message with no response.
+    session.history.length = historyLengthBeforeTurn;
     warning("Error during agent turn:", error instanceof Error ? error.message : String(error));
+    if (error instanceof Error && error.stack !== undefined) {
+      warning("Stack trace:", error.stack);
+    }
     try {
       await msg.channel?.createMessage({ content: "An internal error occurred." });
     } catch {

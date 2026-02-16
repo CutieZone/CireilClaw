@@ -147,6 +147,11 @@ export async function generate(
     tools: context.tools.map(translateTool),
   });
 
+  if (!Array.isArray(resp.choices)) {
+    throw new TypeError(
+      `Unexpected API response: 'choices' is ${String(resp.choices)} — the model may not support vision, or the request was rejected`,
+    );
+  }
   const [choice] = resp.choices;
 
   if (choice === undefined) {

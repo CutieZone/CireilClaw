@@ -174,21 +174,6 @@ function _flushSession(agentSlug: string, session: Session): void {
 
   const { json: historyJson, pendingImages } = serializeHistory(session.history, agentSlug);
 
-  // Write any new image files first (skip ones already on disk — same hash
-  // means same content, so no overwrite needed).
-  if (pendingImages.length > 0) {
-    mkdirSync(imageDir(agentSlug), { recursive: true });
-    for (const img of pendingImages) {
-      if (!existsSync(img.path)) {
-        writeFileSync(img.path, Buffer.from(img.data));
-      }
-      db.insert(images)
-        .values({ agentSlug, id: img.id, mediaType: img.mediaType, sessionId })
-        .onConflictDoNothing()
-        .run();
-    }
-  }
-
   let meta: object | undefined = undefined;
   if (session.channel === "discord") {
     meta = {
@@ -200,6 +185,7 @@ function _flushSession(agentSlug: string, session: Session): void {
     meta = { roomId: session.roomId };
   }
 
+  // Upsert the session row first so that the images FK constraint is satisfied.
   db.insert(sessions)
     .values({
       agentSlug,
@@ -218,6 +204,20 @@ function _flushSession(agentSlug: string, session: Session): void {
       target: sessions.id,
     })
     .run();
+
+  // Write image files and index them after the session row exists.
+  if (pendingImages.length > 0) {
+    mkdirSync(imageDir(agentSlug), { recursive: true });
+    for (const img of pendingImages) {
+      if (!existsSync(img.path)) {
+        writeFileSync(img.path, Buffer.from(img.data));
+      }
+      db.insert(images)
+        .values({ agentSlug, id: img.id, mediaType: img.mediaType, sessionId })
+        .onConflictDoNothing()
+        .run();
+    }
+  }
 }
 
 function loadSessions(agentSlug: string): Map<string, Session> {

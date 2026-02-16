@@ -22,18 +22,18 @@ function sandboxToReal(path: string, agentSlug: string): string {
   let sandboxPath = "";
   let expectedSubdir: "blocks" | "memories" | "skills" | "workspace" | undefined = undefined;
 
-  if (path.startsWith("/blocks/")) {
+  if (path === "/blocks" || path.startsWith("/blocks/")) {
     expectedSubdir = "blocks";
-    sandboxPath = join(origin, "blocks", path.slice("/blocks/".length));
-  } else if (path.startsWith("/memories/")) {
+    sandboxPath = join(origin, "blocks", path.slice("/blocks".length));
+  } else if (path === "/memories" || path.startsWith("/memories/")) {
     expectedSubdir = "memories";
-    sandboxPath = join(origin, "memories", path.slice("/memories/".length));
-  } else if (path.startsWith("/skills/")) {
+    sandboxPath = join(origin, "memories", path.slice("/memories".length));
+  } else if (path === "/skills" || path.startsWith("/skills/")) {
     expectedSubdir = "skills";
-    sandboxPath = join(origin, "skills", path.slice("/skills/".length));
-  } else if (path.startsWith("/workspace/")) {
+    sandboxPath = join(origin, "skills", path.slice("/skills".length));
+  } else if (path === "/workspace" || path.startsWith("/workspace/")) {
     expectedSubdir = "workspace";
-    sandboxPath = join(origin, "workspace", path.slice("/workspace/".length));
+    sandboxPath = join(origin, "workspace", path.slice("/workspace".length));
   } else {
     throw new Error(`Access denied: path '${path}' is outside the sandbox.`);
   }

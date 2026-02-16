@@ -1,5 +1,6 @@
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 
+import { toWebp } from "$/util/image.js";
 import { sandboxToReal, sanitizeError } from "$/util/paths.js";
 import { readFile, stat } from "node:fs/promises";
 import { extname } from "node:path";
@@ -30,7 +31,10 @@ export const read: ToolDef = {
       const mediaType = IMAGE_EXT_TO_MEDIA_TYPE[extname(data.path).toLowerCase()];
       if (mediaType !== undefined) {
         const buf = await readFile(realPath);
-        ctx.session.pendingImages.push({ data: buf.buffer, mediaType, type: "image" });
+        const data = await toWebp(
+          buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
+        );
+        ctx.session.pendingImages.push({ data, mediaType: "image/webp", type: "image" });
         return { mediaType, path: data.path, size, success: true, type: "image" };
       }
 

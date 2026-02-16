@@ -22,6 +22,7 @@
     "oceanic.js": "^1.13.0",
     "openai": "^6.22.0",
     "ora": "^9.3.0",
+    "sharp": "^0.34.5",
     "smol-toml": "^1.6.0",
     "valibot": "^1.2.0"
   },
@@ -37,7 +38,8 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "better-sqlite3"
+      "better-sqlite3",
+      "sharp"
     ]
   }
 }
