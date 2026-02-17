@@ -4,6 +4,7 @@ import type {
   Client as OceanicClient,
   Message as DiscordMessage,
   PossiblyUncachedMessage,
+  TextableChannel,
 } from "oceanic.js";
 
 import { loadChannel } from "$/config/index.js";
@@ -13,7 +14,7 @@ import colors from "$/output/colors.js";
 import { debug, info, warning } from "$/output/log.js";
 import { toWebp } from "$/util/image.js";
 import { createRequire } from "node:module";
-import { TextableChannel, TextableChannelTypes } from "oceanic.js";
+import { TextableChannelTypes } from "oceanic.js";
 
 // oceanic.js's ESM shim breaks under tsx's module loader (.default.default chain
 // resolves to undefined). Force CJS to get the real constructors.
