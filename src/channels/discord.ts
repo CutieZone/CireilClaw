@@ -196,8 +196,7 @@ async function startDiscord(owner: Harness): Promise<OceanicClient> {
     const storedHash = readCommandsHash();
     if (storedHash !== COMMANDS_HASH) {
       try {
-        // oxlint-disable-next-line typescript/no-unsafe-call
-        await client.rest.applications.bulkEditGlobalApplicationCommands(appId, SLASH_COMMANDS);
+        await client.rest.applications.bulkEditGlobalCommands(appId, SLASH_COMMANDS);
         writeCommandsHash(COMMANDS_HASH);
         info("Registered Discord slash commands");
       } catch (error) {
