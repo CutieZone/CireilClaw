@@ -1,20 +1,27 @@
 import type { ImageContent, TextContent } from "$/engine/content.js";
 import type { Harness } from "$/harness/index.js";
 import type {
+  AnyInteractionGateway,
   Client as OceanicClient,
+  CommandInteraction,
   Message as DiscordMessage,
   PossiblyUncachedMessage,
   TextableChannel,
 } from "oceanic.js";
 
+import * as clearCommand from "$/channels/discord/clear-command.js";
 import { loadChannel } from "$/config/index.js";
 import { saveSession } from "$/db/sessions.js";
 import { DiscordSession, MatrixSession } from "$/harness/session.js";
 import colors from "$/output/colors.js";
 import { debug, info, warning } from "$/output/log.js";
 import { toWebp } from "$/util/image.js";
+import { root } from "$/util/paths.js";
+import { createHash } from "node:crypto";
+import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { TextableChannelTypes } from "oceanic.js";
+import { join } from "node:path";
+import { InteractionTypes, TextableChannelTypes } from "oceanic.js";
 
 // oceanic.js's ESM shim breaks under tsx's module loader (.default.default chain
 // resolves to undefined). Force CJS to get the real constructors.
@@ -30,6 +37,29 @@ const TYPING_INTERVAL_MS = 5000;
 
 // Media types supported by OpenAI's vision API.
 const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
+
+// All registered slash commands. Add new command modules here — the hash
+// check on startup will detect changes and re-register with Discord's API.
+const SLASH_COMMANDS = [clearCommand.definition];
+
+type SlashHandler = (interaction: CommandInteraction, owner: Harness) => Promise<void>;
+const SLASH_HANDLERS = new Map<string, SlashHandler>([["clear", clearCommand.handle]]);
+
+// Persisted hash of SLASH_COMMANDS to avoid re-registering on every startup.
+const COMMANDS_HASH = createHash("sha256").update(JSON.stringify(SLASH_COMMANDS)).digest("hex");
+const COMMANDS_HASH_FILE = join(root(), "discord-commands.hash");
+
+function readCommandsHash(): string | undefined {
+  try {
+    return readFileSync(COMMANDS_HASH_FILE, "utf8").trim();
+  } catch {
+    return undefined;
+  }
+}
+
+function writeCommandsHash(hash: string): void {
+  writeFileSync(COMMANDS_HASH_FILE, hash, "utf8");
+}
 
 // Wraps an incoming Discord message's content with sender metadata so the
 // agent has full context about who sent what and when, without needing to
@@ -153,8 +183,30 @@ async function startDiscord(owner: Harness): Promise<OceanicClient> {
     }
   });
 
-  client.on("ready", () => {
+  // oxlint-disable-next-line typescript/no-misused-promises
+  client.on("ready", async () => {
     info("Channel", colors.keyword("discord"), "is now listening");
+
+    const appId = client.application?.id;
+    if (appId === undefined) {
+      warning("Discord application ID unavailable — skipping slash command registration");
+      return;
+    }
+
+    const storedHash = readCommandsHash();
+    if (storedHash !== COMMANDS_HASH) {
+      try {
+        // oxlint-disable-next-line typescript/no-unsafe-call
+        await client.rest.applications.bulkEditGlobalApplicationCommands(appId, SLASH_COMMANDS);
+        writeCommandsHash(COMMANDS_HASH);
+        info("Registered Discord slash commands");
+      } catch (error) {
+        warning(
+          "Failed to register slash commands:",
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+    }
   });
 
   client.on("error", (err) => {
@@ -175,6 +227,11 @@ async function startDiscord(owner: Harness): Promise<OceanicClient> {
   // oxlint-disable-next-line typescript/no-misused-promises
   client.on("messageDelete", async (msg) => {
     await handleMessageDelete(client, owner, ownerId, msg);
+  });
+
+  // oxlint-disable-next-line typescript/no-misused-promises
+  client.on("interactionCreate", async (interaction) => {
+    await handleInteractionCreate(owner, ownerId, interaction);
   });
 
   await client.connect();
@@ -322,6 +379,25 @@ async function handleMessageDelete(
   _msg: PossiblyUncachedMessage,
 ): Promise<void> {
   // TODO: unimplemented
+}
+
+async function handleInteractionCreate(
+  owner: Harness,
+  ownerId: string,
+  interaction: AnyInteractionGateway,
+): Promise<void> {
+  if (interaction.type !== InteractionTypes.APPLICATION_COMMAND) {
+    return;
+  }
+  // Only respond to the configured owner.
+  if (interaction.user.id !== ownerId) {
+    return;
+  }
+
+  const handler = SLASH_HANDLERS.get(interaction.data.name);
+  if (handler !== undefined) {
+    await handler(interaction, owner);
+  }
 }
 
 export { formatUserMessage, startDiscord };
