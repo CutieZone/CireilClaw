@@ -13,7 +13,7 @@ import colors from "$/output/colors.js";
 import { debug, info, warning } from "$/output/log.js";
 import { toWebp } from "$/util/image.js";
 import { createRequire } from "node:module";
-import { TextableChannel } from "oceanic.js";
+import { TextableChannel, TextableChannelTypes } from "oceanic.js";
 
 // oceanic.js's ESM shim breaks under tsx's module loader (.default.default chain
 // resolves to undefined). Force CJS to get the real constructors.
@@ -231,8 +231,10 @@ async function handleMessageCreate(
     const { channelID } = msg;
     const channel = await client.rest.channels.get(channelID);
 
-    if (channel !== undefined && channel instanceof TextableChannel) {
-      session = new DiscordSession(msg.channelID, msg.guildID ?? undefined, channel.nsfw);
+    if (channel.type in TextableChannelTypes) {
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      const textableChannel = channel as TextableChannel;
+      session = new DiscordSession(msg.channelID, msg.guildID ?? undefined, textableChannel.nsfw);
     } else {
       session = new DiscordSession(msg.channelID, msg.guildID ?? undefined);
     }
@@ -242,8 +244,10 @@ async function handleMessageCreate(
     const { channelID } = msg;
     const channel = await client.rest.channels.get(channelID);
 
-    if (channel !== undefined && channel instanceof TextableChannel) {
-      session.isNsfw = channel.nsfw;
+    if (channel.type in TextableChannelTypes) {
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      const textableChannel = channel as TextableChannel;
+      session.isNsfw = textableChannel.nsfw;
     }
   }
 
