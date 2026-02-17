@@ -12,6 +12,7 @@ import type {
 
 import { encode } from "$/util/base64.js";
 import { toJsonSchema } from "@valibot/to-json-schema";
+import { APIError } from "openai/error.js";
 import { OpenAI } from "openai/client.js";
 
 function translateContent(
@@ -137,15 +138,46 @@ export async function generate(
     baseURL: apiBase,
   });
 
-  const resp = await client.chat.completions.create({
-    messages: [
-      { content: context.systemPrompt, role: "system" },
-      ...context.messages.map(translateMsg),
-    ],
-    model: model,
-    tool_choice: "required",
-    tools: context.tools.map(translateTool),
-  });
+  let resp: Awaited<ReturnType<typeof client.chat.completions.create>> | undefined = undefined;
+  try {
+    resp = await client.chat.completions.create({
+      messages: [
+        { content: context.systemPrompt, role: "system" },
+        ...context.messages.map(translateMsg),
+      ],
+      model: model,
+      tool_choice: "required",
+      tools: context.tools.map(translateTool),
+    });
+  } catch (error) {
+    if (error instanceof APIError) {
+      // oxlint-disable-next-line typescript/no-unsafe-assignment
+      const apiErrorDetails: Record<string, unknown> = {
+        code: error.code,
+        // oxlint-disable-next-line typescript/no-unsafe-assignment
+        error: error.error,
+        message: error.message,
+        param: error.param,
+        requestID: error.requestID,
+        // oxlint-disable-next-line typescript/no-unsafe-assignment
+        status: error.status,
+        // oxlint-disable-next-line typescript/no-unsafe-assignment
+        type: error.type,
+      };
+      throw new Error(
+        `API Error (${error.status}): ${error.message}\n` +
+          `Details: ${JSON.stringify(apiErrorDetails, undefined, 2)}\n` +
+          `Request info:\n` +
+          `  - Model: ${model}\n` +
+          `  - API Base: ${apiBase}\n` +
+          `  - Tools: ${context.tools.map((tool) => tool.name).join(", ")}\n` +
+          `  - Messages: ${context.messages.length}\n` +
+          `  - System prompt length: ${context.systemPrompt.length}`,
+        { cause: error },
+      );
+    }
+    throw error;
+  }
 
   if (!Array.isArray(resp.choices)) {
     throw new TypeError(
