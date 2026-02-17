@@ -10,8 +10,6 @@ import type {
   ChatCompletionTool,
 } from "openai/resources";
 
-import colors from "$/output/colors.js";
-import { debug } from "$/output/log.js";
 import { encode } from "$/util/base64.js";
 import { toJsonSchema } from "@valibot/to-json-schema";
 import { OpenAI } from "openai/client.js";
