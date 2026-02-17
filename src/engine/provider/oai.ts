@@ -10,10 +10,12 @@ import type {
   ChatCompletionTool,
 } from "openai/resources";
 
+import colors from "$/output/colors.js";
+import { debug } from "$/output/log.js";
 import { encode } from "$/util/base64.js";
 import { toJsonSchema } from "@valibot/to-json-schema";
-import { APIError } from "openai/error.js";
 import { OpenAI } from "openai/client.js";
+import { APIError } from "openai/error.js";
 
 function translateContent(
   content: Content,
@@ -217,7 +219,7 @@ export async function generate(
       if (it.type === "function") {
         return {
           id: it.id,
-          input: JSON.parse(it.function.arguments),
+          input: it.function.arguments.trim() === "" ? {} : JSON.parse(it.function.arguments),
           name: it.function.name,
           type: "toolCall",
         } as ToolCallContent;

@@ -1,10 +1,5 @@
 import type { ImageContent, TextContent } from "$/engine/content.js";
 import type { Harness } from "$/harness/index.js";
-import type {
-  Client as OceanicClient,
-  Message as DiscordMessage,
-  PossiblyUncachedMessage,
-} from "oceanic.js";
 
 import { loadChannel } from "$/config/index.js";
 import { saveSession } from "$/db/sessions.js";
@@ -13,6 +8,12 @@ import colors from "$/output/colors.js";
 import { debug, info, warning } from "$/output/log.js";
 import { toWebp } from "$/util/image.js";
 import { createRequire } from "node:module";
+import {
+  type Client as OceanicClient,
+  type Message as DiscordMessage,
+  type PossiblyUncachedMessage,
+  TextableChannel,
+} from "oceanic.js";
 
 // oceanic.js's ESM shim breaks under tsx's module loader (.default.default chain
 // resolves to undefined). Force CJS to get the real constructors.
@@ -226,11 +227,14 @@ async function handleMessageCreate(
   if (session === undefined) {
     const { DiscordSession } = await import("$/harness/session.js");
 
-    const isNsfw =
-      msg.channel !== undefined && "nsfw" in msg.channel
-        ? (msg.channel as { nsfw?: boolean }).nsfw
-        : undefined;
-    session = new DiscordSession(msg.channelID, msg.guildID ?? undefined, isNsfw);
+    const channel = msg.channel;
+
+    if (channel !== undefined && channel instanceof TextableChannel) {
+      session = new DiscordSession(msg.channelID, msg.guildID ?? undefined, channel.nsfw);
+    } else {
+      session = new DiscordSession(msg.channelID, msg.guildID ?? undefined);
+    }
+
     agent.sessions.set(sessionId, session);
   } else if (msg.channel !== undefined && "nsfw" in msg.channel) {
     session.isNsfw = (msg.channel as { nsfw: boolean }).nsfw;

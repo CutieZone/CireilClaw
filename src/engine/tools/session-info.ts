@@ -4,13 +4,13 @@ import { DiscordSession, MatrixSession } from "$/harness/session.js";
 import * as vb from "valibot";
 
 // No input parameters needed — this just returns session context.
-const Schema = vb.strictObject({});
+const Schema = vb.object({});
 
 export const sessionInfo: ToolDef = {
   description:
     "Get information about the current session context.\n\n" +
     "Returns:\n" +
-    "- `platform`: The platform type (\"discord\" or \"matrix\")\n" +
+    '- `platform`: The platform type ("discord" or "matrix")\n' +
     "- `channel_id` (Discord only): The Discord channel ID\n" +
     "- `guild_id` (Discord only, optional): The Discord guild/server ID (undefined for DMs)\n" +
     "- `room_id` (Matrix only): The Matrix room ID\n" +
