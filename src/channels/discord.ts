@@ -163,17 +163,17 @@ async function startDiscord(owner: Harness): Promise<OceanicClient> {
 
   // oxlint-disable-next-line typescript/no-misused-promises
   client.on("messageCreate", async (msg) => {
-    await handleMessageCreate(owner, ownerId, msg);
+    await handleMessageCreate(client, owner, ownerId, msg);
   });
 
   // oxlint-disable-next-line typescript/no-misused-promises
   client.on("messageUpdate", async (msg) => {
-    await handleMessageUpdate(owner, ownerId, msg);
+    await handleMessageUpdate(client, owner, ownerId, msg);
   });
 
   // oxlint-disable-next-line typescript/no-misused-promises
   client.on("messageDelete", async (msg) => {
-    await handleMessageDelete(owner, ownerId, msg);
+    await handleMessageDelete(client, owner, ownerId, msg);
   });
 
   await client.connect();
@@ -182,6 +182,7 @@ async function startDiscord(owner: Harness): Promise<OceanicClient> {
 }
 
 async function handleMessageCreate(
+  client: OceanicClient,
   owner: Harness,
   ownerId: string,
   msg: DiscordMessage,
@@ -227,7 +228,8 @@ async function handleMessageCreate(
   if (session === undefined) {
     const { DiscordSession } = await import("$/harness/session.js");
 
-    const { channel } = msg;
+    const { channelID } = msg;
+    const channel = await client.rest.channels.get(channelID);
 
     if (channel !== undefined && channel instanceof TextableChannel) {
       session = new DiscordSession(msg.channelID, msg.guildID ?? undefined, channel.nsfw);
@@ -236,8 +238,13 @@ async function handleMessageCreate(
     }
 
     agent.sessions.set(sessionId, session);
-  } else if (msg.channel !== undefined && msg.channel instanceof TextableChannel) {
-    session.isNsfw = msg.channel.nsfw;
+  } else {
+    const { channelID } = msg;
+    const channel = await client.rest.channels.get(channelID);
+
+    if (channel !== undefined && channel instanceof TextableChannel) {
+      session.isNsfw = channel.nsfw;
+    }
   }
 
   if (!(session instanceof DiscordSession)) {
@@ -295,6 +302,7 @@ async function handleMessageCreate(
 }
 
 async function handleMessageUpdate(
+  _client: OceanicClient,
   _owner: Harness,
   _ownerId: string,
   _msg: DiscordMessage,
@@ -303,6 +311,7 @@ async function handleMessageUpdate(
 }
 
 async function handleMessageDelete(
+  _client: OceanicClient,
   _owner: Harness,
   _ownerId: string,
   _msg: PossiblyUncachedMessage,
