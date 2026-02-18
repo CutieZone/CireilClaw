@@ -1,7 +1,8 @@
-import type { ConfigChangeEvent } from "$/config/index.js";
+import path from "node:path";
 
 import { Agent } from "$/agent/index.js";
 import { startDiscord } from "$/channels/discord.js";
+import type { ConfigChangeEvent } from "$/config/index.js";
 import { loadAgents, loadEngine, watcher } from "$/config/index.js";
 import { initDb } from "$/db/index.js";
 import { flushAllSessions, loadSessions } from "$/db/sessions.js";
@@ -11,7 +12,6 @@ import { config, debug, info } from "$/output/log.js";
 import { root } from "$/util/paths.js";
 import { onShutdown, registerSigint } from "$/util/shutdown.js";
 import { buildCommand } from "@stricli/core";
-import path from "node:path";
 
 // Extracts agent slug from a config directory path
 // e.g., "/home/user/.cireilclaw/agents/mybot/config" -> "mybot"

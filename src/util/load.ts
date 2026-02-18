@@ -1,10 +1,10 @@
-import type { MemoryBlock } from "$/engine/block.js";
-
-import colors from "$/output/colors.js";
-import { root } from "$/util/paths.js";
 import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { format, join } from "node:path";
+
+import type { MemoryBlock } from "$/engine/block.js";
+import colors from "$/output/colors.js";
+import { root } from "$/util/paths.js";
 import { parse } from "smol-toml";
 
 type Frontmatter = Omit<MemoryBlock, "content" | "label" | "metadata">;

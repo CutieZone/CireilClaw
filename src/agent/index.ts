@@ -1,7 +1,6 @@
 import type { EngineConfig } from "$/config/index.js";
-import type { Session } from "$/harness/session.js";
-
 import { Engine } from "$/engine/index.js";
+import type { Session } from "$/harness/session.js";
 
 export class Agent {
   private _engine: Engine;

@@ -1,7 +1,6 @@
 import type { Agent } from "$/agent/index.js";
 import type { Watchers } from "$/config/index.js";
 import type { ChannelType, Session } from "$/harness/session.js";
-
 import { debug } from "$/output/log.js";
 import { Scheduler } from "$/scheduler/index.js";
 

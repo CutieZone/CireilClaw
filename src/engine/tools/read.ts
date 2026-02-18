@@ -1,9 +1,9 @@
-import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
-
-import { toWebp } from "$/util/image.js";
-import { sandboxToReal, sanitizeError } from "$/util/paths.js";
 import { readFile, stat } from "node:fs/promises";
 import { extname } from "node:path";
+
+import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
+import { toWebp } from "$/util/image.js";
+import { sandboxToReal, sanitizeError } from "$/util/paths.js";
 import * as vb from "valibot";
 
 const Schema = vb.strictObject({

@@ -1,17 +1,17 @@
-import type { BlockLabel } from "$/util/load.js";
+import { randomBytes } from "node:crypto";
+import { existsSync } from "node:fs";
+import { mkdir, rename, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 
 // oxlint-disable typescript/no-empty-object-type
 import { toolRegistry } from "$/engine/tools/index.js";
 import colors from "$/output/colors.js";
 import { info, warning } from "$/output/log.js";
+import type { BlockLabel } from "$/util/load.js";
 import { blockLabels } from "$/util/load.js";
 import { root } from "$/util/paths.js";
 import { confirm, input } from "@inquirer/prompts";
 import { buildCommand } from "@stricli/core";
-import { randomBytes } from "node:crypto";
-import { existsSync } from "node:fs";
-import { mkdir, rename, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 
 // oxlint-disable-next-line typescript/no-empty-interface
 interface Flags {}

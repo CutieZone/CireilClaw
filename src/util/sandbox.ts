@@ -1,8 +1,9 @@
-// oxlint-disable promise/no-multiple-resolved
-import { debug, warning } from "$/output/log.js";
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
-import { parse, isAbsolute, join, resolve } from "node:path";
+import { parse, isAbsolute, join, resolve as resolvePath } from "node:path";
+
+// oxlint-disable promise/no-multiple-resolved
+import { debug, warning } from "$/output/log.js";
 
 function locate(command: string, pathEnvOverride?: string[]): string | undefined {
   if (isAbsolute(command)) {
@@ -24,7 +25,7 @@ function locate(command: string, pathEnvOverride?: string[]): string | undefined
   const pathEnv = pathEnvOverride ?? (process.env.PATH ?? "").split(":");
 
   for (const pathEntry of pathEnv) {
-    const joined = resolve(join(pathEntry, command));
+    const joined = resolvePath(join(pathEntry, command));
 
     if (existsSync(joined)) {
       return joined;

@@ -1,15 +1,15 @@
-import type { Agent } from "$/agent/index.js";
-import type { HeartbeatConfig } from "$/config/heartbeat.js";
-import type { Session } from "$/harness/session.js";
-
-import { saveSession } from "$/db/sessions.js";
-import { Engine } from "$/engine/index.js";
-import colors from "$/output/colors.js";
-import { debug, warning } from "$/output/log.js";
-import { agentRoot } from "$/util/paths.js";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+
+import type { Agent } from "$/agent/index.js";
+import type { HeartbeatConfig } from "$/config/heartbeat.js";
+import { saveSession } from "$/db/sessions.js";
+import { Engine } from "$/engine/index.js";
+import type { Session } from "$/harness/session.js";
+import colors from "$/output/colors.js";
+import { debug, warning } from "$/output/log.js";
+import { agentRoot } from "$/util/paths.js";
 
 const HEARTBEAT_OK = "HEARTBEAT_OK";
 

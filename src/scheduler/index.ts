@@ -2,7 +2,6 @@
 import type { Agent } from "$/agent/index.js";
 import type { CronJobConfig } from "$/config/cron.js";
 import type { HeartbeatConfig } from "$/config/heartbeat.js";
-
 import { loadCron, loadHeartbeat } from "$/config/index.js";
 import { getAgentCronJobs } from "$/db/cron.js";
 import colors from "$/output/colors.js";
@@ -193,6 +192,7 @@ export class Scheduler {
         }
       })();
 
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
       if (recurring && !signal.aborted) {
         const timer = setTimeout(fire, delayMs);
         this._cronHandles.set(job.id, fromTimeout(timer));

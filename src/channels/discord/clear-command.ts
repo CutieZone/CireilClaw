@@ -1,7 +1,6 @@
+import { deleteSession } from "$/db/sessions.js";
 import type { Harness } from "$/harness/index.js";
 import type { CommandInteraction, CreateApplicationCommandOptions } from "oceanic.js";
-
-import { deleteSession } from "$/db/sessions.js";
 import { ApplicationCommandTypes } from "oceanic.js";
 
 const definition: CreateApplicationCommandOptions = {

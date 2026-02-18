@@ -1,13 +1,13 @@
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+
 import type { ImageContent } from "$/engine/content.js";
 import type { Message } from "$/engine/message.js";
 import type { Session } from "$/harness/session.js";
-
 import { DiscordSession, MatrixSession } from "$/harness/session.js";
 import { agentRoot } from "$/util/paths.js";
 import { blake3 } from "@noble/hashes/blake3.js";
 import { and, eq, inArray, notInArray } from "drizzle-orm";
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 
 import { getDb } from "./index.js";
 import { images, sessions } from "./schema.js";
@@ -141,23 +141,6 @@ const _pending = new Map<string, { timer: NodeJS.Timeout; flush: () => void }>()
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-
-// Schedules a save after DEBOUNCE_MS. Resets the timer on repeated calls so
-// rapid back-to-back turns only produce one write.
-function saveSession(agentSlug: string, session: Session): void {
-  const key = `${agentSlug}:${session.id()}`;
-  const existing = _pending.get(key);
-  if (existing !== undefined) {
-    clearTimeout(existing.timer);
-  }
-
-  function flush(): void {
-    _pending.delete(key);
-    _flushSession(agentSlug, session);
-  }
-
-  _pending.set(key, { flush, timer: setTimeout(flush, DEBOUNCE_MS) });
-}
 
 // Flushes all pending debounced saves immediately — call before process exit
 // so in-flight data isn't lost.
@@ -293,6 +276,23 @@ function deleteSession(sessionId: string): void {
 
   db.delete(images).where(eq(images.sessionId, sessionId)).run();
   db.delete(sessions).where(eq(sessions.id, sessionId)).run();
+}
+
+// Schedules a save after DEBOUNCE_MS. Resets the timer on repeated calls so
+// rapid back-to-back turns only produce one write.
+function saveSession(agentSlug: string, session: Session): void {
+  const key = `${agentSlug}:${session.id()}`;
+  const existing = _pending.get(key);
+  if (existing !== undefined) {
+    clearTimeout(existing.timer);
+  }
+
+  function flush(): void {
+    _pending.delete(key);
+    _flushSession(agentSlug, session);
+  }
+
+  _pending.set(key, { flush, timer: setTimeout(flush, DEBOUNCE_MS) });
 }
 
 export { flushAllSessions, loadSessions, saveSession, deleteSession };

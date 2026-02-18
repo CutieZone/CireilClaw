@@ -1,6 +1,5 @@
-import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
-
 import { loadIntegrations } from "$/config/index.js";
+import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import * as vb from "valibot";
 
 const Schema = vb.strictObject({

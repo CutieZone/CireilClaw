@@ -1,7 +1,6 @@
 import type { ExecToolConfigSchema } from "$/config/index.js";
-import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
-
 import { loadTools } from "$/config/index.js";
+import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import { exec as sandboxExec } from "$/util/sandbox.js";
 import * as vb from "valibot";
 
@@ -71,7 +70,7 @@ export const exec: ToolDef = {
         args: data.args,
         binaries: execConfig.binaries,
         command: data.command,
-        timeout: execConfig.timeout ?? 60_000,
+        timeout: execConfig.timeout,
       });
 
       if (result.type === "error") {

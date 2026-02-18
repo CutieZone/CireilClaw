@@ -1,5 +1,4 @@
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
-
 import { DiscordSession, MatrixSession } from "$/harness/session.js";
 import * as vb from "valibot";
 

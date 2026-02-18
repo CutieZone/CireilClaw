@@ -2,6 +2,10 @@ import type { Content, ToolCallContent } from "$/engine/content.js";
 import type { Context } from "$/engine/context.js";
 import type { AssistantMessage, Message } from "$/engine/message.js";
 import type { Tool } from "$/engine/tool.js";
+import { encode } from "$/util/base64.js";
+import { toJsonSchema } from "@valibot/to-json-schema";
+import { OpenAI } from "openai/client.js";
+import { APIError } from "openai/error.js";
 import type {
   ChatCompletionContentPartImage,
   ChatCompletionContentPartText,
@@ -9,11 +13,6 @@ import type {
   ChatCompletionMessageToolCall,
   ChatCompletionTool,
 } from "openai/resources";
-
-import { encode } from "$/util/base64.js";
-import { toJsonSchema } from "@valibot/to-json-schema";
-import { OpenAI } from "openai/client.js";
-import { APIError } from "openai/error.js";
 
 function translateContent(
   content: Content,
@@ -200,7 +199,7 @@ export async function generate(
 
   if (reason !== "tool_calls") {
     throw new Error(
-      `Expected 'tool_calls' finish reason (tool_choice is required), got '${reason ?? "unknown"}'`,
+      `Expected 'tool_calls' finish reason (tool_choice is required), got '${reason}'`,
     );
   }
 

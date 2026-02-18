@@ -1,5 +1,6 @@
-import { sandboxToReal, sanitizeError } from "$/util/paths.js";
 import { readFile } from "node:fs/promises";
+
+import { sandboxToReal, sanitizeError } from "$/util/paths.js";
 import * as vb from "valibot";
 
 import type { ToolContext, ToolDef } from "./tool-def.js";

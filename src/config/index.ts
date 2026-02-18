@@ -1,16 +1,16 @@
-import type { CronConfig } from "$/config/cron.js";
-import type { HeartbeatConfig } from "$/config/heartbeat.js";
-import type { ChannelType } from "$/harness/session.js";
-import type { TomlTable } from "smol-toml";
+import { existsSync } from "node:fs";
+import { readdir, readFile, watch } from "node:fs/promises";
+import { join } from "node:path";
 
+import type { CronConfig } from "$/config/cron.js";
 import { CronConfigSchema } from "$/config/cron.js";
+import type { HeartbeatConfig } from "$/config/heartbeat.js";
 import { HeartbeatConfigSchema } from "$/config/heartbeat.js";
+import type { ChannelType } from "$/harness/session.js";
 import colors from "$/output/colors.js";
 import { root } from "$/util/paths.js";
 import merge from "fast-merge-async-iterators";
-import { existsSync } from "node:fs";
-import { readdir, readFile, watch } from "node:fs/promises";
-import path, { join } from "node:path";
+import type { TomlTable } from "smol-toml";
 import { parse } from "smol-toml";
 import * as vb from "valibot";
 
@@ -42,7 +42,7 @@ const ToolsConfigSchema = vb.record(
 type ToolsConfig = vb.InferOutput<typeof ToolsConfigSchema>;
 
 async function loadTools(agentSlug: string): Promise<ToolsConfig> {
-  const file = path.join(root(), "agents", agentSlug, "config", "tools.toml");
+  const file = join(root(), "agents", agentSlug, "config", "tools.toml");
 
   if (existsSync(file)) {
     const data = await readFile(file, { encoding: "utf8" });
@@ -61,7 +61,7 @@ async function loadTools(agentSlug: string): Promise<ToolsConfig> {
 async function loadEngine(agentSlug?: string): Promise<EngineConfig> {
   let obj: TomlTable | undefined = undefined;
   if (agentSlug === undefined) {
-    const file = path.join(root(), "config", "engine.toml");
+    const file = join(root(), "config", "engine.toml");
 
     if (existsSync(file)) {
       const data = await readFile(file, { encoding: "utf8" });
@@ -71,7 +71,7 @@ async function loadEngine(agentSlug?: string): Promise<EngineConfig> {
       throw new Error(`Could not find config file at path: ${colors.path(file)}`);
     }
   } else {
-    const file = path.join(root(), "agents", agentSlug, "config", "engine.toml");
+    const file = join(root(), "agents", agentSlug, "config", "engine.toml");
 
     if (existsSync(file)) {
       const data = await readFile(file, { encoding: "utf8" });
@@ -97,7 +97,7 @@ const IntegrationsConfigSchema = vb.strictObject({
 type IntegrationsConfig = vb.InferOutput<typeof IntegrationsConfigSchema>;
 
 async function loadIntegrations(): Promise<IntegrationsConfig> {
-  const file = path.join(root(), "config", "integrations.toml");
+  const file = join(root(), "config", "integrations.toml");
 
   if (!existsSync(file)) {
     return {};
@@ -120,6 +120,8 @@ type MatrixConfig = vb.InferOutput<typeof MatrixSchema>;
 interface ChannelConfigMap {
   discord: DiscordConfig;
   matrix: MatrixConfig;
+  // oxlint-disable-next-line typescript/no-invalid-void-type
+  internal: void;
 }
 
 async function loadChannel<Key extends ChannelType>(
@@ -167,27 +169,27 @@ type Watchers = AsyncIterableIterator<ConfigChangeEvent>;
 
 // Tags events from a watcher with the base path being watched
 async function* tagWatcher(
-  watcher: AsyncIterableIterator<{ eventType: "change" | "rename"; filename: string | null }>,
+  toTag: AsyncIterableIterator<{ eventType: "change" | "rename"; filename: string | null }>,
   basePath: string,
 ): AsyncGenerator<ConfigChangeEvent> {
-  for await (const event of watcher) {
+  for await (const event of toTag) {
     yield { ...event, basePath };
   }
 }
 
 async function watcher(signal: AbortSignal): Promise<Watchers> {
-  const globalConfigDir = path.join(root(), "config");
+  const globalConfigDir = join(root(), "config");
   const globalConfigWatcher = watch(globalConfigDir, {
     encoding: "utf8",
     recursive: true,
     signal: signal,
   });
 
-  if (!existsSync(path.join(root(), "agents"))) {
+  if (!existsSync(join(root(), "agents"))) {
     return tagWatcher(globalConfigWatcher, globalConfigDir);
   }
 
-  const agentsFiles = await readdir(path.join(root(), "agents"), {
+  const agentsFiles = await readdir(join(root(), "agents"), {
     encoding: "utf8",
     withFileTypes: true,
   });
@@ -196,7 +198,7 @@ async function watcher(signal: AbortSignal): Promise<Watchers> {
     tagWatcher(globalConfigWatcher, globalConfigDir),
     ...agentsFiles
       .filter((entry) => entry.isDirectory())
-      .map((entry) => path.join(entry.parentPath, entry.name, "config"))
+      .map((entry) => join(entry.parentPath, entry.name, "config"))
       .filter((configPath) => existsSync(configPath))
       .map((configPath) =>
         tagWatcher(
@@ -214,7 +216,7 @@ async function watcher(signal: AbortSignal): Promise<Watchers> {
 }
 
 async function loadHeartbeat(agentSlug: string): Promise<HeartbeatConfig> {
-  const file = path.join(root(), "agents", agentSlug, "config", "heartbeat.toml");
+  const file = join(root(), "agents", agentSlug, "config", "heartbeat.toml");
 
   if (!existsSync(file)) {
     return vb.parse(HeartbeatConfigSchema, {});
@@ -227,7 +229,7 @@ async function loadHeartbeat(agentSlug: string): Promise<HeartbeatConfig> {
 }
 
 async function loadCron(agentSlug: string): Promise<CronConfig> {
-  const file = path.join(root(), "agents", agentSlug, "config", "cron.toml");
+  const file = join(root(), "agents", agentSlug, "config", "cron.toml");
 
   if (!existsSync(file)) {
     return vb.parse(CronConfigSchema, {});
@@ -240,7 +242,7 @@ async function loadCron(agentSlug: string): Promise<CronConfig> {
 }
 
 async function loadAgents(): Promise<string[]> {
-  const agentsDir = path.join(root(), "agents");
+  const agentsDir = join(root(), "agents");
 
   if (!existsSync(agentsDir)) {
     return [];

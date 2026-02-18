@@ -1,5 +1,18 @@
+import { createHash } from "node:crypto";
+import { readFileSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { join } from "node:path";
+
+import * as clearCommand from "$/channels/discord/clear-command.js";
+import { loadChannel } from "$/config/index.js";
+import { saveSession } from "$/db/sessions.js";
 import type { ImageContent, TextContent } from "$/engine/content.js";
 import type { Harness } from "$/harness/index.js";
+import { DiscordSession } from "$/harness/session.js";
+import colors from "$/output/colors.js";
+import { debug, info, warning } from "$/output/log.js";
+import { toWebp } from "$/util/image.js";
+import { root } from "$/util/paths.js";
 import type {
   AnyInteractionGateway,
   Client as OceanicClient,
@@ -8,19 +21,6 @@ import type {
   PossiblyUncachedMessage,
   TextableChannel,
 } from "oceanic.js";
-
-import * as clearCommand from "$/channels/discord/clear-command.js";
-import { loadChannel } from "$/config/index.js";
-import { saveSession } from "$/db/sessions.js";
-import { DiscordSession, MatrixSession } from "$/harness/session.js";
-import colors from "$/output/colors.js";
-import { debug, info, warning } from "$/output/log.js";
-import { toWebp } from "$/util/image.js";
-import { root } from "$/util/paths.js";
-import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { join } from "node:path";
 import { InteractionTypes, TextableChannelTypes } from "oceanic.js";
 
 // oceanic.js's ESM shim breaks under tsx's module loader (.default.default chain
@@ -137,7 +137,7 @@ function splitMessage(content: string): string[] {
     const fenceCloseLen = openFence === undefined ? 0 : 4;
 
     if (currentLen + addedLen + fenceCloseLen > CHUNK_LIMIT && currentLines.length > 0) {
-      if (openFence !== null) {
+      if (openFence !== undefined) {
         currentLines.push("```");
       }
       emit();
@@ -158,84 +158,6 @@ function splitMessage(content: string): string[] {
 
   emit();
   return result;
-}
-
-async function startDiscord(owner: Harness): Promise<OceanicClient> {
-  const { token, ownerId } = await loadChannel("discord");
-
-  const client = new Client({
-    auth: `Bot ${token}`,
-    gateway: {
-      intents: Intents.GUILD_MESSAGES | Intents.DIRECT_MESSAGES | Intents.MESSAGE_CONTENT,
-    },
-    rest: {},
-  });
-
-  owner.registerSend("discord", async (session, content) => {
-    if (!(session instanceof DiscordSession)) {
-      throw new Error("Somehow, `session` was not a DiscordSession");
-    }
-
-    const ds = session;
-    const chunks = splitMessage(content);
-    for (const chunk of chunks) {
-      await client.rest.channels.createMessage(ds.channelId, { content: chunk });
-    }
-  });
-
-  // oxlint-disable-next-line typescript/no-misused-promises
-  client.on("ready", async () => {
-    info("Channel", colors.keyword("discord"), "is now listening");
-
-    const appId = client.application?.id;
-    if (appId === undefined) {
-      warning("Discord application ID unavailable — skipping slash command registration");
-      return;
-    }
-
-    const storedHash = readCommandsHash();
-    if (storedHash !== COMMANDS_HASH) {
-      try {
-        await client.rest.applications.bulkEditGlobalCommands(appId, SLASH_COMMANDS);
-        writeCommandsHash(COMMANDS_HASH);
-        info("Registered Discord slash commands");
-      } catch (error) {
-        warning(
-          "Failed to register slash commands:",
-          error instanceof Error ? error.message : String(error),
-        );
-      }
-    }
-  });
-
-  client.on("error", (err) => {
-    warning("An error occurred on Discord:", err instanceof Error ? err.message : String(err));
-    warning(err);
-  });
-
-  // oxlint-disable-next-line typescript/no-misused-promises
-  client.on("messageCreate", async (msg) => {
-    await handleMessageCreate(client, owner, ownerId, msg);
-  });
-
-  // oxlint-disable-next-line typescript/no-misused-promises
-  client.on("messageUpdate", async (msg) => {
-    await handleMessageUpdate(client, owner, ownerId, msg);
-  });
-
-  // oxlint-disable-next-line typescript/no-misused-promises
-  client.on("messageDelete", async (msg) => {
-    await handleMessageDelete(client, owner, ownerId, msg);
-  });
-
-  // oxlint-disable-next-line typescript/no-misused-promises
-  client.on("interactionCreate", async (interaction) => {
-    await handleInteractionCreate(owner, ownerId, interaction);
-  });
-
-  await client.connect();
-
-  return client;
 }
 
 async function handleMessageCreate(
@@ -271,20 +193,18 @@ async function handleMessageCreate(
   // oxlint-disable-next-line typescript/no-non-null-assertion
   const agent = agents[0]!;
 
+  const guildId = msg.guildID ?? undefined;
+
   // Find or create the session for this channel.
   const sessionId =
-    msg.guildID === undefined
-      ? `discord:${msg.channelID}`
-      : `discord:${msg.channelID}|${msg.guildID}`;
+    guildId === undefined ? `discord:${msg.channelID}` : `discord:${msg.channelID}|${msg.guildID}`;
 
   let session = agent.sessions.get(sessionId);
-  if (session instanceof MatrixSession) {
-    throw new TypeError("invalid session type: expected discord, got matrix");
+  if (session !== undefined && !(session instanceof DiscordSession)) {
+    throw new TypeError(`invalid session type: expected discord, got ${session.channel}`);
   }
 
   if (session === undefined) {
-    const { DiscordSession } = await import("$/harness/session.js");
-
     const { channelID } = msg;
     const channel = await client.rest.channels.get(channelID);
 
@@ -319,12 +239,14 @@ async function handleMessageCreate(
     const WAIT_MS = 5000;
     const POLL_MS = 500;
     let waited = 0;
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     while (ds.busy && waited < WAIT_MS) {
       await new Promise<void>((resolve) => {
         setTimeout(resolve, POLL_MS);
       });
       waited += POLL_MS;
     }
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (ds.busy) {
       debug("Ignoring message — session still busy after wait for", colors.keyword(sessionId));
       return;
@@ -413,6 +335,80 @@ async function handleInteractionCreate(
   if (handler !== undefined) {
     await handler(interaction, owner);
   }
+}
+
+async function startDiscord(owner: Harness): Promise<OceanicClient> {
+  const { token, ownerId } = await loadChannel("discord");
+
+  const client = new Client({
+    auth: `Bot ${token}`,
+    gateway: {
+      intents: Intents.GUILD_MESSAGES | Intents.DIRECT_MESSAGES | Intents.MESSAGE_CONTENT,
+    },
+    rest: {},
+  });
+
+  owner.registerSend("discord", async (session, content) => {
+    if (!(session instanceof DiscordSession)) {
+      throw new Error("Somehow, `session` was not a DiscordSession");
+    }
+
+    const ds = session;
+    const chunks = splitMessage(content);
+    for (const chunk of chunks) {
+      await client.rest.channels.createMessage(ds.channelId, { content: chunk });
+    }
+  });
+
+  // oxlint-disable-next-line typescript/no-misused-promises
+  client.on("ready", async () => {
+    info("Channel", colors.keyword("discord"), "is now listening");
+
+    const appId = client.application.id;
+
+    const storedHash = readCommandsHash();
+    if (storedHash !== COMMANDS_HASH) {
+      try {
+        await client.rest.applications.bulkEditGlobalCommands(appId, SLASH_COMMANDS);
+        writeCommandsHash(COMMANDS_HASH);
+        info("Registered Discord slash commands");
+      } catch (error) {
+        warning(
+          "Failed to register slash commands:",
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+    }
+  });
+
+  client.on("error", (err) => {
+    warning("An error occurred on Discord:", err instanceof Error ? err.message : String(err));
+    warning(err);
+  });
+
+  // oxlint-disable-next-line typescript/no-misused-promises
+  client.on("messageCreate", async (msg) => {
+    await handleMessageCreate(client, owner, ownerId, msg);
+  });
+
+  // oxlint-disable-next-line typescript/no-misused-promises
+  client.on("messageUpdate", async (msg) => {
+    await handleMessageUpdate(client, owner, ownerId, msg);
+  });
+
+  // oxlint-disable-next-line typescript/no-misused-promises
+  client.on("messageDelete", async (msg) => {
+    await handleMessageDelete(client, owner, ownerId, msg);
+  });
+
+  // oxlint-disable-next-line typescript/no-misused-promises
+  client.on("interactionCreate", async (interaction) => {
+    await handleInteractionCreate(owner, ownerId, interaction);
+  });
+
+  await client.connect();
+
+  return client;
 }
 
 export { formatUserMessage, startDiscord };

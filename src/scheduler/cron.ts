@@ -1,11 +1,10 @@
 import type { Agent } from "$/agent/index.js";
 import type { CronJobConfig } from "$/config/cron.js";
-import type { Session } from "$/harness/session.js";
-
 import { deleteCronJob, updateLastRun } from "$/db/cron.js";
 import { saveSession } from "$/db/sessions.js";
 import { Engine } from "$/engine/index.js";
 import { Harness } from "$/harness/index.js";
+import type { Session } from "$/harness/session.js";
 import { InternalSession } from "$/harness/session.js";
 import colors from "$/output/colors.js";
 import { debug, warning } from "$/output/log.js";
@@ -31,21 +30,50 @@ function resolveTarget(agent: Agent, target: string): Session | undefined {
   return sessions.get(target);
 }
 
-async function runCronJob(agent: Agent, job: CronJobConfig): Promise<void> {
-  debug("Cron: firing job", colors.keyword(job.id), "for agent", colors.keyword(agent.slug));
+async function deliverOutput(agent: Agent, job: CronJobConfig, content: string): Promise<void> {
+  const { delivery } = job;
 
-  const isOneShot = "at" in job.schedule;
-
-  if (job.execution === "main") {
-    await runMainSession(agent, job);
-  } else {
-    await runIsolatedSession(agent, job);
+  if (delivery === "none") {
+    debug("Cron: job", colors.keyword(job.id), "delivery=none — discarding output");
+    return;
   }
 
-  if (isOneShot) {
-    deleteCronJob(agent.slug, job.id);
-  } else {
-    updateLastRun(agent.slug, job.id, new Date().toISOString());
+  if (delivery === "webhook") {
+    if (job.webhookUrl === undefined) {
+      warning("Cron: job", colors.keyword(job.id), "has delivery=webhook but no webhookUrl");
+      return;
+    }
+    try {
+      await fetch(job.webhookUrl, {
+        body: JSON.stringify({ agentSlug: agent.slug, content, jobId: job.id }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+    } catch (error) {
+      warning(
+        "Cron: webhook delivery failed for job",
+        colors.keyword(job.id),
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+    return;
+  }
+
+  // delivery === "announce"
+  const target = resolveTarget(agent, job.target);
+  if (target === undefined) {
+    debug("Cron: no target session to announce for job", colors.keyword(job.id));
+    return;
+  }
+
+  try {
+    await Harness.get().send(target, content);
+  } catch (error) {
+    warning(
+      "Cron: announce delivery failed for job",
+      colors.keyword(job.id),
+      error instanceof Error ? error.message : String(error),
+    );
   }
 }
 
@@ -137,50 +165,21 @@ async function runIsolatedSession(agent: Agent, job: CronJobConfig): Promise<voi
   await deliverOutput(agent, job, cc);
 }
 
-async function deliverOutput(agent: Agent, job: CronJobConfig, content: string): Promise<void> {
-  const { delivery } = job;
+async function runCronJob(agent: Agent, job: CronJobConfig): Promise<void> {
+  debug("Cron: firing job", colors.keyword(job.id), "for agent", colors.keyword(agent.slug));
 
-  if (delivery === "none") {
-    debug("Cron: job", colors.keyword(job.id), "delivery=none — discarding output");
-    return;
+  const isOneShot = "at" in job.schedule;
+
+  if (job.execution === "main") {
+    await runMainSession(agent, job);
+  } else {
+    await runIsolatedSession(agent, job);
   }
 
-  if (delivery === "webhook") {
-    if (job.webhookUrl === undefined) {
-      warning("Cron: job", colors.keyword(job.id), "has delivery=webhook but no webhookUrl");
-      return;
-    }
-    try {
-      await fetch(job.webhookUrl, {
-        body: JSON.stringify({ agentSlug: agent.slug, content, jobId: job.id }),
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
-      });
-    } catch (error) {
-      warning(
-        "Cron: webhook delivery failed for job",
-        colors.keyword(job.id),
-        error instanceof Error ? error.message : String(error),
-      );
-    }
-    return;
-  }
-
-  // delivery === "announce"
-  const target = resolveTarget(agent, job.target);
-  if (target === undefined) {
-    debug("Cron: no target session to announce for job", colors.keyword(job.id));
-    return;
-  }
-
-  try {
-    await Harness.get().send(target, content);
-  } catch (error) {
-    warning(
-      "Cron: announce delivery failed for job",
-      colors.keyword(job.id),
-      error instanceof Error ? error.message : String(error),
-    );
+  if (isOneShot) {
+    deleteCronJob(agent.slug, job.id);
+  } else {
+    updateLastRun(agent.slug, job.id, new Date().toISOString());
   }
 }
 

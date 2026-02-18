@@ -1,19 +1,19 @@
+import { readFile, stat } from "node:fs/promises";
+
 import type { EngineConfig } from "$/config/index.js";
+import { loadTools } from "$/config/index.js";
 import type { ToolCallContent } from "$/engine/content.js";
 import type { Context } from "$/engine/context.js";
 import type { AssistantMessage, Message, ToolMessage } from "$/engine/message.js";
 import type { ProviderKind } from "$/engine/provider/index.js";
+import { generate } from "$/engine/provider/oai.js";
 import type { Tool } from "$/engine/tool.js";
 import type { ToolContext } from "$/engine/tools/tool-def.js";
 import type { Session } from "$/harness/session.js";
-
-import { loadTools } from "$/config/index.js";
-import { generate } from "$/engine/provider/oai.js";
 import colors from "$/output/colors.js";
 import { debug } from "$/output/log.js";
 import { loadBlocks, loadBaseInstructions, loadSkills } from "$/util/load.js";
 import { sandboxToReal } from "$/util/paths.js";
-import { readFile, stat } from "node:fs/promises";
 
 import { toolRegistry } from "./tools/index.js";
 
@@ -237,6 +237,7 @@ export class Engine {
 
       let assistantMsg: AssistantMessage | undefined = undefined;
       switch (this._type) {
+        // oxlint-disable-next-line typescript/no-unnecessary-condition
         case "openai":
           assistantMsg = await generate(context, this._apiBase, this._apiKey, this._model);
           break;
