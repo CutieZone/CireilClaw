@@ -1,7 +1,7 @@
 // oxlint-disable promise/no-multiple-resolved
 import { debug, warning } from "$/output/log.js";
 import { spawn } from "node:child_process";
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { parse, isAbsolute, join, resolve } from "node:path";
 
 function locate(command: string, pathEnvOverride?: string[]): string | undefined {
@@ -103,22 +103,59 @@ function addSslCertificates(args: string[]): void {
   }
 }
 
-function addEnvironmentVars(args: string[], pathValue: string): void {
-  args.push(
-    "--clearenv",
-    "--setenv",
-    "PATH",
-    pathValue,
-    "--setenv",
-    "HOME",
-    "/workspace",
-    "--setenv",
-    "LANG",
-    "C.UTF-8",
-    "--setenv",
-    "LC_ALL",
-    "C.UTF-8",
-  );
+interface EnvVar {
+  key: string;
+  value: string;
+}
+
+function parseEnvFile(envPath: string): EnvVar[] {
+  if (!existsSync(envPath)) {
+    return [];
+  }
+
+  const content = readFileSync(envPath, "utf8");
+  const vars: EnvVar[] = [];
+
+  for (const line of content.split("\n")) {
+    const trimmed = line.trim();
+
+    if (trimmed.length === 0 || trimmed.startsWith("#")) {
+      continue;
+    }
+
+    const eqIndex = trimmed.indexOf("=");
+    if (eqIndex === -1) {
+      continue;
+    }
+
+    const key = trimmed.slice(0, eqIndex).trim();
+    const value = trimmed.slice(eqIndex + 1).trim();
+
+    if (key.length === 0) {
+      continue;
+    }
+
+    vars.push({ key, value });
+  }
+
+  return vars;
+}
+
+function addEnvironmentVars(args: string[], pathValue: string, extraVars?: EnvVar[]): void {
+  args.push("--clearenv");
+
+  const defaultVars: EnvVar[] = [
+    { key: "PATH", value: pathValue },
+    { key: "HOME", value: "/workspace" },
+    { key: "LANG", value: "C.UTF-8" },
+    { key: "LC_ALL", value: "C.UTF-8" },
+  ];
+
+  const allVars = extraVars ? [...defaultVars, ...extraVars] : defaultVars;
+
+  for (const { key, value } of allVars) {
+    args.push("--setenv", key, value);
+  }
 }
 
 function detectNixOS(): boolean {
@@ -264,15 +301,22 @@ async function buildBwrap(binaries: string[], agentSlug: string): Promise<string
   addEtcBindings(args);
   addSslCertificates(args);
 
+  const envPath = join(home, ".cireilclaw", "agents", agentSlug, "workspace", ".env");
+  const extraVars = parseEnvFile(envPath);
+
+  if (extraVars.length > 0) {
+    debug({ count: extraVars.length, envPath }, "Loaded environment variables from .env file");
+  }
+
   const isNixOS = detectNixOS();
   let success = false;
 
   if (isNixOS) {
     success = await buildNixBindings(args, binaries);
-    addEnvironmentVars(args, "/bin");
+    addEnvironmentVars(args, "/bin", extraVars);
   } else {
     success = buildGenericLinuxBindings(args, binaries);
-    addEnvironmentVars(args, "/usr/bin:/bin:/usr/local/bin");
+    addEnvironmentVars(args, "/usr/bin:/bin:/usr/local/bin", extraVars);
   }
 
   if (!success) {
