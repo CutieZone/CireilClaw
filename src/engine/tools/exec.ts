@@ -11,8 +11,8 @@ const Schema = vb.strictObject({
   command: vb.pipe(
     vb.string(),
     vb.nonEmpty(),
-    vb.check(
-      (value) => !SHELL_METACHAR_PATTERN.test(value),
+    vb.custom(
+      (value) => typeof value === "string" && !SHELL_METACHAR_PATTERN.test(value),
       "Command must be a single binary name without spaces or shell metacharacters. Use 'args' for arguments.",
     ),
   ),
