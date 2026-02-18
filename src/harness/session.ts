@@ -1,7 +1,7 @@
 import type { ImageContent } from "$/engine/content.js";
 import type { Message } from "$/engine/message.js";
 
-type ChannelType = "discord" | "matrix";
+type ChannelType = "discord" | "matrix" | "internal";
 
 abstract class BaseSession {
   abstract readonly channel: ChannelType;
@@ -11,6 +11,13 @@ abstract class BaseSession {
   pendingToolMessages: Message[] = new Array<Message>();
   // Images queued by tools (e.g. read) to be injected as a user message before the next generation.
   pendingImages: ImageContent[] = new Array<ImageContent>();
+
+  // Concurrency gate — true while a turn (user or scheduled) is in progress.
+  busy = false;
+  // Timestamp (ms) of the last user-initiated message; used to resolve target = "last".
+  lastActivity = 0;
+  // Optional hook checked by Harness.send() — return false to suppress delivery.
+  sendFilter?: (content: string) => boolean = undefined;
 
   abstract id(): string;
 }
@@ -54,7 +61,23 @@ class MatrixSession extends BaseSession {
   }
 }
 
-type Session = DiscordSession | MatrixSession;
+// Ephemeral session for isolated cron job execution — never persisted to DB.
+class InternalSession extends BaseSession {
+  override readonly channel = "internal";
 
-export { DiscordSession, MatrixSession };
+  readonly jobId: string;
+
+  constructor(jobId: string) {
+    super();
+    this.jobId = jobId;
+  }
+
+  override id(): string {
+    return `cron:${this.jobId}`;
+  }
+}
+
+type Session = DiscordSession | MatrixSession | InternalSession;
+
+export { DiscordSession, MatrixSession, InternalSession };
 export type { Session, ChannelType };

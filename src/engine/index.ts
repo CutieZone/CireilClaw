@@ -82,6 +82,8 @@ async function buildSystemPrompt(agentSlug: string, session: Session): Promise<s
     } else {
       lines.push(`This is considered a ${session.isNsfw ? "NSFW" : "SFW"} session`);
     }
+  } else if (session.channel === "internal") {
+    lines.push(`This is an internal cron session (job ID: ${session.jobId})`);
   } else {
     throw new Error(`Unimplemented channel: ${session.channel}`);
   }

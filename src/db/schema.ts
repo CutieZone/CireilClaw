@@ -1,5 +1,5 @@
 // oxlint-disable sort-keys
-import { primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 // One row per session. History and opened-files are stored as JSON blobs —
 // we don't need to query inside them, only load/save whole sessions.
@@ -36,4 +36,24 @@ const images = sqliteTable(
   (tb) => [primaryKey({ columns: [tb.id, tb.sessionId] })],
 );
 
-export { sessions, images };
+// Tracks cron jobs: both config-file recurring jobs (for last-run timestamps)
+// and runtime one-shot jobs created via the schedule tool.
+const cronJobs = sqliteTable(
+  "cron_jobs",
+  {
+    agentSlug: text("agent_slug").notNull(),
+    jobId: text("job_id").notNull(),
+    // "one-shot" | "recurring"
+    type: text("type").notNull(),
+    // JSON blob for runtime one-shot jobs (schedule, prompt, delivery, target, etc.)
+    config: text("config"),
+    lastRun: text("last_run"),
+    nextRun: text("next_run"),
+    status: text("status").notNull().default("pending"),
+    retryCount: integer("retry_count").notNull().default(0),
+    createdAt: text("created_at").notNull(),
+  },
+  (tb) => [primaryKey({ columns: [tb.agentSlug, tb.jobId] })],
+);
+
+export { sessions, images, cronJobs };

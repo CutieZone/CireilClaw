@@ -1,7 +1,10 @@
+import type { CronConfig } from "$/config/cron.js";
+import type { HeartbeatConfig } from "$/config/heartbeat.js";
 import type { ChannelType } from "$/harness/session.js";
-import type { FileChangeInfo } from "node:fs/promises";
 import type { TomlTable } from "smol-toml";
 
+import { CronConfigSchema } from "$/config/cron.js";
+import { HeartbeatConfigSchema } from "$/config/heartbeat.js";
 import colors from "$/output/colors.js";
 import { root } from "$/util/paths.js";
 import merge from "fast-merge-async-iterators";
@@ -154,16 +157,34 @@ async function loadChannel<Key extends ChannelType>(
   return vb.parse(schema, obj) as ChannelConfigMap[Key];
 }
 
-type Watchers = AsyncIterableIterator<FileChangeInfo<string>>;
+interface ConfigChangeEvent {
+  eventType: "change" | "rename";
+  filename: string | null;
+  basePath: string;
+}
+
+type Watchers = AsyncIterableIterator<ConfigChangeEvent>;
+
+// Tags events from a watcher with the base path being watched
+async function* tagWatcher(
+  watcher: AsyncIterableIterator<{ eventType: "change" | "rename"; filename: string | null }>,
+  basePath: string,
+): AsyncGenerator<ConfigChangeEvent> {
+  for await (const event of watcher) {
+    yield { ...event, basePath };
+  }
+}
+
 async function watcher(signal: AbortSignal): Promise<Watchers> {
-  const globalConfigWatcher = watch(path.join(root(), "config"), {
+  const globalConfigDir = path.join(root(), "config");
+  const globalConfigWatcher = watch(globalConfigDir, {
     encoding: "utf8",
     recursive: true,
     signal: signal,
   });
 
   if (!existsSync(path.join(root(), "agents"))) {
-    return globalConfigWatcher;
+    return tagWatcher(globalConfigWatcher, globalConfigDir);
   }
 
   const agentsFiles = await readdir(path.join(root(), "agents"), {
@@ -171,19 +192,51 @@ async function watcher(signal: AbortSignal): Promise<Watchers> {
     withFileTypes: true,
   });
 
-  const agentsWatchers = agentsFiles
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => path.join(entry.parentPath, entry.name, "config"))
-    .filter((configPath) => existsSync(configPath))
-    .map((configPath) =>
-      watch(configPath, {
-        encoding: "utf8",
-        recursive: true,
-        signal: signal,
-      }),
-    );
+  const taggedWatchers = [
+    tagWatcher(globalConfigWatcher, globalConfigDir),
+    ...agentsFiles
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => path.join(entry.parentPath, entry.name, "config"))
+      .filter((configPath) => existsSync(configPath))
+      .map((configPath) =>
+        tagWatcher(
+          watch(configPath, {
+            encoding: "utf8",
+            recursive: true,
+            signal: signal,
+          }),
+          configPath,
+        ),
+      ),
+  ];
 
-  return merge.default("iters-close-wait", globalConfigWatcher, ...agentsWatchers);
+  return merge.default("iters-close-wait", ...taggedWatchers);
+}
+
+async function loadHeartbeat(agentSlug: string): Promise<HeartbeatConfig> {
+  const file = path.join(root(), "agents", agentSlug, "config", "heartbeat.toml");
+
+  if (!existsSync(file)) {
+    return vb.parse(HeartbeatConfigSchema, {});
+  }
+
+  const data = await readFile(file, { encoding: "utf8" });
+  const obj = parse(data);
+
+  return vb.parse(HeartbeatConfigSchema, obj);
+}
+
+async function loadCron(agentSlug: string): Promise<CronConfig> {
+  const file = path.join(root(), "agents", agentSlug, "config", "cron.toml");
+
+  if (!existsSync(file)) {
+    return vb.parse(CronConfigSchema, {});
+  }
+
+  const data = await readFile(file, { encoding: "utf8" });
+  const obj = parse(data);
+
+  return vb.parse(CronConfigSchema, obj);
 }
 
 async function loadAgents(): Promise<string[]> {
@@ -205,9 +258,21 @@ export {
   ToolsConfigSchema,
   loadAgents,
   loadChannel,
+  loadCron,
   loadEngine,
+  loadHeartbeat,
   loadIntegrations,
   loadTools,
   watcher,
 };
-export type { EngineConfig, ExecToolConfig, IntegrationsConfig, ToolConfig, ToolsConfig, Watchers };
+export type {
+  ConfigChangeEvent,
+  CronConfig,
+  EngineConfig,
+  ExecToolConfig,
+  HeartbeatConfig,
+  IntegrationsConfig,
+  ToolConfig,
+  ToolsConfig,
+  Watchers,
+};

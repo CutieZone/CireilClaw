@@ -169,6 +169,11 @@ function flushAllSessions(): void {
 }
 
 function _flushSession(agentSlug: string, session: Session): void {
+  // Internal sessions are ephemeral — never persisted.
+  if (session.channel === "internal") {
+    return;
+  }
+
   const db = getDb();
   const sessionId = session.id();
 

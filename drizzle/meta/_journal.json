@@ -15,6 +15,13 @@
       "when": 1771148214805,
       "tag": "20260215093654_amusing_the_hunter",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1771418435550,
+      "tag": "20260218124035_awesome_rumiko_fujikawa",
+      "breakpoints": true
     }
   ]
 }

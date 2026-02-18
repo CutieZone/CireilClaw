@@ -8,6 +8,7 @@ import { openFile } from "$/engine/tools/open-file.js";
 import { skill as readSkill } from "$/engine/tools/read-skill.js";
 import { read } from "$/engine/tools/read.js";
 import { respond } from "$/engine/tools/respond.js";
+import { schedule } from "$/engine/tools/schedule.js";
 import { sessionInfo } from "$/engine/tools/session-info.js";
 import { strReplace } from "$/engine/tools/str-replace.js";
 import { write } from "$/engine/tools/write.js";
@@ -21,6 +22,7 @@ export const toolRegistry: Record<string, ToolDef> = {
   read,
   "read-skill": readSkill,
   respond,
+  schedule,
   "session-info": sessionInfo,
   "str-replace": strReplace,
   write,

@@ -313,11 +313,26 @@ async function handleMessageCreate(
   }
   const ds = session;
 
-  // Prevent concurrent turns on the same session.
-  if (ds.typingInterval !== undefined) {
-    debug("Ignoring message — turn already in progress for", colors.keyword(sessionId));
-    return;
+  // If a scheduled turn (e.g. heartbeat) is running, wait up to 5 s for it
+  // to finish before proceeding. If it's still busy after that, give up.
+  if (ds.busy) {
+    const WAIT_MS = 5000;
+    const POLL_MS = 500;
+    let waited = 0;
+    while (ds.busy && waited < WAIT_MS) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, POLL_MS);
+      });
+      waited += POLL_MS;
+    }
+    if (ds.busy) {
+      debug("Ignoring message — session still busy after wait for", colors.keyword(sessionId));
+      return;
+    }
   }
+
+  session.lastActivity = Date.now();
+  session.busy = true;
 
   // Push user message into history, including any image attachments.
   const textContent = formatUserMessage(msg);
@@ -359,6 +374,7 @@ async function handleMessageCreate(
     saveSession(agent.slug, session);
     clearInterval(ds.typingInterval);
     ds.typingInterval = undefined;
+    session.busy = false;
   }
 }
 
