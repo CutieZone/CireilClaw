@@ -5,9 +5,17 @@ import { loadTools } from "$/config/index.js";
 import { exec as sandboxExec } from "$/util/sandbox.js";
 import * as vb from "valibot";
 
+const SHELL_METACHAR_PATTERN = /[\s"'|&;$`\\]/;
 const Schema = vb.strictObject({
   args: vb.exactOptional(vb.array(vb.pipe(vb.string(), vb.nonEmpty())), []),
-  command: vb.pipe(vb.string(), vb.nonEmpty()),
+  command: vb.pipe(
+    vb.string(),
+    vb.nonEmpty(),
+    vb.check(
+      (value) => !SHELL_METACHAR_PATTERN.test(value),
+      "Command must be a single binary name without spaces or shell metacharacters. Use 'args' for arguments.",
+    ),
+  ),
 });
 
 function isExecConfig(value: unknown): value is vb.InferOutput<typeof ExecToolConfigSchema> {
@@ -18,6 +26,9 @@ export const exec: ToolDef = {
   description:
     "Run a shell command inside a bubblewrap sandbox. The working directory is /workspace.\n\n" +
     "Only binaries explicitly listed in the agent's tools.toml [exec] config are available — all other commands will fail. Returns stdout, stderr, and exit code.\n\n" +
+    "Usage:\n" +
+    "- 'command' must be a single binary name (no spaces, no shell metacharacters like |, &, ;, $, etc.)\n" +
+    "- 'args' is an array of arguments to pass to the command\n\n" +
     "When to use:\n" +
     "- Running build tools, linters, formatters, scripts, or other CLI programs.\n" +
     "- Performing operations that cannot be expressed with the other file tools (e.g., grep, git, compilation).\n\n" +
@@ -45,6 +56,14 @@ export const exec: ToolDef = {
 
       if (!execConfig.enabled) {
         return { error: "Exec tool is disabled in configuration.", success: false };
+      }
+
+      if (!execConfig.binaries.includes(data.command)) {
+        return {
+          error: `Command '${data.command}' is not in the allowed binaries list.`,
+          hint: "Use `bash -c 'command'` if you think the binary is in your $PATH (e.g., from .env).",
+          success: false,
+        };
       }
 
       const result = await sandboxExec({

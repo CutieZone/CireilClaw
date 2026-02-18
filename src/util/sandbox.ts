@@ -60,6 +60,12 @@ function buildCommonArgs(home: string, agentSlug: string): string[] {
   return [
     "bwrap",
     "--die-with-parent",
+    "--unshare-pid",
+    "--unshare-ipc",
+    "--unshare-uts",
+    "--new-session",
+    "--hostname",
+    `${agentSlug}-sandbox`,
     "--bind",
     join(home, ".cireilclaw", "agents", agentSlug, "workspace"),
     "/workspace",
@@ -69,6 +75,8 @@ function buildCommonArgs(home: string, agentSlug: string): string[] {
     "--bind",
     join(home, ".cireilclaw", "agents", agentSlug, "skills"),
     "/skills",
+    "--size",
+    String(64 * 1024 * 1024),
     "--tmpfs",
     "/tmp",
     "--proc",
@@ -324,6 +332,8 @@ async function buildBwrap(binaries: string[], agentSlug: string): Promise<string
     return undefined;
   }
 
+  args.push("--chdir", "/workspace");
+
   return args;
 }
 
@@ -400,40 +410,22 @@ async function runInSandbox(
   return result;
 }
 
+const SHELL_METACHAR_PATTERN = /[\s"'|&;$`\\]/;
+
 async function exec(cfg: ExecConfig): Promise<ExecResult> {
   const { binaries, command, args, timeout, agentSlug } = cfg;
 
-  const cmdParts: string[] = [];
-  let current = "";
-  let inQuote = false;
-  let quoteChar = "";
-
-  for (const char of command) {
-    if ((char === '"' || char === "'") && !inQuote) {
-      inQuote = true;
-      quoteChar = char;
-    } else if (char === quoteChar && inQuote) {
-      inQuote = false;
-      quoteChar = "";
-    } else if (char === " " && !inQuote) {
-      if (current.length > 0) {
-        cmdParts.push(current);
-        current = "";
-      }
-    } else {
-      current += char;
-    }
-  }
-
-  if (current.length > 0) {
-    cmdParts.push(current);
-  }
-
-  const [baseCommand, ...commandArgs] = cmdParts;
-
-  if (baseCommand === undefined || !binaries.includes(baseCommand)) {
+  // Reject any command with shell metacharacters or spaces
+  if (SHELL_METACHAR_PATTERN.test(command)) {
     return {
-      error: `Command '${baseCommand ?? "<empty>"}' is not in the allowed binaries list.`,
+      error: `Command '${command}' contains invalid characters. Use 'args' for arguments.`,
+      type: "error",
+    };
+  }
+
+  if (!binaries.includes(command)) {
+    return {
+      error: `Command '${command}' is not in the allowed binaries list.`,
       type: "error",
     };
   }
@@ -447,14 +439,10 @@ async function exec(cfg: ExecConfig): Promise<ExecResult> {
     };
   }
 
-  const finalArgs = args ?? commandArgs;
-
   const isNixOS = detectNixOS();
-  const commandPath = isNixOS
-    ? `/bin/${baseCommand}`
-    : (locate(baseCommand) ?? `/usr/bin/${baseCommand}`);
+  const commandPath = isNixOS ? `/bin/${command}` : (locate(command) ?? `/usr/bin/${command}`);
 
-  return runInSandbox(bwrap, commandPath, finalArgs, timeout);
+  return runInSandbox(bwrap, commandPath, args ?? [], timeout);
 }
 
 export { buildBwrap, exec, locate };
