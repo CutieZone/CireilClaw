@@ -9,6 +9,12 @@
 - Speedy: Should run well even in a limited environment
 - Composability: Should be completely configurable without editing code; disabling components, enabling features. Hot-reload possibility.
 
+## Project State
+
+Ready for usage.
+
+Core functionality is stable and good for production use. Discord integration is fully functional; Matrix remains a stub. The scheduler (heartbeat + cron) and all 12 tools work as expected.
+
 ## Rationale
 
 <sub>written by: [@lyssieth](https://github.com/lyssieth)</sub>

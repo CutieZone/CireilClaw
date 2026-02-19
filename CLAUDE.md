@@ -34,7 +34,8 @@ CLI (`@stricli/core`) → Config (TOML) → Harness (multi-channel) → Agent (p
 ### Channel Support
 
 - **Discord** — Full integration via oceanic.js with message handling, image attachments, typing indicators, and automatic message chunking.
-- **Matrix** — Session support (implementation via harness abstraction).
+- **Matrix** — Stub only (`MatrixSession` class exists but no channel handler).
+- **Internal** — Ephemeral sessions for heartbeat and isolated cron jobs. Never persisted to DB.
 
 ### Turn Execution
 
@@ -48,35 +49,36 @@ Each agent turn:
 
 ### Key Modules
 
-- **`src/engine/`** — LLM interaction core. Builds system prompts from base instructions + memory blocks + opened files + skills, manages tool registry, calls OpenAI-compatible APIs via `src/engine/provider/oai.ts`.
-- **`src/engine/tools/`** — Extensible tool system (10+ tools). Each tool implements `ToolDef` with a Valibot schema. Tools include: `read`, `write`, `open-file`, `close-file`, `str-replace`, `list-dir`, `exec` (sandboxed), `brave-search`, `read-skill`, and `respond`.
+- **`src/engine/`** — LLM interaction core. Builds system prompts from base instructions + memory blocks + opened files + skills, manages tool registry, calls OpenAI-compatible APIs via `src/engine/provider/oai.ts`. Uses `tool_choice: "required"` — agents must call tools, cannot respond with plain text.
+- **`src/engine/tools/`** — Extensible tool system (12 tools). Each tool implements `ToolDef` with a Valibot schema. Tools include: `read`, `write`, `open-file`, `close-file`, `str-replace`, `list-dir`, `exec` (sandboxed), `brave-search`, `read-skill`, `respond`, `schedule`, and `session-info`.
+- **`src/scheduler/`** — Manages heartbeat and cron jobs. Heartbeat runs `HEARTBEAT.md` checklist in target session. Cron jobs execute in main or isolated sessions with configurable delivery (announce/webhook).
 - **`src/agent/`** — Wraps Engine with a slug identifier and per-channel session management.
-- **`src/harness/`** — Multi-agent orchestrator with file watcher for config hot-reload. Manages both Discord and Matrix channels. Delegates to channel handlers for sending responses.
-- **`src/harness/session.ts`** — Abstract session base class with Discord and Matrix implementations. Tracks conversation history and channel-specific metadata (e.g., NSFW flags, typing intervals).
+- **`src/harness/`** — Multi-agent orchestrator with file watcher for config hot-reload. Manages Discord channels and internal sessions. Delegates to channel handlers for sending responses.
+- **`src/harness/session.ts`** — Abstract session base class with `DiscordSession`, `MatrixSession` (stub), and `InternalSession` implementations. Tracks conversation history, opened files, pending messages/images, and channel-specific metadata.
 - **`src/channels/discord.ts`** — Discord integration with oceanic.js. Handles message creation/updates/deletes, image attachment fetching, typing indicators, and message chunking for Discord's 2000-char limit.
-- **`src/config/`** — Loads and validates TOML config (engine settings, tool toggles) via Valibot. Watches both global and agent-specific config directories.
-- **`src/db/`** — SQLite session persistence with Drizzle ORM. WAL-mode enabled for concurrent read safety.
+- **`src/config/`** — Loads and validates TOML config via Valibot. Global configs: `engine.toml`, `integrations.toml` (Brave Search), `channels/discord.toml`. Agent configs: `engine.toml`, `tools.toml`, `heartbeat.toml`, `cron.toml`. Watches both global and agent-specific directories for hot-reload.
+- **`src/db/`** — SQLite persistence with Drizzle ORM. WAL-mode enabled for concurrent read safety. Three tables: `sessions` (history, opened files), `images` (blake3 hash-based image index for deduplication), and `cron_jobs` (recurring and one-shot scheduled jobs).
 - **`src/util/paths.ts`** — Sandbox enforcement. Only 4 paths are allowed: `/blocks/`, `/memories/`, `/workspace/`, `/skills/`. Prevents symlink escape and path traversal. Maps sandbox paths to real filesystem under `~/.cireilclaw/`.
-- **`src/util/sandbox.ts`** — Bubblewrap sandbox builder. NixOS-aware with `nix-store` queries for dependency binding. Generic Linux fallback binds `/usr`, `/bin`, `/lib`.
-- **`src/util/load.ts`** — Loads memory blocks (person, identity, long-term, soul) and skills with TOML frontmatter + markdown content into the system prompt.
+- **`src/util/sandbox.ts`** — Bubblewrap sandbox builder. NixOS-aware with `nix-store` queries for dependency binding. Generic Linux fallback binds `/usr`, `/bin`, `/lib`. Reads `.env` from workspace for environment variables. 64MB tmpfs for `/tmp`, timeout enforcement via `SIGKILL`.
+- **`src/util/load.ts`** — Loads memory blocks (person, identity, long-term, soul, style-notes) and skills with TOML frontmatter + markdown content into the system prompt.
 - **`src/util/image.ts`** — WebP image conversion (quality 90) for vision API. Handles format conversion and buffer management.
 - **`src/output/`** — Logging and color utilities for console output.
-- **`src/cli/`** — CLI commands built with `@stricli/core`. `init` sets up a new agent, `run` watches config, `clear` clears session history.
+- **`src/cli/`** — CLI commands built with `@stricli/core`. `init` interactively sets up a new agent directory, `run` starts the harness, `clear` deletes one or all sessions from DB.
 
 ### Agent Directory Layout (`~/.cireilclaw/agents/{slug}/`)
 
 ```
-blocks/          # Memory blocks (person.md, identity.md, long-term.md, soul.md)
-config/          # engine.toml (API config), tools.toml (tool toggles)
+blocks/          # Memory blocks (person.md, identity.md, long-term.md, soul.md, style-notes.md)
+config/          # engine.toml (API config), tools.toml (tool toggles, exec config), heartbeat.toml, cron.toml
 core.md          # Base system instructions
 skills/          # Reusable skill documents (markdown with TOML frontmatter)
-workspace/       # Sandboxed workspace for agent operations
+workspace/       # Sandboxed workspace for agent operations (includes HEARTBEAT.md if using heartbeat)
 memories/        # Session-specific memory (persisted across turns)
 ```
 
 ### Persistence
 
-Session history and state are persisted to `~/.cireilclaw/sessions.db` (SQLite with WAL mode) via Drizzle ORM migrations. This allows agents to maintain context across restarts per channel/guild.
+Session history and state are persisted to `~/.cireilclaw/sessions.db` (SQLite with WAL mode) via Drizzle ORM migrations. Session saves are debounced (2 seconds) with `flushAllSessions()` for graceful shutdown. Images are stored as files using blake3 hash filenames with DB index for deduplication across sessions. Cron jobs (one-shot) are also persisted for recovery after restart.
 
 ### Validation
 
