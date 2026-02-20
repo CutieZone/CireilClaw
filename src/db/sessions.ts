@@ -79,7 +79,15 @@ function serializeHistory(
     return ct;
   }
 
-  const serialized = history.map((msg) => ({
+  // Filter out non-persistent messages (e.g., reply context) before serializing.
+  const persistable = history.filter((msg) => {
+    if (msg.role !== "user") {
+      return true;
+    }
+    return msg.persist !== false;
+  });
+
+  const serialized = persistable.map((msg) => ({
     ...msg,
     content: Array.isArray(msg.content)
       ? msg.content.map(serializeContent)

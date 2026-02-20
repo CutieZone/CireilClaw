@@ -8,6 +8,7 @@ import type { HandlerCtx } from "$/channels/discord/handler-ctx.js";
 import { loadChannel } from "$/config/index.js";
 import { saveSession } from "$/db/sessions.js";
 import type { ImageContent, TextContent } from "$/engine/content.js";
+import type { Message } from "$/engine/message.js";
 import type { Harness } from "$/harness/index.js";
 import { DiscordSession } from "$/harness/session.js";
 import colors from "$/output/colors.js";
@@ -75,6 +76,70 @@ function formatUserMessage(msg: DiscordMessage): TextContent {
     content: `<msg from="${username} <${id}>" displayName="${displayName}" timestamp="${timestamp}">${msg.content}</msg>`,
     type: "text",
   };
+}
+
+// Formats a message as a context item (different from user message - marks it as
+// reply context so the agent understands this is historical conversation).
+function formatReplyContext(msg: DiscordMessage): TextContent {
+  const { username } = msg.author;
+  const { id } = msg.author;
+  const displayName = msg.member?.nick ?? msg.author.globalName ?? username;
+  const timestamp = msg.createdAt.toISOString();
+
+  return {
+    content: `<reply-context from="${username} <${id}>" displayName="${displayName}" timestamp="${timestamp}">${msg.content}</reply-context>`,
+    type: "text",
+  };
+}
+
+// Crawls the reply chain from a starting message, collecting all ancestor messages.
+// Returns messages in chronological order (oldest first).
+async function crawlReplyTree(
+  client: OceanicClient,
+  startMsg: DiscordMessage,
+): Promise<DiscordMessage[]> {
+  const messages: DiscordMessage[] = [];
+  const seen = new Set<string>();
+  // Track the message ID we need to fetch next, not the message object itself
+  let nextRef = startMsg.messageReference;
+
+  while (nextRef?.channelID !== undefined && nextRef.messageID !== undefined) {
+    const { channelID, messageID } = nextRef;
+
+    // Prevent infinite loops
+    if (seen.has(messageID)) {
+      break;
+    }
+    seen.add(messageID);
+
+    try {
+      const parent = await client.rest.channels.getMessage(channelID, messageID);
+      messages.push(parent);
+      nextRef = parent.messageReference;
+    } catch {
+      // Failed to fetch parent (deleted, no permission, etc.) - stop crawling
+      break;
+    }
+  }
+
+  // Reverse to get chronological order (oldest first)
+  return messages.toReversed();
+}
+
+// Checks if a Discord message ID already exists in session history.
+function isMessageInHistory(history: Message[], messageId: string): boolean {
+  for (const entry of history) {
+    if (entry.role !== "user") {
+      continue;
+    }
+    const contents = Array.isArray(entry.content) ? entry.content : [entry.content];
+    for (const content of contents) {
+      if (content.type === "text" && content.content.includes(`<${messageId}>`)) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 // Fetches image attachments from a Discord message, filtering to types
@@ -182,11 +247,12 @@ async function handleMessageCreate(
   const userIdMentioned = mentions.users.some((it) => it.id === client.application.id);
 
   let mentionedInReference = false;
+  let directReply: DiscordMessage | undefined = undefined;
   const ref = msg.messageReference;
   if (ref?.channelID !== undefined && ref.messageID !== undefined) {
     try {
       const refMsg = await client.rest.channels.getMessage(ref.channelID, ref.messageID);
-
+      directReply = refMsg;
       mentionedInReference = refMsg.author.id === client.application.id;
     } catch (error: unknown) {
       warning("Failed to fetch message reference for", ref, error);
@@ -271,6 +337,41 @@ async function handleMessageCreate(
 
   session.lastActivity = Date.now();
   session.busy = true;
+
+  // Crawl the full reply tree and add ancestor messages as context.
+  // These messages help the agent understand the conversation flow but
+  // aren't persisted to avoid polluting long-term history.
+  if (directReply !== undefined) {
+    // Crawl ancestors (messages older than the direct reply)
+    const ancestors = await crawlReplyTree(client, directReply);
+
+    // Add all ancestor messages with persist: false
+    for (const ancestor of ancestors) {
+      // Skip if this is the direct reply (we handle it separately)
+      if (ancestor.id === directReply.id) {
+        continue;
+      }
+
+      const ancestorContent = formatReplyContext(ancestor);
+      const ancestorImages = await fetchAttachmentImages(ancestor);
+      ds.history.push({
+        content: ancestorImages.length > 0 ? [ancestorContent, ...ancestorImages] : ancestorContent,
+        persist: false,
+        role: "user",
+      });
+    }
+
+    // Add direct reply only if not already in history
+    if (!isMessageInHistory(ds.history, directReply.id)) {
+      const replyContent = formatReplyContext(directReply);
+      const replyImages = await fetchAttachmentImages(directReply);
+      ds.history.push({
+        content: replyImages.length > 0 ? [replyContent, ...replyImages] : replyContent,
+        persist: true,
+        role: "user",
+      });
+    }
+  }
 
   // Push user message into history, including any image attachments.
   const textContent = formatUserMessage(msg);

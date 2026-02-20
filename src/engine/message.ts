@@ -10,6 +10,9 @@ type UserContent = TextContent | ImageContent;
 interface UserMessage extends BaseMessage {
   role: "user";
   content: UserContent | UserContent[];
+  // If false, this message is included in context but not persisted to DB.
+  // Used for reply chain context that shouldn't pollute long-term history.
+  persist?: boolean;
 }
 
 interface SystemMessage extends BaseMessage {
