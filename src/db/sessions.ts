@@ -157,7 +157,7 @@ function _flushSession(agentSlug: string, session: Session): void {
     return;
   }
 
-  const db = getDb();
+  const db = getDb(agentSlug);
   const sessionId = session.id();
 
   const { json: historyJson, pendingImages } = serializeHistory(session.history, agentSlug);
@@ -176,7 +176,6 @@ function _flushSession(agentSlug: string, session: Session): void {
   // Upsert the session row first so that the images FK constraint is satisfied.
   db.insert(sessions)
     .values({
-      agentSlug,
       channel: session.channel,
       history: historyJson,
       id: sessionId,
@@ -201,7 +200,7 @@ function _flushSession(agentSlug: string, session: Session): void {
         writeFileSync(img.path, Buffer.from(img.data));
       }
       db.insert(images)
-        .values({ agentSlug, id: img.id, mediaType: img.mediaType, sessionId })
+        .values({ id: img.id, mediaType: img.mediaType, sessionId })
         .onConflictDoNothing()
         .run();
     }
@@ -209,8 +208,9 @@ function _flushSession(agentSlug: string, session: Session): void {
 }
 
 function loadSessions(agentSlug: string): Map<string, Session> {
-  const db = getDb();
-  const rows = db.select().from(sessions).where(eq(sessions.agentSlug, agentSlug)).all();
+  const db = getDb(agentSlug);
+  // All sessions in this DB belong to this agent — no slug filter needed.
+  const rows = db.select().from(sessions).all();
   const map = new Map<string, Session>();
 
   for (const row of rows) {
@@ -239,11 +239,11 @@ function loadSessions(agentSlug: string): Map<string, Session> {
 
 // Deletes a session and prunes image files that are no longer referenced by
 // any remaining session.
-function deleteSession(sessionId: string): void {
-  const db = getDb();
+function deleteSession(agentSlug: string, sessionId: string): void {
+  const db = getDb(agentSlug);
 
   const referenced = db
-    .select({ agentSlug: images.agentSlug, id: images.id, mediaType: images.mediaType })
+    .select({ id: images.id, mediaType: images.mediaType })
     .from(images)
     .where(eq(images.sessionId, sessionId))
     .all();
@@ -265,7 +265,7 @@ function deleteSession(sessionId: string): void {
       if (stillShared.has(img.id)) {
         continue;
       }
-      const path = imagePath(img.agentSlug, img.id, img.mediaType);
+      const path = imagePath(agentSlug, img.id, img.mediaType);
       try {
         unlinkSync(path);
       } catch {

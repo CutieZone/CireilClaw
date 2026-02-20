@@ -27,7 +27,7 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
 
   if (agent.sessions.has(sessionId)) {
     agent.sessions.delete(sessionId);
-    deleteSession(sessionId);
+    deleteSession(ctx.agentSlug, sessionId);
     found = true;
   }
 

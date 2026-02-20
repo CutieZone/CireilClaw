@@ -68,8 +68,6 @@ async function run(flags: Flags): Promise<void> {
 
   info("Initializing", colors.keyword("cireilclaw"));
 
-  initDb();
-
   const sc = new AbortController();
 
   registerSigint();
@@ -83,6 +81,7 @@ async function run(flags: Flags): Promise<void> {
   const agents = new Map<string, Agent>();
 
   for (const slug of slugs) {
+    initDb(slug);
     const cfg = await loadEngine(slug);
     const sessions = loadSessions(slug);
     agents.set(slug, new Agent(slug, cfg, sessions));

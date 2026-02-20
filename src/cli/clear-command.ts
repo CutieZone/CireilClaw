@@ -11,8 +11,6 @@ interface Flags {
 }
 
 async function run(flags: Flags): Promise<void> {
-  initDb();
-
   const slugs = await loadAgents();
 
   if (slugs.length === 0) {
@@ -38,6 +36,7 @@ async function run(flags: Flags): Promise<void> {
     });
   }
 
+  initDb(agentSlug);
   const sessions = loadSessions(agentSlug);
 
   if (sessions.size === 0) {
@@ -68,7 +67,7 @@ async function run(flags: Flags): Promise<void> {
   }
 
   for (const id of targets) {
-    deleteSession(id);
+    deleteSession(agentSlug, id);
     info("Cleared", colors.keyword(id));
   }
 }

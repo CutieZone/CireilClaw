@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import { getDb } from "./index.js";
 import { cronJobs } from "./schema.js";
@@ -18,10 +18,9 @@ function upsertCronJob(
     createdAt: string;
   },
 ): void {
-  const db = getDb();
+  const db = getDb(agentSlug);
   db.insert(cronJobs)
     .values({
-      agentSlug,
       config: data.config,
       createdAt: data.createdAt,
       jobId,
@@ -40,38 +39,30 @@ function upsertCronJob(
         status: data.status ?? "pending",
         type: data.type,
       },
-      target: [cronJobs.agentSlug, cronJobs.jobId],
+      target: cronJobs.jobId,
     })
     .run();
 }
 
 function getCronJob(agentSlug: string, jobId: string): CronJobRow | undefined {
-  const db = getDb();
-  return db
-    .select()
-    .from(cronJobs)
-    .where(and(eq(cronJobs.agentSlug, agentSlug), eq(cronJobs.jobId, jobId)))
-    .get();
+  const db = getDb(agentSlug);
+  return db.select().from(cronJobs).where(eq(cronJobs.jobId, jobId)).get();
 }
 
 function getAgentCronJobs(agentSlug: string): CronJobRow[] {
-  const db = getDb();
-  return db.select().from(cronJobs).where(eq(cronJobs.agentSlug, agentSlug)).all();
+  const db = getDb(agentSlug);
+  // All cron jobs in this DB belong to this agent — no slug filter needed.
+  return db.select().from(cronJobs).all();
 }
 
 function deleteCronJob(agentSlug: string, jobId: string): void {
-  const db = getDb();
-  db.delete(cronJobs)
-    .where(and(eq(cronJobs.agentSlug, agentSlug), eq(cronJobs.jobId, jobId)))
-    .run();
+  const db = getDb(agentSlug);
+  db.delete(cronJobs).where(eq(cronJobs.jobId, jobId)).run();
 }
 
 function updateLastRun(agentSlug: string, jobId: string, timestamp: string): void {
-  const db = getDb();
-  db.update(cronJobs)
-    .set({ lastRun: timestamp })
-    .where(and(eq(cronJobs.agentSlug, agentSlug), eq(cronJobs.jobId, jobId)))
-    .run();
+  const db = getDb(agentSlug);
+  db.update(cronJobs).set({ lastRun: timestamp }).where(eq(cronJobs.jobId, jobId)).run();
 }
 
 export type { CronJobRow };

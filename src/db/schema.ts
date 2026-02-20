@@ -3,10 +3,10 @@ import { integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core"
 
 // One row per session. History and opened-files are stored as JSON blobs —
 // we don't need to query inside them, only load/save whole sessions.
+// Note: Each agent has its own database, so no agent_slug column needed.
 const sessions = sqliteTable("sessions", {
   // e.g. "discord:123456789|987654321"
   id: text("id").primaryKey(),
-  agentSlug: text("agent_slug").notNull(),
   // "discord" | "matrix"
   channel: text("channel").notNull(),
   // JSON: channel-specific fields (channelId, guildId, isNsfw, roomId, …)
@@ -22,11 +22,11 @@ const sessions = sqliteTable("sessions", {
 // so we can prune files when a session is cleared.
 // Composite PK allows the same image (same sha256) to be referenced by
 // multiple sessions without duplicating the file.
+// Note: Each agent has its own database, so no agent_slug column needed.
 const images = sqliteTable(
   "images",
   {
     // blake3 hex of the raw image bytes — also the filename stem
-    agentSlug: text("agent_slug").notNull(),
     id: text("id").notNull(),
     mediaType: text("media_type").notNull(),
     sessionId: text("session_id")
@@ -38,22 +38,18 @@ const images = sqliteTable(
 
 // Tracks cron jobs: both config-file recurring jobs (for last-run timestamps)
 // and runtime one-shot jobs created via the schedule tool.
-const cronJobs = sqliteTable(
-  "cron_jobs",
-  {
-    agentSlug: text("agent_slug").notNull(),
-    jobId: text("job_id").notNull(),
-    // "one-shot" | "recurring"
-    type: text("type").notNull(),
-    // JSON blob for runtime one-shot jobs (schedule, prompt, delivery, target, etc.)
-    config: text("config"),
-    lastRun: text("last_run"),
-    nextRun: text("next_run"),
-    status: text("status").notNull().default("pending"),
-    retryCount: integer("retry_count").notNull().default(0),
-    createdAt: text("created_at").notNull(),
-  },
-  (tb) => [primaryKey({ columns: [tb.agentSlug, tb.jobId] })],
-);
+// Note: Each agent has its own database, so job_id is unique within agent.
+const cronJobs = sqliteTable("cron_jobs", {
+  jobId: text("job_id").primaryKey(),
+  // "one-shot" | "recurring"
+  type: text("type").notNull(),
+  // JSON blob for runtime one-shot jobs (schedule, prompt, delivery, target, etc.)
+  config: text("config"),
+  lastRun: text("last_run"),
+  nextRun: text("next_run"),
+  status: text("status").notNull().default("pending"),
+  retryCount: integer("retry_count").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+});
 
 export { sessions, images, cronJobs };
