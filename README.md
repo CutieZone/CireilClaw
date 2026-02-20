@@ -37,7 +37,7 @@ Source: [Tool Use Compatibility](https://platform.moonshot.ai/docs/guide/kimi-k2
 
 We use `tool_choice: "required"` because that prevents having to deal with text output _at all_. However, Kimi K2.5 doesn't support this alongside reasoning.
 
-Due to this flaw, currently we apply the following [hotfix](./src/engine/provider/oai.ts:158).
+Due to this flaw, currently we apply the following [hotfix](https://github.com/CutieZone/CireilClaw/blob/33da64feb751b4d3d12c189d4856d9ce693a4474/src/engine/provider/oai.ts#L158).
 
 ```ts
 if (model.includes("kimi") && model.includes("2.5")) {
