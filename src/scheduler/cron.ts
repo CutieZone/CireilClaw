@@ -103,9 +103,10 @@ async function runMainSession(agent: Agent, job: CronJobConfig): Promise<void> {
       job.model === undefined
         ? agent.engine
         : new Engine({
-            apiBase: job.model.apiBase,
-            apiKey: job.model.apiKey,
-            model: job.model.model,
+            apiBase: job.model.apiBase ?? agent.engine.apiBase,
+            apiKey: job.model.apiKey ?? agent.engine.apiKey,
+            channel: agent.engine.overrides,
+            model: job.model.model ?? agent.engine.model,
           });
 
     await engine.runTurn(session, agent.slug);
@@ -140,9 +141,10 @@ async function runIsolatedSession(agent: Agent, job: CronJobConfig): Promise<voi
       job.model === undefined
         ? agent.engine
         : new Engine({
-            apiBase: job.model.apiBase,
-            apiKey: job.model.apiKey,
-            model: job.model.model,
+            apiBase: job.model.apiBase ?? agent.engine.apiBase,
+            apiKey: job.model.apiKey ?? agent.engine.apiKey,
+            channel: agent.engine.overrides,
+            model: job.model.model ?? agent.engine.model,
           });
 
     await engine.runTurn(session, agent.slug);

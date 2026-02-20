@@ -5,8 +5,8 @@
   "module": "src/entrypoint.ts",
   "exports": "./dist/cireilclaw.js",
   "scripts": {
-    "lint": "oxlint --type-aware .",
-    "lint:fix": "oxlint --type-aware --fix .",
+    "lint": "oxlint --type-aware --type-check .",
+    "lint:fix": "oxlint --type-aware --type-check --fix .",
     "format": "oxfmt --write .",
     "start": "tsx ./src/entrypoint.ts"
   },
@@ -29,17 +29,19 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^25.2.3",
+    "@types/node": "^25.3.0",
     "drizzle-kit": "^0.31.9",
-    "oxfmt": "^0.33.0",
-    "oxlint": "^1.48.0",
-    "oxlint-tsgolint": "^0.14.0",
+    "oxfmt": "^0.34.0",
+    "oxlint": "^1.49.0",
+    "oxlint-tsgolint": "^0.14.2",
     "tsx": "^4.21.0",
     "typescript": "^5"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "esbuild"
+      "better-sqlite3",
+      "esbuild",
+      "sharp"
     ]
   }
 }

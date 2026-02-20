@@ -1,5 +1,5 @@
 import type { Agent } from "$/agent/index.js";
-import type { Watchers } from "$/config/index.js";
+import type { Watchers } from "$/config/schemas.js";
 import type { ChannelType, Session } from "$/harness/session.js";
 import { debug } from "$/output/log.js";
 import { Scheduler } from "$/scheduler/index.js";
@@ -9,10 +9,10 @@ type SendFn = (session: Session, content: string) => Promise<void>;
 export class Harness {
   private static _instance: Harness | undefined;
 
-  private _agents: Map<string, Agent>;
-  private _watcher: Watchers;
-  private _sendHandlers = new Map<ChannelType, SendFn>();
-  private _schedulers = new Map<string, Scheduler>();
+  private readonly _agents: Map<string, Agent>;
+  private readonly _watcher: Watchers;
+  private readonly _sendHandlers = new Map<ChannelType, SendFn>();
+  private readonly _schedulers = new Map<string, Scheduler>();
 
   private constructor(agents: Map<string, Agent>, watcher: Watchers) {
     this._agents = agents;

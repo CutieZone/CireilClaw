@@ -6,6 +6,20 @@ import type { CronConfig } from "$/config/cron.js";
 import { CronConfigSchema } from "$/config/cron.js";
 import type { HeartbeatConfig } from "$/config/heartbeat.js";
 import { HeartbeatConfigSchema } from "$/config/heartbeat.js";
+import type {
+  ChannelConfigMap,
+  ConfigChangeEvent,
+  EngineConfig,
+  IntegrationsConfig,
+  ToolsConfig,
+  Watchers,
+} from "$/config/schemas.js";
+import {
+  DiscordSchema,
+  EngineConfigSchema,
+  IntegrationsConfigSchema,
+  ToolsConfigSchema,
+} from "$/config/schemas.js";
 import type { ChannelType } from "$/harness/session.js";
 import colors from "$/output/colors.js";
 import { root } from "$/util/paths.js";
@@ -13,33 +27,6 @@ import merge from "fast-merge-async-iterators";
 import type { TomlTable } from "smol-toml";
 import { parse } from "smol-toml";
 import * as vb from "valibot";
-
-const EngineConfigSchema = vb.strictObject({
-  apiBase: vb.pipe(vb.string(), vb.nonEmpty(), vb.url()),
-  apiKey: vb.exactOptional(vb.pipe(vb.string(), vb.nonEmpty()), "not-needed"),
-  model: vb.pipe(vb.string(), vb.nonEmpty()),
-});
-
-type EngineConfig = vb.InferOutput<typeof EngineConfigSchema>;
-
-const ExecToolConfigSchema = vb.strictObject({
-  binaries: vb.array(vb.pipe(vb.string(), vb.nonEmpty())),
-  enabled: vb.exactOptional(vb.boolean(), true),
-  timeout: vb.exactOptional(vb.pipe(vb.number(), vb.integer(), vb.minValue(1000)), 60_000),
-});
-
-type ExecToolConfig = vb.InferOutput<typeof ExecToolConfigSchema>;
-
-const ToolConfigSchema = vb.union([vb.boolean(), ExecToolConfigSchema]);
-
-type ToolConfig = vb.InferOutput<typeof ToolConfigSchema>;
-
-const ToolsConfigSchema = vb.record(
-  vb.pipe(vb.string(), vb.nonEmpty()),
-  vb.exactOptional(ToolConfigSchema, true),
-);
-
-type ToolsConfig = vb.InferOutput<typeof ToolsConfigSchema>;
 
 async function loadTools(agentSlug: string): Promise<ToolsConfig> {
   const file = join(root(), "agents", agentSlug, "config", "tools.toml");
@@ -87,15 +74,6 @@ async function loadEngine(agentSlug?: string): Promise<EngineConfig> {
   return cfg;
 }
 
-const IntegrationsConfigSchema = vb.strictObject({
-  brave: vb.exactOptional(
-    vb.strictObject({
-      apiKey: vb.pipe(vb.string(), vb.nonEmpty()),
-    }),
-  ),
-});
-type IntegrationsConfig = vb.InferOutput<typeof IntegrationsConfigSchema>;
-
 async function loadIntegrations(): Promise<IntegrationsConfig> {
   const file = join(root(), "config", "integrations.toml");
 
@@ -109,24 +87,9 @@ async function loadIntegrations(): Promise<IntegrationsConfig> {
   return vb.parse(IntegrationsConfigSchema, obj);
 }
 
-const DiscordSchema = vb.strictObject({
-  ownerId: vb.pipe(vb.string(), vb.nonEmpty(), vb.regex(/[0-9]+/)),
-  token: vb.pipe(vb.string(), vb.nonEmpty()),
-});
-type DiscordConfig = vb.InferOutput<typeof DiscordSchema>;
-const MatrixSchema = vb.strictObject({});
-type MatrixConfig = vb.InferOutput<typeof MatrixSchema>;
-
-interface ChannelConfigMap {
-  discord: DiscordConfig;
-  matrix: MatrixConfig;
-  // oxlint-disable-next-line typescript/no-invalid-void-type
-  internal: void;
-}
-
 async function loadChannel<Key extends ChannelType>(
   channel: Key,
-  agentSlug?: string,
+  agentSlug: string,
 ): Promise<ChannelConfigMap[Key]> {
   const origin = root();
   let path: string | undefined = undefined;
@@ -135,7 +98,6 @@ async function loadChannel<Key extends ChannelType>(
   // oxlint-disable-next-line typescript/switch-exhaustiveness-check
   switch (channel) {
     case "discord":
-      path = join(origin, "config", "channels", `${channel}.toml`);
       schema = DiscordSchema;
       break;
 
@@ -143,13 +105,11 @@ async function loadChannel<Key extends ChannelType>(
       throw new Error(`Channel ${channel} is unimplemented.`);
   }
 
-  if (!existsSync(path) && agentSlug !== undefined) {
-    const maybe = join(origin, "agents", agentSlug, "config", "channels", `${channel}.toml`);
-    if (existsSync(maybe)) {
-      path = maybe;
-    } else {
-      throw new Error(`No channel config found for ${channel}.`);
-    }
+  const maybe = join(origin, "agents", agentSlug, "config", "channels", `${channel}.toml`);
+  if (existsSync(maybe)) {
+    path = maybe;
+  } else {
+    throw new Error(`No channel config found for ${channel}.`);
   }
 
   const tomlData = await readFile(path, "utf8");
@@ -158,14 +118,6 @@ async function loadChannel<Key extends ChannelType>(
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return vb.parse(schema, obj) as ChannelConfigMap[Key];
 }
-
-interface ConfigChangeEvent {
-  eventType: "change" | "rename";
-  filename: string | null;
-  basePath: string;
-}
-
-type Watchers = AsyncIterableIterator<ConfigChangeEvent>;
 
 // Tags events from a watcher with the base path being watched
 async function* tagWatcher(
@@ -253,11 +205,6 @@ async function loadAgents(): Promise<string[]> {
 }
 
 export {
-  EngineConfigSchema,
-  ExecToolConfigSchema,
-  IntegrationsConfigSchema,
-  ToolConfigSchema,
-  ToolsConfigSchema,
   loadAgents,
   loadChannel,
   loadCron,
@@ -266,15 +213,4 @@ export {
   loadIntegrations,
   loadTools,
   watcher,
-};
-export type {
-  ConfigChangeEvent,
-  CronConfig,
-  EngineConfig,
-  ExecToolConfig,
-  HeartbeatConfig,
-  IntegrationsConfig,
-  ToolConfig,
-  ToolsConfig,
-  Watchers,
 };

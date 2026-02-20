@@ -3,7 +3,7 @@ import { basename, dirname, isAbsolute, join, normalize, relative } from "node:p
 import { env } from "node:process";
 
 function root(): string {
-  const home = env.HOME;
+  const home = env["HOME"];
 
   if (home === undefined) {
     throw new Error("$HOME variable not available");

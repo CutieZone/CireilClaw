@@ -1,10 +1,6 @@
 import * as vb from "valibot";
 
-const CronModelSchema = vb.strictObject({
-  apiBase: vb.pipe(vb.string(), vb.nonEmpty(), vb.url()),
-  apiKey: vb.exactOptional(vb.pipe(vb.string(), vb.nonEmpty()), "not-needed"),
-  model: vb.pipe(vb.string(), vb.nonEmpty()),
-});
+import { EngineOverrideSchema } from "./schemas.js";
 
 // Schedule variants:
 // every: run every N seconds (min 60)
@@ -35,7 +31,7 @@ const CronJobConfigSchema = vb.strictObject({
   // Whether to run in the main session or an isolated one.
   execution: vb.exactOptional(vb.picklist(["main", "isolated"]), "isolated"),
   id: vb.pipe(vb.string(), vb.nonEmpty()),
-  model: vb.exactOptional(CronModelSchema),
+  model: vb.exactOptional(EngineOverrideSchema),
   prompt: vb.pipe(vb.string(), vb.nonEmpty()),
   schedule: ScheduleSchema,
   // Session target for announce delivery.

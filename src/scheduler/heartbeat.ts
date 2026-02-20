@@ -118,9 +118,10 @@ export async function runHeartbeat(agent: Agent, cfg: HeartbeatConfig): Promise<
       cfg.model === undefined
         ? agent.engine
         : new Engine({
-            apiBase: cfg.model.apiBase,
-            apiKey: cfg.model.apiKey,
-            model: cfg.model.model,
+            apiBase: cfg.model.apiBase ?? agent.engine.apiBase,
+            apiKey: cfg.model.apiKey ?? agent.engine.apiKey,
+            channel: agent.engine.overrides,
+            model: cfg.model.model ?? agent.engine.model,
           });
 
     await engine.runTurn(session, agent.slug);

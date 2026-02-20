@@ -1,9 +1,11 @@
+// oxlint-disable promise/no-multiple-resolved
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { parse, isAbsolute, join, resolve as resolvePath } from "node:path";
 
-// oxlint-disable promise/no-multiple-resolved
 import { debug, warning } from "$/output/log.js";
+
+import { root } from "./paths.js";
 
 function locate(command: string, pathEnvOverride?: string[]): string | undefined {
   if (isAbsolute(command)) {
@@ -22,7 +24,7 @@ function locate(command: string, pathEnvOverride?: string[]): string | undefined
     }
   }
 
-  const pathEnv = pathEnvOverride ?? (process.env.PATH ?? "").split(":");
+  const pathEnv = pathEnvOverride ?? (process.env["PATH"] ?? "").split(":");
 
   for (const pathEntry of pathEnv) {
     const joined = resolvePath(join(pathEntry, command));
@@ -296,7 +298,7 @@ function buildGenericLinuxBindings(args: string[], binaries: string[]): boolean 
 }
 
 async function buildBwrap(binaries: string[], agentSlug: string): Promise<string[] | undefined> {
-  const home = process.env.HOME;
+  const home = process.env["HOME"];
 
   if (home === undefined) {
     warning("Could not locate $HOME");
@@ -310,7 +312,7 @@ async function buildBwrap(binaries: string[], agentSlug: string): Promise<string
   addEtcBindings(args);
   addSslCertificates(args);
 
-  const envPath = join(home, ".cireilclaw", "agents", agentSlug, "workspace", ".env");
+  const envPath = join(root(), "agents", agentSlug, "workspace", ".env");
   const extraVars = parseEnvFile(envPath);
 
   if (extraVars.length > 0) {

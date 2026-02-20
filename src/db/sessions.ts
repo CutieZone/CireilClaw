@@ -32,7 +32,7 @@ function imagePath(agentSlug: string, id: string, mediaType: string): string {
   return join(imageDir(agentSlug), `${id}${ext}`);
 }
 
-function hashImage(data: ArrayBuffer): string {
+function hashImage(data: ArrayBufferLike): string {
   return Buffer.from(blake3(new Uint8Array(data))).toString("hex");
 }
 
@@ -52,7 +52,7 @@ interface PendingImage {
   id: string;
   mediaType: string;
   path: string;
-  data: ArrayBuffer;
+  data: ArrayBufferLike;
 }
 
 function serializeHistory(

@@ -1,7 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 
-import type { EngineConfig } from "$/config/index.js";
 import { loadTools } from "$/config/index.js";
+import type { EngineConfig, EngineOverride, EngineOverrides } from "$/config/schemas.js";
 import type { ToolCallContent } from "$/engine/content.js";
 import type { Context } from "$/engine/context.js";
 import type { AssistantMessage, Message, ToolMessage } from "$/engine/message.js";
@@ -9,6 +9,7 @@ import type { ProviderKind } from "$/engine/provider/index.js";
 import { generate } from "$/engine/provider/oai.js";
 import type { Tool } from "$/engine/tool.js";
 import type { ToolContext } from "$/engine/tools/tool-def.js";
+import { DiscordSession, MatrixSession } from "$/harness/session.js";
 import type { Session } from "$/harness/session.js";
 import colors from "$/output/colors.js";
 import { debug } from "$/output/log.js";
@@ -179,24 +180,45 @@ async function buildTools(agentSlug: string, _session: Session): Promise<Tool[]>
 }
 
 export class Engine {
-  private _apiKey: string;
-  private _apiBase: string;
-  private _model: string;
-  private _type: ProviderKind;
+  private readonly _apiKey: string;
+  private readonly _apiBase: string;
+  private readonly _model: string;
+  private readonly _type: ProviderKind;
+  private readonly _overrides: EngineOverrides;
 
   constructor(cfg: EngineConfig) {
     this._apiKey = cfg.apiKey;
     this._apiBase = cfg.apiBase;
     this._model = cfg.model;
     this._type = "openai";
+
+    this._overrides = cfg.channel;
   }
 
   get apiBase(): string {
     return this._apiBase;
   }
 
+  get apiKey(): string {
+    return this._apiKey;
+  }
+
   get model(): string {
     return this._model;
+  }
+
+  get overrides(): EngineOverrides {
+    return this._overrides;
+  }
+
+  static resolveOverride(session: Session, overrides: EngineOverrides): EngineOverride | undefined {
+    if (session instanceof DiscordSession && session.guildId !== undefined) {
+      return overrides.discord?.guild?.[session.guildId];
+    } else if (session instanceof MatrixSession) {
+      return overrides.matrix?.[session.roomId];
+    }
+
+    return undefined;
   }
 
   async runTurn(session: Session, agentSlug: string): Promise<void> {
@@ -204,6 +226,12 @@ export class Engine {
     const ctx: ToolContext = { agentSlug, session };
 
     debug("Turn start", colors.keyword(agentSlug), colors.keyword(session.id()));
+
+    const override = Engine.resolveOverride(session, this._overrides);
+
+    const effectiveApikey: string = override?.apiKey ?? this._apiKey;
+    const effectiveApiBase: string = override?.apiBase ?? this._apiBase;
+    const effectiveModel: string = override?.model ?? this._model;
 
     if (session.history.length > MAX_TURNS * 3) {
       debug(
@@ -239,7 +267,7 @@ export class Engine {
       switch (this._type) {
         // oxlint-disable-next-line typescript/no-unnecessary-condition
         case "openai":
-          assistantMsg = await generate(context, this._apiBase, this._apiKey, this._model);
+          assistantMsg = await generate(context, effectiveApiBase, effectiveApikey, effectiveModel);
           break;
 
         default: {

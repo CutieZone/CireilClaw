@@ -2,6 +2,7 @@ import type { Content, ToolCallContent } from "$/engine/content.js";
 import type { Context } from "$/engine/context.js";
 import type { AssistantMessage, Message } from "$/engine/message.js";
 import type { Tool } from "$/engine/tool.js";
+import { debug } from "$/output/log.js";
 import { encode } from "$/util/base64.js";
 import { toJsonSchema } from "@valibot/to-json-schema";
 import { OpenAI } from "openai/client.js";
@@ -17,7 +18,6 @@ import type {
 function translateContent(
   content: Content,
 ): ChatCompletionContentPartImage | ChatCompletionContentPartText {
-  // oxlint-disable-next-line default-case
   switch (content.type) {
     case "text":
       return {
@@ -34,11 +34,12 @@ function translateContent(
       throw new Error(
         `Content type '${content.type}' should not be translated via translateContent - handled separately in translateMsg`,
       );
+    default:
+      throw new Error("Unreachable");
   }
 }
 
 function translateMsg(message: Message): ChatCompletionMessageParam {
-  // oxlint-disable-next-line default-case
   switch (message.role) {
     case "user":
       if (Array.isArray(message.content)) {
@@ -106,6 +107,9 @@ function translateMsg(message: Message): ChatCompletionMessageParam {
         content: message.content.content,
         role: "system",
       };
+
+    default:
+      throw new Error("Unreachable");
   }
 }
 
@@ -139,6 +143,7 @@ export async function generate(
 
   let resp: Awaited<ReturnType<typeof client.chat.completions.create>> | undefined = undefined;
   try {
+    debug("Starting chat completion generation...");
     resp = await client.chat.completions.create({
       messages: [
         { content: context.systemPrompt, role: "system" },
@@ -148,19 +153,16 @@ export async function generate(
       tool_choice: "required",
       tools: context.tools.map(translateTool),
     });
+    debug("Finished chat completion generation...");
   } catch (error) {
     if (error instanceof APIError) {
-      // oxlint-disable-next-line typescript/no-unsafe-assignment
       const apiErrorDetails: Record<string, unknown> = {
         code: error.code,
-        // oxlint-disable-next-line typescript/no-unsafe-assignment
         error: error.error,
         message: error.message,
         param: error.param,
         requestID: error.requestID,
-        // oxlint-disable-next-line typescript/no-unsafe-assignment
         status: error.status,
-        // oxlint-disable-next-line typescript/no-unsafe-assignment
         type: error.type,
       };
       throw new Error(

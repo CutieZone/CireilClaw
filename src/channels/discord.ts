@@ -4,13 +4,14 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 
 import * as clearCommand from "$/channels/discord/clear-command.js";
+import type { HandlerCtx } from "$/channels/discord/handler-ctx.js";
 import { loadChannel } from "$/config/index.js";
 import { saveSession } from "$/db/sessions.js";
 import type { ImageContent, TextContent } from "$/engine/content.js";
 import type { Harness } from "$/harness/index.js";
 import { DiscordSession } from "$/harness/session.js";
 import colors from "$/output/colors.js";
-import { debug, info, warning } from "$/output/log.js";
+import { debug, error as logError, info, warning } from "$/output/log.js";
 import { toWebp } from "$/util/image.js";
 import { root } from "$/util/paths.js";
 import type {
@@ -42,7 +43,7 @@ const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "
 // check on startup will detect changes and re-register with Discord's API.
 const SLASH_COMMANDS = [clearCommand.definition];
 
-type SlashHandler = (interaction: CommandInteraction, owner: Harness) => Promise<void>;
+type SlashHandler = (interaction: CommandInteraction, ctx: HandlerCtx) => Promise<void>;
 const SLASH_HANDLERS = new Map<string, SlashHandler>([["clear", clearCommand.handle]]);
 
 // Persisted hash of SLASH_COMMANDS to avoid re-registering on every startup.
@@ -161,19 +162,9 @@ function splitMessage(content: string): string[] {
 }
 
 async function handleMessageCreate(
-  client: OceanicClient,
-  owner: Harness,
-  ownerId: string,
+  { client, owner, ownerId, agentSlug }: HandlerCtx,
   msg: DiscordMessage,
 ): Promise<void> {
-  // Only respond to the configured owner.
-  if (msg.author.id !== ownerId) {
-    return;
-  }
-  // Ignore bot messages.
-  if (msg.author.bot) {
-    return;
-  }
   // Ignore messages with no text and no image attachments.
   const hasImages = msg.attachments.some(
     (attachment) =>
@@ -184,14 +175,42 @@ async function handleMessageCreate(
     return;
   }
 
-  // Find an agent to handle this message. For now, use the first available agent.
-  const agents = [...owner.agents.values()];
-  if (agents.length === 0) {
-    warning("Received message but no agents are loaded");
+  const isDirectMessage = (msg.guildID ?? undefined) === undefined && msg.author.id === ownerId;
+
+  const { mentions } = msg;
+  const memberIdMentioned = mentions.members.some((it) => it.id === client.application.id);
+  const userIdMentioned = mentions.users.some((it) => it.id === client.application.id);
+
+  let mentionedInReference = false;
+  const ref = msg.messageReference;
+  if (ref?.channelID !== undefined && ref.messageID !== undefined) {
+    try {
+      const refMsg = await client.rest.channels.getMessage(ref.channelID, ref.messageID);
+      const { mentions: refMentions } = refMsg;
+
+      mentionedInReference =
+        refMentions.members.some((it) => it.id === client.application.id) ||
+        refMentions.users.some((it) => it.id === client.application.id);
+    } catch (error: unknown) {
+      warning("Failed to fetch message reference for", ref, error);
+    }
+  }
+
+  // Not mentioned anywhere
+  if (!(mentionedInReference || memberIdMentioned || userIdMentioned || isDirectMessage)) {
     return;
   }
-  // oxlint-disable-next-line typescript/no-non-null-assertion
-  const agent = agents[0]!;
+
+  const agent = owner.agents.get(agentSlug);
+
+  if (agent === undefined) {
+    logError(
+      "There was no agent to be found with slug",
+      colors.keyword(agentSlug),
+      "are you certain you have everything set up correctly?",
+    );
+    return;
+  }
 
   const guildId = msg.guildID ?? undefined;
 
@@ -300,45 +319,34 @@ async function handleMessageCreate(
   }
 }
 
-async function handleMessageUpdate(
-  _client: OceanicClient,
-  _owner: Harness,
-  _ownerId: string,
-  _msg: DiscordMessage,
-): Promise<void> {
+async function handleMessageUpdate(_ctx: HandlerCtx, _msg: DiscordMessage): Promise<void> {
   // TODO: unimplemented
 }
 
-async function handleMessageDelete(
-  _client: OceanicClient,
-  _owner: Harness,
-  _ownerId: string,
-  _msg: PossiblyUncachedMessage,
-): Promise<void> {
+async function handleMessageDelete(_ctx: HandlerCtx, _msg: PossiblyUncachedMessage): Promise<void> {
   // TODO: unimplemented
 }
 
 async function handleInteractionCreate(
-  owner: Harness,
-  ownerId: string,
+  ctx: HandlerCtx,
   interaction: AnyInteractionGateway,
 ): Promise<void> {
   if (interaction.type !== InteractionTypes.APPLICATION_COMMAND) {
     return;
   }
   // Only respond to the configured owner.
-  if (interaction.user.id !== ownerId) {
+  if (interaction.user.id !== ctx.ownerId) {
     return;
   }
 
   const handler = SLASH_HANDLERS.get(interaction.data.name);
   if (handler !== undefined) {
-    await handler(interaction, owner);
+    await handler(interaction, ctx);
   }
 }
 
-async function startDiscord(owner: Harness): Promise<OceanicClient> {
-  const { token, ownerId } = await loadChannel("discord");
+async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicClient> {
+  const { token, ownerId } = await loadChannel("discord", agentSlug);
 
   const client = new Client({
     auth: `Bot ${token}`,
@@ -386,24 +394,31 @@ async function startDiscord(owner: Harness): Promise<OceanicClient> {
     warning(err);
   });
 
+  const ctx: HandlerCtx = {
+    agentSlug,
+    client,
+    owner,
+    ownerId,
+  };
+
   // oxlint-disable-next-line typescript/no-misused-promises
   client.on("messageCreate", async (msg) => {
-    await handleMessageCreate(client, owner, ownerId, msg);
+    await handleMessageCreate(ctx, msg);
   });
 
   // oxlint-disable-next-line typescript/no-misused-promises
   client.on("messageUpdate", async (msg) => {
-    await handleMessageUpdate(client, owner, ownerId, msg);
+    await handleMessageUpdate(ctx, msg);
   });
 
   // oxlint-disable-next-line typescript/no-misused-promises
   client.on("messageDelete", async (msg) => {
-    await handleMessageDelete(client, owner, ownerId, msg);
+    await handleMessageDelete(ctx, msg);
   });
 
   // oxlint-disable-next-line typescript/no-misused-promises
   client.on("interactionCreate", async (interaction) => {
-    await handleInteractionCreate(owner, ownerId, interaction);
+    await handleInteractionCreate(ctx, interaction);
   });
 
   await client.connect();

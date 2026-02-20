@@ -1,11 +1,11 @@
-import type { EngineConfig } from "$/config/index.js";
+import type { EngineConfig } from "$/config/schemas.js";
 import { Engine } from "$/engine/index.js";
 import type { Session } from "$/harness/session.js";
 
 export class Agent {
   private _engine: Engine;
-  private _slug: string;
-  private _sessions: Map<string, Session>;
+  private readonly _slug: string;
+  private readonly _sessions: Map<string, Session>;
 
   constructor(slug: string, cfg: EngineConfig, sessions: Map<string, Session>) {
     this._engine = new Engine(cfg);

@@ -1,5 +1,5 @@
-import type { ExecToolConfigSchema } from "$/config/index.js";
 import { loadTools } from "$/config/index.js";
+import type { ExecToolConfigSchema } from "$/config/schemas.js";
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import { exec as sandboxExec } from "$/util/sandbox.js";
 import * as vb from "valibot";

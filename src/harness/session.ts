@@ -1,7 +1,8 @@
 import type { ImageContent } from "$/engine/content.js";
 import type { Message } from "$/engine/message.js";
 
-type ChannelType = "discord" | "matrix" | "internal";
+const channelTypes = ["discord", "matrix", "internal"] as const;
+type ChannelType = (typeof channelTypes)[number];
 
 abstract class BaseSession {
   abstract readonly channel: ChannelType;
@@ -79,5 +80,5 @@ class InternalSession extends BaseSession {
 
 type Session = DiscordSession | MatrixSession | InternalSession;
 
-export { DiscordSession, MatrixSession, InternalSession };
+export { DiscordSession, MatrixSession, InternalSession, channelTypes as channelTypeList };
 export type { Session, ChannelType };

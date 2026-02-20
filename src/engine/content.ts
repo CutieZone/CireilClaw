@@ -5,7 +5,7 @@ interface TextContent {
 
 interface ImageContent {
   type: "image";
-  data: ArrayBuffer;
+  data: ArrayBufferLike;
   mediaType: string;
 }
 

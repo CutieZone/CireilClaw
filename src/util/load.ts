@@ -6,6 +6,7 @@ import type { MemoryBlock } from "$/engine/block.js";
 import colors from "$/output/colors.js";
 import { root } from "$/util/paths.js";
 import { parse } from "smol-toml";
+import * as vb from "valibot";
 
 type Frontmatter = Omit<MemoryBlock, "content" | "label" | "metadata">;
 
@@ -91,10 +92,10 @@ interface Skill {
   whenToUse: string;
 }
 
-interface SkillFrontmatter {
-  summary: string;
-  whenToUse: string;
-}
+const FrontmatterSchema = vb.strictObject({
+  summary: vb.pipe(vb.string(), vb.nonEmpty()),
+  whenToUse: vb.pipe(vb.string(), vb.nonEmpty()),
+});
 
 async function loadSkills(agentSlug: string): Promise<Skill[]> {
   const skillsPath = join(root(), "agents", agentSlug, "skills");
@@ -129,8 +130,8 @@ async function loadSkills(agentSlug: string): Promise<Skill[]> {
     }
 
     const tomlData = content.slice(3, ending);
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const frontmatter = parse(tomlData) as SkillFrontmatter;
+    const tomlObj = parse(tomlData);
+    const frontmatter = vb.parse(FrontmatterSchema, tomlObj);
 
     skills.push({
       slug,

@@ -36,6 +36,8 @@
     "eslint/max-classes-per-file": "off",
     "eslint/no-warning-comments": "off",
     "eslint/no-bitwise": "off",
+    "typescript/prefer-readonly-parameter-types": "off",
+    "typescript/strict-void-return": "off",
     "unicorn/switch-case-braces": "off",
     "unicorn/no-useless-undefined": "off",
     "eslint/no-console": [

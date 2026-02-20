@@ -1,15 +1,11 @@
 import * as vb from "valibot";
 
+import { EngineOverrideSchema } from "./schemas.js";
+
 const ActiveHoursSchema = vb.strictObject({
   end: vb.pipe(vb.string(), vb.nonEmpty(), vb.regex(/^\d{2}:\d{2}$/, "Must be HH:MM format")),
   start: vb.pipe(vb.string(), vb.nonEmpty(), vb.regex(/^\d{2}:\d{2}$/, "Must be HH:MM format")),
   timezone: vb.pipe(vb.string(), vb.nonEmpty()),
-});
-
-const HeartbeatModelSchema = vb.strictObject({
-  apiBase: vb.pipe(vb.string(), vb.nonEmpty(), vb.url()),
-  apiKey: vb.exactOptional(vb.pipe(vb.string(), vb.nonEmpty()), "not-needed"),
-  model: vb.pipe(vb.string(), vb.nonEmpty()),
 });
 
 const HeartbeatVisibilitySchema = vb.strictObject({
@@ -26,7 +22,7 @@ const HeartbeatConfigSchema = vb.strictObject({
   enabled: vb.exactOptional(vb.boolean(), false),
   // Interval in seconds between heartbeat pulses. Minimum 60s.
   interval: vb.exactOptional(vb.pipe(vb.number(), vb.integer(), vb.minValue(60)), 1800),
-  model: vb.exactOptional(HeartbeatModelSchema),
+  model: vb.exactOptional(EngineOverrideSchema),
   // Session target: "last" = most recently active session, "none" = skip, or a specific session ID.
   target: vb.exactOptional(vb.pipe(vb.string(), vb.nonEmpty()), "last"),
   visibility: vb.exactOptional(HeartbeatVisibilitySchema, {

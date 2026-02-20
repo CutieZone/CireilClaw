@@ -2,12 +2,12 @@ import path from "node:path";
 
 import { Agent } from "$/agent/index.js";
 import { startDiscord } from "$/channels/discord.js";
-import type { ConfigChangeEvent } from "$/config/index.js";
 import { loadAgents, loadEngine, watcher } from "$/config/index.js";
+import type { ConfigChangeEvent } from "$/config/schemas.js";
 import { initDb } from "$/db/index.js";
 import { flushAllSessions, loadSessions } from "$/db/sessions.js";
 import { Harness } from "$/harness/index.js";
-import color from "$/output/colors.js";
+import colors from "$/output/colors.js";
 import { config, debug, info } from "$/output/log.js";
 import { root } from "$/util/paths.js";
 import { onShutdown, registerSigint } from "$/util/shutdown.js";
@@ -46,16 +46,16 @@ async function handleConfigChange(
 
   const agent = agents.get(slug);
   if (agent === undefined) {
-    info("Unknown agent", color.keyword(slug), "- skipping reload");
+    info("Unknown agent", colors.keyword(slug), "- skipping reload");
     return;
   }
 
   try {
     const cfg = await loadEngine(slug);
     agent.updateEngine(cfg);
-    info("Reloaded engine config for", color.keyword(slug));
+    info("Reloaded engine config for", colors.keyword(slug));
   } catch (error) {
-    info("Failed to reload engine config for", color.keyword(slug), "-", error);
+    info("Failed to reload engine config for", colors.keyword(slug), "-", error);
   }
 }
 
@@ -66,7 +66,7 @@ interface Flags {
 async function run(flags: Flags): Promise<void> {
   config.level = flags.logLevel;
 
-  info("Initializing", color.keyword("cireilclaw"));
+  info("Initializing", colors.keyword("cireilclaw"));
 
   initDb();
 
@@ -86,7 +86,7 @@ async function run(flags: Flags): Promise<void> {
     const cfg = await loadEngine(slug);
     const sessions = loadSessions(slug);
     agents.set(slug, new Agent(slug, cfg, sessions));
-    info("Loaded agent", color.keyword(slug));
+    info("Loaded agent", colors.keyword(slug));
   }
 
   const watchers = await watcher(sc.signal);
@@ -97,18 +97,22 @@ async function run(flags: Flags): Promise<void> {
     harness.stopSchedulers();
   });
 
-  await startDiscord(harness);
+  for (const slug of agents.keys()) {
+    await startDiscord(harness, slug);
+  }
   await harness.startSchedulers(sc.signal);
 
+  info("Running with", colors.number(agents.size), "agents");
+
   for await (const event of harness.watcher) {
-    info("Config change", color.keyword(event.eventType), color.path(event.filename ?? ""));
+    info("Config change", colors.keyword(event.eventType), colors.path(event.filename ?? ""));
     await handleConfigChange(event, agents);
 
     const filename = event.filename ?? "";
     if (filename === "heartbeat.toml" || filename === "cron.toml") {
       const slug = extractSlugFromPath(event.basePath);
       if (slug !== undefined) {
-        debug("Reloading scheduler for agent", color.keyword(slug));
+        debug("Reloading scheduler for agent", colors.keyword(slug));
         await harness.reloadScheduler(slug);
       }
     }

@@ -1,7 +1,8 @@
 import { deleteSession } from "$/db/sessions.js";
-import type { Harness } from "$/harness/index.js";
 import type { CommandInteraction, CreateApplicationCommandOptions } from "oceanic.js";
 import { ApplicationCommandTypes } from "oceanic.js";
+
+import type { HandlerCtx } from "./handler-ctx.js";
 
 const definition: CreateApplicationCommandOptions = {
   description: "Clear the current channel's conversation history",
@@ -9,20 +10,25 @@ const definition: CreateApplicationCommandOptions = {
   type: ApplicationCommandTypes.CHAT_INPUT,
 };
 
-async function handle(interaction: CommandInteraction, owner: Harness): Promise<void> {
+async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise<void> {
   const channelId = interaction.channelID;
   const guildId = interaction.guildID ?? undefined;
   const sessionId =
     guildId === undefined ? `discord:${channelId}` : `discord:${channelId}|${guildId}`;
 
   let found = false;
-  for (const agent of owner.agents.values()) {
-    if (agent.sessions.has(sessionId)) {
-      agent.sessions.delete(sessionId);
-      deleteSession(sessionId);
-      found = true;
-      break;
-    }
+  const agent = ctx.owner.agents.get(ctx.agentSlug);
+  if (agent === undefined) {
+    await interaction.createMessage({
+      content: "Failed to find valid session: no such agent exists here.",
+    });
+    return;
+  }
+
+  if (agent.sessions.has(sessionId)) {
+    agent.sessions.delete(sessionId);
+    deleteSession(sessionId);
+    found = true;
   }
 
   await interaction.createMessage({
