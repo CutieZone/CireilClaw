@@ -186,11 +186,8 @@ async function handleMessageCreate(
   if (ref?.channelID !== undefined && ref.messageID !== undefined) {
     try {
       const refMsg = await client.rest.channels.getMessage(ref.channelID, ref.messageID);
-      const { mentions: refMentions } = refMsg;
 
-      mentionedInReference =
-        refMentions.members.some((it) => it.id === client.application.id) ||
-        refMentions.users.some((it) => it.id === client.application.id);
+      mentionedInReference = refMsg.author.id === client.application.id;
     } catch (error: unknown) {
       warning("Failed to fetch message reference for", ref, error);
     }
