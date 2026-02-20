@@ -15,6 +15,20 @@ Ready for usage.
 
 Core functionality is stable and good for production use. Discord integration is fully functional; Matrix remains a stub. The scheduler (heartbeat + cron) and all 12 tools work as expected.
 
+## Platform Requirements
+
+**Linux-native.** The sandbox relies on Linux kernel features (namespaces, cgroups) via `bubblewrap`. There is no cross-platform sandbox implementation.
+
+| Platform | Status |
+|----------|--------|
+| **Linux** | ✅ Full support |
+| **NixOS** | ✅ First-class — automatic dependency resolution via `nix-store` |
+| **Windows** | ⚠️ WSL2 required (runs Linux version) |
+| **macOS** | ⚠️ Docker or VM required — no native sandbox equivalent |
+| **BSDs** | 🔮 Potential future support via jails (FreeBSD) or `pledge`/`unveil` (OpenBSD) |
+
+The answer to "what about macOS/Windows?" is "run Linux in a VM."
+
 ## Rationale
 
 <sub>written by: [@lyssieth](https://github.com/lyssieth)</sub>
