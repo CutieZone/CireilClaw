@@ -303,8 +303,9 @@ async function handleMessageCreate(
     if (error instanceof Error && error.stack !== undefined) {
       warning("Stack trace:", error.stack);
     }
+    const reason = error instanceof Error ? error.message : String(error);
     try {
-      await msg.channel?.createMessage({ content: "An internal error occurred." });
+      await msg.channel?.createMessage({ content: `⚠️ Engine error: ${reason}` });
     } catch {
       // Best-effort.
     }

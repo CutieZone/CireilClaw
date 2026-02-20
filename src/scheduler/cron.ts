@@ -114,11 +114,9 @@ async function runMainSession(agent: Agent, job: CronJobConfig): Promise<void> {
     debug("Cron: main-session job", colors.keyword(job.id), "completed");
   } catch (error) {
     session.history.length = historyLengthBefore;
-    warning(
-      "Cron: error in main-session job",
-      colors.keyword(job.id),
-      error instanceof Error ? error.message : String(error),
-    );
+    const reason = error instanceof Error ? error.message : String(error);
+    warning("Cron: error in main-session job", colors.keyword(job.id), reason);
+    await deliverOutput(agent, job, `⚠️ Engine error: ${reason}`);
   } finally {
     session.busy = false;
     saveSession(agent.slug, session);
@@ -153,11 +151,9 @@ async function runIsolatedSession(agent: Agent, job: CronJobConfig): Promise<voi
     });
     debug("Cron: isolated job", colors.keyword(job.id), "completed");
   } catch (error) {
-    warning(
-      "Cron: error in isolated job",
-      colors.keyword(job.id),
-      error instanceof Error ? error.message : String(error),
-    );
+    const reason = error instanceof Error ? error.message : String(error);
+    warning("Cron: error in isolated job", colors.keyword(job.id), reason);
+    await deliverOutput(agent, job, `⚠️ Engine error: ${reason}`);
     return;
   }
 
