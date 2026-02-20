@@ -13,6 +13,8 @@ interface UserMessage extends BaseMessage {
   // If false, this message is included in context but not persisted to DB.
   // Used for reply chain context that shouldn't pollute long-term history.
   persist?: boolean;
+  // Optional Discord message ID for deduplication of reply chain messages.
+  id?: string;
 }
 
 interface SystemMessage extends BaseMessage {

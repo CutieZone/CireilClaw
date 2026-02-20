@@ -129,14 +129,8 @@ async function crawlReplyTree(
 // Checks if a Discord message ID already exists in session history.
 function isMessageInHistory(history: Message[], messageId: string): boolean {
   for (const entry of history) {
-    if (entry.role !== "user") {
-      continue;
-    }
-    const contents = Array.isArray(entry.content) ? entry.content : [entry.content];
-    for (const content of contents) {
-      if (content.type === "text" && content.content.includes(`<${messageId}>`)) {
-        return true;
-      }
+    if (entry.role === "user" && entry.id === messageId) {
+      return true;
     }
   }
   return false;
@@ -345,10 +339,9 @@ async function handleMessageCreate(
     // Crawl ancestors (messages older than the direct reply)
     const ancestors = await crawlReplyTree(client, directReply);
 
-    // Add all ancestor messages with persist: false
+    // Add ancestor messages that aren't already in history
     for (const ancestor of ancestors) {
-      // Skip if this is the direct reply (we handle it separately)
-      if (ancestor.id === directReply.id) {
+      if (isMessageInHistory(ds.history, ancestor.id)) {
         continue;
       }
 
@@ -356,6 +349,7 @@ async function handleMessageCreate(
       const ancestorImages = await fetchAttachmentImages(ancestor);
       ds.history.push({
         content: ancestorImages.length > 0 ? [ancestorContent, ...ancestorImages] : ancestorContent,
+        id: ancestor.id,
         persist: false,
         role: "user",
       });
@@ -367,6 +361,7 @@ async function handleMessageCreate(
       const replyImages = await fetchAttachmentImages(directReply);
       ds.history.push({
         content: replyImages.length > 0 ? [replyContent, ...replyImages] : replyContent,
+        id: directReply.id,
         persist: true,
         role: "user",
       });
@@ -379,6 +374,8 @@ async function handleMessageCreate(
   const historyLengthBeforeTurn = session.history.length;
   session.history.push({
     content: imageContents.length > 0 ? [textContent, ...imageContents] : textContent,
+    id: msg.id,
+    persist: true,
     role: "user",
   });
 
