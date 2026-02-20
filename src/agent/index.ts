@@ -2,10 +2,13 @@ import type { EngineConfig } from "$/config/schemas.js";
 import { Engine } from "$/engine/index.js";
 import type { Session } from "$/harness/session.js";
 
+export type SendFn = (session: Session, content: string) => Promise<void>;
+
 export class Agent {
   private _engine: Engine;
   private readonly _slug: string;
   private readonly _sessions: Map<string, Session>;
+  private _send: SendFn | undefined = undefined;
 
   constructor(slug: string, cfg: EngineConfig, sessions: Map<string, Session>) {
     this._engine = new Engine(cfg);
@@ -27,5 +30,28 @@ export class Agent {
 
   get sessions(): Map<string, Session> {
     return this._sessions;
+  }
+
+  registerSend(fn: SendFn): void {
+    this._send = fn;
+  }
+
+  async send(session: Session, content: string): Promise<void> {
+    // Allow the session to intercept and optionally suppress delivery.
+    if (session.sendFilter !== undefined && !session.sendFilter(content)) {
+      return;
+    }
+
+    if (this._send === undefined) {
+      throw new Error(`Agent ${this._slug} has no send handler registered`);
+    }
+    await this._send(session, content);
+  }
+
+  async runTurn(session: Session): Promise<void> {
+    const send = async (content: string): Promise<void> => {
+      await this.send(session, content);
+    };
+    await this._engine.runTurn(session, this._slug, send);
   }
 }

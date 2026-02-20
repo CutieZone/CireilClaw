@@ -221,9 +221,13 @@ export class Engine {
     return undefined;
   }
 
-  async runTurn(session: Session, agentSlug: string): Promise<void> {
+  async runTurn(
+    session: Session,
+    agentSlug: string,
+    send: (content: string) => Promise<void>,
+  ): Promise<void> {
     const tools = await buildTools(agentSlug, session);
-    const ctx: ToolContext = { agentSlug, session };
+    const ctx: ToolContext = { agentSlug, send, session };
 
     debug("Turn start", colors.keyword(agentSlug), colors.keyword(session.id()));
 

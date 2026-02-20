@@ -1,5 +1,4 @@
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
-import { Harness } from "$/harness/index.js";
 import * as vb from "valibot";
 
 const RespondSchema = vb.strictObject({
@@ -20,7 +19,7 @@ const respond: ToolDef = {
     "You must call this tool at least once per turn. Every turn must end with a `final: true` respond call.",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     const { content, final } = vb.parse(RespondSchema, input);
-    await Harness.get().send(ctx.session, content);
+    await ctx.send(content);
     return { final, sent: true };
   },
   name: "respond",

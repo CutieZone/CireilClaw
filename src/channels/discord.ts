@@ -294,7 +294,7 @@ async function handleMessageCreate(
   }, TYPING_INTERVAL_MS);
 
   try {
-    await agent.engine.runTurn(session, agent.slug);
+    await agent.runTurn(session);
   } catch (error) {
     // Roll back any history entries added during this failed turn so that the
     // next message doesn't see a stranded user message with no response.
@@ -345,6 +345,11 @@ async function handleInteractionCreate(
 async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicClient> {
   const { token, ownerId } = await loadChannel("discord", agentSlug);
 
+  const agent = owner.agents.get(agentSlug);
+  if (agent === undefined) {
+    throw new Error(`Agent ${agentSlug} not found`);
+  }
+
   const client = new Client({
     auth: `Bot ${token}`,
     gateway: {
@@ -353,7 +358,7 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
     rest: {},
   });
 
-  owner.registerSend("discord", async (session, content) => {
+  agent.registerSend(async (session, content) => {
     if (!(session instanceof DiscordSession)) {
       throw new Error("Somehow, `session` was not a DiscordSession");
     }

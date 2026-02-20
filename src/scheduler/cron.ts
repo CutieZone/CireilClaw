@@ -3,7 +3,6 @@ import type { CronJobConfig } from "$/config/cron.js";
 import { deleteCronJob, updateLastRun } from "$/db/cron.js";
 import { saveSession } from "$/db/sessions.js";
 import { Engine } from "$/engine/index.js";
-import { Harness } from "$/harness/index.js";
 import type { Session } from "$/harness/session.js";
 import { InternalSession } from "$/harness/session.js";
 import colors from "$/output/colors.js";
@@ -67,7 +66,7 @@ async function deliverOutput(agent: Agent, job: CronJobConfig, content: string):
   }
 
   try {
-    await Harness.get().send(target, content);
+    await agent.send(target, content);
   } catch (error) {
     warning(
       "Cron: announce delivery failed for job",
@@ -109,7 +108,9 @@ async function runMainSession(agent: Agent, job: CronJobConfig): Promise<void> {
             model: job.model.model ?? agent.engine.model,
           });
 
-    await engine.runTurn(session, agent.slug);
+    await engine.runTurn(session, agent.slug, async (content: string): Promise<void> => {
+      await agent.send(session, content);
+    });
     debug("Cron: main-session job", colors.keyword(job.id), "completed");
   } catch (error) {
     session.history.length = historyLengthBefore;
@@ -147,7 +148,9 @@ async function runIsolatedSession(agent: Agent, job: CronJobConfig): Promise<voi
             model: job.model.model ?? agent.engine.model,
           });
 
-    await engine.runTurn(session, agent.slug);
+    await engine.runTurn(session, agent.slug, async (content: string): Promise<void> => {
+      await agent.send(session, content);
+    });
     debug("Cron: isolated job", colors.keyword(job.id), "completed");
   } catch (error) {
     warning(

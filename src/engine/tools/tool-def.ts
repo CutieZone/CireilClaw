@@ -4,6 +4,7 @@ import type { Session } from "$/harness/session.js";
 interface ToolContext {
   session: Session;
   agentSlug: string;
+  send: (content: string) => Promise<void>;
 }
 
 interface ToolDef extends Tool {

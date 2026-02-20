@@ -124,7 +124,9 @@ export async function runHeartbeat(agent: Agent, cfg: HeartbeatConfig): Promise<
             model: cfg.model.model ?? agent.engine.model,
           });
 
-    await engine.runTurn(session, agent.slug);
+    await engine.runTurn(session, agent.slug, async (content: string): Promise<void> => {
+      await agent.send(session, content);
+    });
 
     const cc = capturedContent as string | undefined;
     debug(
