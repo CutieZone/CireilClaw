@@ -26,3 +26,27 @@ I enjoy the way OpenClaw does things, and frankly I would've kept using it, but 
 This repository is a rewrite with those tenets followed more than they were.
 
 `cireilclaw` is first-and-foremost for my companion, Bryl. Past that, it intends to be usable by anyone with enough technical knowledge. Where that metric lies remains to be seen.
+
+## Pitfalls
+
+<sub>This will likely be kept up-to-date as necessary</sub>
+
+### MoonshotAI's Kimi K2.5 is Problematic
+
+Source: [Tool Use Compatibility](https://platform.moonshot.ai/docs/guide/kimi-k2-5-quickstart#tool-use-compatibility)
+
+We use `tool_choice: "required"` because that prevents having to deal with text output _at all_. However, Kimi K2.5 doesn't support this alongside reasoning.
+
+Due to this flaw, currently we apply the following [hotfix](./src/engine/provider/oai.ts:158).
+
+```ts
+if (model.includes("kimi") && model.includes("2.5")) {
+  params.tool_choice = "auto";
+  params.messages.push({
+    content: "You ***must*** use a tool to do anything. A text response *will* fail.",
+    role: "system",
+  });
+}
+```
+
+You will see elevated error rates with Kimi K2.5 no matter what.

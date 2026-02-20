@@ -10,6 +10,7 @@ import { APIError } from "openai/error.js";
 import type {
   ChatCompletionContentPartImage,
   ChatCompletionContentPartText,
+  ChatCompletionCreateParamsNonStreaming,
   ChatCompletionMessageParam,
   ChatCompletionMessageToolCall,
   ChatCompletionTool,
@@ -144,7 +145,7 @@ export async function generate(
   let resp: Awaited<ReturnType<typeof client.chat.completions.create>> | undefined = undefined;
   try {
     debug("Starting chat completion generation...");
-    resp = await client.chat.completions.create({
+    const params: ChatCompletionCreateParamsNonStreaming = {
       messages: [
         { content: context.systemPrompt, role: "system" },
         ...context.messages.map(translateMsg),
@@ -152,7 +153,17 @@ export async function generate(
       model: model,
       tool_choice: "required",
       tools: context.tools.map(translateTool),
-    });
+    };
+
+    if (model.includes("kimi") && model.includes("2.5")) {
+      params.tool_choice = "auto";
+      params.messages.push({
+        content: "You ***must*** use a tool to do anything. A text response *will* fail.",
+        role: "system",
+      });
+    }
+
+    resp = await client.chat.completions.create(params);
     debug("Finished chat completion generation...");
   } catch (error) {
     if (error instanceof APIError) {
@@ -200,6 +211,8 @@ export async function generate(
   }
 
   if (reason !== "tool_calls") {
+    debug("Failing due to wrong end reason.");
+    debug("Content:", choice.message.content);
     throw new Error(
       `Expected 'tool_calls' finish reason (tool_choice is required), got '${reason}'`,
     );
