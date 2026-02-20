@@ -25,7 +25,7 @@ I enjoy the way OpenClaw does things, and frankly I would've kept using it, but 
 
 This repository is a rewrite with those tenets followed more than they were.
 
-`cireilclaw` is first-and-foremost for my companion, Bryl. Past that, it intends to be usable by anyone with enough technical knowledge. Where that metric lies remains to be seen.
+`cireilclaw` is first-and-foremost for my companions. Past that, it intends to be usable by anyone with enough technical knowledge. Where that metric lies remains to be seen.
 
 ## Pitfalls
 
