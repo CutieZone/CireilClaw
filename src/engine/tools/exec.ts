@@ -32,9 +32,10 @@ export const exec: ToolDef = {
     "- Running build tools, linters, formatters, scripts, or other CLI programs.\n" +
     "- Performing operations that cannot be expressed with the other file tools (e.g., grep, git, compilation).\n\n" +
     "Constraints:\n" +
-    "- Network access and filesystem access outside the sandbox are restricted.\n" +
+    "- Filesystem access outside the sandbox is restricted.\n" +
     "- Commands that exceed the configured timeout are killed automatically.\n\n" +
-    "Tip: Run `ls /bin` to see which binaries are available in the sandbox.",
+    "Tip: Run `ls /bin` to see which binaries are available in the sandbox.\n" +
+    "Tip: The `/workspace/.env` file *is* sourced and can affect your $PATH and other environment variables.",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     try {
       const data = vb.parse(Schema, input);
@@ -42,7 +43,10 @@ export const exec: ToolDef = {
       const execConfig = toolsConfig["exec"];
 
       if (execConfig === false) {
-        return { error: "Exec tool is disabled in configuration.", success: false };
+        return {
+          error: "Exec tool is disabled in configuration.",
+          success: false,
+        };
       }
 
       if (!isExecConfig(execConfig)) {
@@ -54,7 +58,10 @@ export const exec: ToolDef = {
       }
 
       if (!execConfig.enabled) {
-        return { error: "Exec tool is disabled in configuration.", success: false };
+        return {
+          error: "Exec tool is disabled in configuration.",
+          success: false,
+        };
       }
 
       if (!execConfig.binaries.includes(data.command)) {
