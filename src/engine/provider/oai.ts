@@ -27,7 +27,9 @@ function translateContent(
       };
     case "image":
       return {
-        image_url: { url: `data:${content.mediaType};base64,${encode(content.data)}` },
+        image_url: {
+          url: `data:${content.mediaType};base64,${encode(content.data)}`,
+        },
         type: "image_url",
       };
     case "toolCall":
@@ -229,12 +231,21 @@ export async function generate(
   return {
     content: choice.message.tool_calls.map((it) => {
       if (it.type === "function") {
-        return {
-          id: it.id,
-          input: it.function.arguments.trim() === "" ? {} : JSON.parse(it.function.arguments),
-          name: it.function.name,
-          type: "toolCall",
-        } as ToolCallContent;
+        try {
+          return {
+            id: it.id,
+            input: it.function.arguments.trim() === "" ? {} : JSON.parse(it.function.arguments),
+            name: it.function.name,
+            type: "toolCall",
+          } as ToolCallContent;
+        } catch (error: unknown) {
+          throw new Error(
+            `Failed to parse tool-call arguments into a json object\n ${it.function.arguments}`,
+            {
+              cause: error,
+            },
+          );
+        }
       }
       throw new Error("custom not supported");
     }),
