@@ -13,7 +13,7 @@
   "dependencies": {
     "@inquirer/prompts": "^8.2.1",
     "@noble/hashes": "^2.0.1",
-    "@stricli/core": "^1.2.5",
+    "@stricli/core": "^1.2.6",
     "@valibot/to-json-schema": "^1.5.0",
     "better-sqlite3": "^12.6.2",
     "chalk": "^5.6.2",
