@@ -388,7 +388,9 @@ async function handleMessageCreate(
   }
   ds.typingInterval = setInterval(() => {
     // oxlint-disable-next-line promise/prefer-await-to-then
-    msg.channel?.sendTyping().catch(() => undefined);
+    msg.channel?.sendTyping().catch(() => {
+      // Intentionally ignored
+    });
   }, TYPING_INTERVAL_MS);
 
   try {

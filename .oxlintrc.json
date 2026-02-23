@@ -39,7 +39,7 @@
     "typescript/prefer-readonly-parameter-types": "off",
     "typescript/strict-void-return": "off",
     "unicorn/switch-case-braces": "off",
-    "unicorn/no-useless-undefined": "off",
+    "unicorn/prefer-ternary": "off",
     "eslint/no-console": [
       "error",
       {
