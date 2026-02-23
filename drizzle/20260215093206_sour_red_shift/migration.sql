@@ -1,4 +1,4 @@
-CREATE TABLE `sessions` (
+CREATE TABLE IF NOT EXISTS `sessions` (
 	`id` text PRIMARY KEY NOT NULL,
 	`channel` text NOT NULL,
 	`meta` text NOT NULL,

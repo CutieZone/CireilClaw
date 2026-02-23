@@ -1,4 +1,4 @@
-CREATE TABLE `images` (
+CREATE TABLE IF NOT EXISTS `images` (
 	`id` text NOT NULL,
 	`session_id` text NOT NULL,
 	`media_type` text NOT NULL,

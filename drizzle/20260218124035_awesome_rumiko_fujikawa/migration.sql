@@ -1,4 +1,4 @@
-CREATE TABLE `cron_jobs` (
+CREATE TABLE IF NOT EXISTS `cron_jobs` (
 	`job_id` text PRIMARY KEY NOT NULL,
 	`type` text NOT NULL,
 	`config` text,
