@@ -1,9 +1,7 @@
 {
   "dialect": "sqlite",
   "id": "197b5e86-882c-4e05-8c3b-5834571d706b",
-  "prevIds": [
-    "c520237f-1e0f-4754-9f13-bcdaa84bf530"
-  ],
+  "prevIds": ["c520237f-1e0f-4754-9f13-bcdaa84bf530"],
   "version": "7",
   "ddl": [
     {
@@ -101,10 +99,7 @@
       "entityType": "columns"
     },
     {
-      "columns": [
-        "agent_slug",
-        "job_id"
-      ],
+      "columns": ["agent_slug", "job_id"],
       "nameExplicit": false,
       "name": "cron_jobs_agent_slug_job_id_pk",
       "table": "cron_jobs",
@@ -155,23 +150,16 @@
       "entityType": "columns"
     },
     {
-      "columns": [
-        "id",
-        "session_id"
-      ],
+      "columns": ["id", "session_id"],
       "nameExplicit": false,
       "name": "images_id_session_id_pk",
       "table": "images",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "session_id"
-      ],
+      "columns": ["session_id"],
       "tableTo": "sessions",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "nameExplicit": false,
@@ -194,9 +182,7 @@
       "entityType": "columns"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "sessions_pk",
       "table": "sessions",

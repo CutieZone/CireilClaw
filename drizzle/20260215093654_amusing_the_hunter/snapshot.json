@@ -1,9 +1,7 @@
 {
   "dialect": "sqlite",
   "id": "c520237f-1e0f-4754-9f13-bcdaa84bf530",
-  "prevIds": [
-    "30a37a29-5891-477c-a1af-28eaa7930cd7"
-  ],
+  "prevIds": ["30a37a29-5891-477c-a1af-28eaa7930cd7"],
   "version": "7",
   "ddl": [
     {
@@ -51,23 +49,16 @@
       "entityType": "columns"
     },
     {
-      "columns": [
-        "id",
-        "session_id"
-      ],
+      "columns": ["id", "session_id"],
       "nameExplicit": false,
       "name": "images_id_session_id_pk",
       "table": "images",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "session_id"
-      ],
+      "columns": ["session_id"],
       "tableTo": "sessions",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "nameExplicit": false,
@@ -90,9 +81,7 @@
       "entityType": "columns"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "sessions_pk",
       "table": "sessions",
