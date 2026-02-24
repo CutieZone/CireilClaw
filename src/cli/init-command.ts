@@ -205,11 +205,8 @@ async function run(_flags: Flags): Promise<void> {
     }
   }
 
-  // Create root and global directories
-  const globalDirs = ["config", "blocks", "memories", "skills", "workspace"];
-  for (const dir of globalDirs) {
-    await mkdir(join(base, dir), { recursive: true });
-  }
+  // Create root and global config directory
+  await mkdir(join(base, "config"), { recursive: true });
   info("Created", colors.path(base));
 
   // Prompt for agent setup
@@ -230,8 +227,9 @@ async function run(_flags: Flags): Promise<void> {
 
   // Create agent directories
   const agentRoot = join(base, "agents", slug);
-  await mkdir(join(agentRoot, "blocks"), { recursive: true });
-  await mkdir(join(agentRoot, "config"), { recursive: true });
+  for (const dir of ["blocks", "config", "memories", "skills", "workspace"]) {
+    await mkdir(join(agentRoot, dir), { recursive: true });
+  }
 
   // Write block stubs
   for (const label of blockLabels) {
