@@ -225,9 +225,10 @@ export class Engine {
     session: Session,
     agentSlug: string,
     send: (content: string) => Promise<void>,
+    react?: (emoji: string, messageId?: string) => Promise<void>,
   ): Promise<void> {
     const tools = await buildTools(agentSlug, session);
-    const ctx: ToolContext = { agentSlug, send, session };
+    const ctx: ToolContext = { agentSlug, react, send, session };
 
     debug("Turn start", colors.keyword(agentSlug), colors.keyword(session.id()));
 
@@ -313,7 +314,7 @@ export class Engine {
         };
         session.pendingToolMessages.push(response);
 
-        if (call.name === "respond" && result["final"] !== false) {
+        if ((call.name === "respond" && result["final"] !== false) || call.name === "no-response") {
           done = true;
         }
       }

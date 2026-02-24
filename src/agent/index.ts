@@ -2,13 +2,15 @@ import type { EngineConfig } from "$/config/schemas.js";
 import { Engine } from "$/engine/index.js";
 import type { Session } from "$/harness/session.js";
 
-export type SendFn = (session: Session, content: string) => Promise<void>;
+type SendFn = (session: Session, content: string) => Promise<void>;
+type ReactFn = (session: Session, emoji: string, messageId?: string) => Promise<void>;
 
 export class Agent {
   private _engine: Engine;
   private readonly _slug: string;
   private readonly _sessions: Map<string, Session>;
   private _send: SendFn | undefined = undefined;
+  private _react: ReactFn | undefined = undefined;
 
   constructor(slug: string, cfg: EngineConfig, sessions: Map<string, Session>) {
     this._engine = new Engine(cfg);
@@ -36,6 +38,10 @@ export class Agent {
     this._send = fn;
   }
 
+  registerReact(fn: ReactFn): void {
+    this._react = fn;
+  }
+
   async send(session: Session, content: string): Promise<void> {
     // Allow the session to intercept and optionally suppress delivery.
     if (session.sendFilter !== undefined && !session.sendFilter(content)) {
@@ -52,6 +58,12 @@ export class Agent {
     const send = async (content: string): Promise<void> => {
       await this.send(session, content);
     };
-    await this._engine.runTurn(session, this._slug, send);
+    const react =
+      this._react === undefined
+        ? undefined
+        : async (emoji: string, messageId?: string): Promise<void> => {
+            await this._react?.(session, emoji, messageId);
+          };
+    await this._engine.runTurn(session, this._slug, send, react);
   }
 }

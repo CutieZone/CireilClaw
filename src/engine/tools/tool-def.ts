@@ -5,6 +5,7 @@ interface ToolContext {
   session: Session;
   agentSlug: string;
   send: (content: string) => Promise<void>;
+  react?: (emoji: string, messageId?: string) => Promise<void>;
 }
 
 interface ToolDef extends Tool {

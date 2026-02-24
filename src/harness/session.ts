@@ -31,6 +31,7 @@ class DiscordSession extends BaseSession {
   isNsfw: boolean;
 
   typingInterval?: NodeJS.Timeout = undefined;
+  lastMessageId?: string = undefined;
 
   constructor(channelId: string, guildId?: string, isNsfw?: boolean) {
     super();

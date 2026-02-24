@@ -68,12 +68,12 @@ function writeCommandsHash(hash: string): void {
 // parse it out of the message history separately.
 function formatUserMessage(msg: DiscordMessage): TextContent {
   const { username } = msg.author;
-  const { id } = msg.author;
+  const authorId = msg.author.id;
   const displayName = msg.member?.nick ?? msg.author.globalName ?? username;
   const timestamp = msg.createdAt.toISOString();
 
   return {
-    content: `<msg from="${username} <${id}>" displayName="${displayName}" timestamp="${timestamp}">${msg.content}</msg>`,
+    content: `<msg msgId="${msg.id}" from="${username} <${authorId}>" displayName="${displayName}" timestamp="${timestamp}">${msg.content}</msg>`,
     type: "text",
   };
 }
@@ -82,12 +82,12 @@ function formatUserMessage(msg: DiscordMessage): TextContent {
 // reply context so the agent understands this is historical conversation).
 function formatReplyContext(msg: DiscordMessage): TextContent {
   const { username } = msg.author;
-  const { id } = msg.author;
+  const authorId = msg.author.id;
   const displayName = msg.member?.nick ?? msg.author.globalName ?? username;
   const timestamp = msg.createdAt.toISOString();
 
   return {
-    content: `<reply-context from="${username} <${id}>" displayName="${displayName}" timestamp="${timestamp}">${msg.content}</reply-context>`,
+    content: `<reply-context msgId="${msg.id}" from="${username} <${authorId}>" displayName="${displayName}" timestamp="${timestamp}">${msg.content}</reply-context>`,
     type: "text",
   };
 }
@@ -330,6 +330,7 @@ async function handleMessageCreate(
   }
 
   session.lastActivity = Date.now();
+  session.lastMessageId = msg.id;
   session.busy = true;
 
   // Crawl the full reply tree and add ancestor messages as context.
@@ -469,6 +470,19 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
     for (const chunk of chunks) {
       await client.rest.channels.createMessage(ds.channelId, { content: chunk });
     }
+  });
+
+  agent.registerReact(async (session, emoji, messageId) => {
+    if (!(session instanceof DiscordSession)) {
+      throw new Error("Somehow, `session` was not a DiscordSession");
+    }
+
+    const targetId = messageId ?? session.lastMessageId;
+    if (targetId === undefined) {
+      return;
+    }
+
+    await client.rest.channels.createReaction(session.channelId, targetId, emoji);
   });
 
   // oxlint-disable-next-line typescript/no-misused-promises
