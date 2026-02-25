@@ -4,14 +4,18 @@ import { mkdir, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 // oxlint-disable typescript/no-empty-object-type
+import { loadIntegrations } from "$/config/index.js";
 import { toolRegistry } from "$/engine/tools/index.js";
 import colors from "$/output/colors.js";
 import { info, warning } from "$/output/log.js";
 import type { BlockLabel } from "$/util/load.js";
 import { blockLabels } from "$/util/load.js";
 import { root } from "$/util/paths.js";
-import { confirm, input } from "@inquirer/prompts";
+import { confirm, input, password, select } from "@inquirer/prompts";
 import { buildCommand } from "@stricli/core";
+import { OpenAI } from "openai/client.js";
+import ora from "ora";
+import { stringify } from "smol-toml";
 
 // oxlint-disable-next-line typescript/no-empty-interface
 interface Flags {}
@@ -24,18 +28,17 @@ function slugify(name: string): string {
     .replaceAll(/^-+|-+$/g, "");
 }
 
-async function renameOld(): Promise<void> {
-  const base = root();
-
+async function renameOld(path: string): Promise<void> {
   let randoms = randomBytes(8).toString("hex");
 
-  while (existsSync(`${base}_${randoms}`)) {
+  while (existsSync(`${path}.${randoms}`)) {
     randoms = randomBytes(8).toString("hex");
   }
 
-  await rename(base, `${base}.${randoms}`);
-  warning("Moved", colors.path(base));
-  warning("To", colors.path(`${base}_${randoms}`));
+  const dest = `${path}.${randoms}`;
+  await rename(path, dest);
+  warning("Moved", colors.path(path));
+  warning("To", colors.path(dest));
 }
 
 function baseInstructionStub(): string {
@@ -188,28 +191,82 @@ description = "The way you communicate; specific tics, word usage, et cetera."
   }
 }
 
-async function run(_flags: Flags): Promise<void> {
-  const base = root();
+type ToolPreset = "minimal" | "standard" | "full";
 
-  if (existsSync(base)) {
-    warning("The path", colors.path(base), "already exists. It may contain sensitive data.");
-    warning(
-      "If you say 'yes' to overwrite, we will rename the existing directory to end with a random string of characters.",
-    );
-    const check = await confirm({ default: false, message: `Overwrite?` });
+// Tools that are always enabled regardless of preset — the agent can't function without them.
+const CORE_TOOLS = new Set([
+  "respond",
+  "no-response",
+  "read",
+  "open-file",
+  "close-file",
+  "list-dir",
+  "read-skill",
+  "session-info",
+]);
 
-    if (check) {
-      await renameOld();
+function buildToolsConfig(
+  preset: ToolPreset,
+  execBinaries: string[] = [],
+): Record<string, unknown> {
+  const obj: Record<string, unknown> = {};
+
+  for (const tool of Object.keys(toolRegistry)) {
+    if (tool === "exec") {
+      // exec needs its own config object; binaries defaults to empty (no commands whitelisted) until configured.
+      obj[tool] =
+        preset === "full" ? { binaries: execBinaries, enabled: true, timeout: 60_000 } : false;
+    } else if (CORE_TOOLS.has(tool)) {
+      obj[tool] = true;
     } else {
-      return;
+      // Non-core tools (write, str-replace, brave-search, schedule, react) are on for standard/full.
+      obj[tool] = preset !== "minimal";
     }
   }
 
-  // Create root and global config directory
-  await mkdir(join(base, "config"), { recursive: true });
-  info("Created", colors.path(base));
+  return obj;
+}
 
-  // Prompt for agent setup
+// Returns an error message if the probe fails, undefined on success.
+async function probeToolChoice(
+  apiBase: string,
+  apiKey: string,
+  model: string,
+): Promise<string | undefined> {
+  try {
+    const client = new OpenAI({ apiKey, baseURL: apiBase, timeout: 15_000 });
+    const resp = await client.chat.completions.create({
+      messages: [{ content: "Call the ping tool.", role: "user" }],
+      model,
+      tool_choice: "required",
+      tools: [
+        {
+          function: {
+            description: "Connection test.",
+            name: "ping",
+            parameters: { properties: {}, required: [], type: "object" },
+          },
+          type: "function",
+        },
+      ],
+    });
+    const [choice] = resp.choices;
+    if (choice?.finish_reason !== "tool_calls") {
+      return `expected finish_reason 'tool_calls', got '${choice?.finish_reason ?? "undefined"}'`;
+    }
+    return undefined;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
+async function run(_flags: Flags): Promise<void> {
+  const base = root();
+
+  // Always ensure the root and global config directory exist.
+  await mkdir(join(base, "config"), { recursive: true });
+
+  // Resolve slug before asking anything else so we can catch conflicts early.
   const name = await input({ message: "Agent name:" });
   const slug = slugify(name);
 
@@ -219,19 +276,143 @@ async function run(_flags: Flags): Promise<void> {
 
   info("Agent slug:", colors.keyword(slug));
 
+  // Override check is at the agent level, not the root level.
+  const agentRoot = join(base, "agents", slug);
+  if (existsSync(agentRoot)) {
+    warning("Agent", colors.keyword(slug), "already exists at", colors.path(agentRoot));
+    warning(
+      "If you say 'yes' to overwrite, we will rename the existing agent directory to end with a random string of characters.",
+    );
+    const check = await confirm({ default: false, message: "Overwrite?" });
+
+    if (check) {
+      await renameOld(agentRoot);
+    } else {
+      return;
+    }
+  }
+
   const rawDescription = await input({
     default: "",
     message: "Short description (optional):",
   });
   const description = rawDescription.length > 0 ? rawDescription : undefined;
 
-  // Create agent directories
-  const agentRoot = join(base, "agents", slug);
+  const preset = await select<ToolPreset>({
+    choices: [
+      {
+        description: "All file I/O, search, scheduling, and reactions — no shell execution",
+        name: "Standard",
+        value: "standard",
+      },
+      {
+        description:
+          "Everything in Standard plus sandboxed exec (configure allowed binaries in tools.toml)",
+        name: "Full",
+        value: "full",
+      },
+      {
+        description: "Core file I/O and respond only — no search, scheduling, exec, or reactions",
+        name: "Minimal",
+        value: "minimal",
+      },
+    ],
+    message: "Tool preset:",
+  });
+
+  let execBinaries: string[] = [];
+  if (preset === "full") {
+    const raw = await input({
+      default: "",
+      message: "Exec binaries whitelist (comma-separated, leave blank for none):",
+    });
+    execBinaries = raw
+      .split(",")
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0);
+  }
+
+  const apiBase = await input({
+    message: "API base URL:",
+    validate: (value) => value.length > 0 || "API base URL is required",
+  });
+
+  const model = await input({
+    message: "Model:",
+    validate: (value) => value.length > 0 || "Model is required",
+  });
+
+  const rawApiKey = await password({
+    mask: true,
+    message: "API key (leave blank if not needed):",
+  });
+  const apiKey = rawApiKey.length > 0 ? rawApiKey : "not-needed";
+
+  // Probe the model for tool_choice: required support before committing to anything.
+  const probeSpinner = ora(
+    `Probing ${colors.keyword(model)} for tool_choice: required support...`,
+  ).start();
+  const probeError = await probeToolChoice(apiBase, apiKey, model);
+  if (probeError === undefined) {
+    probeSpinner.succeed(`${colors.keyword(model)} supports tool_choice: required`);
+  } else {
+    probeSpinner.warn(
+      `Could not verify tool_choice: required support — ${probeError}\n` +
+        `  The agent may not work correctly. You can still proceed.`,
+    );
+  }
+
+  const proceed = await confirm({ default: true, message: "Continue with setup?" });
+  if (!proceed) {
+    return;
+  }
+
+  // Integrations (only relevant when brave-search is enabled)
+  let braveApiKey: string | undefined = undefined;
+  if (preset !== "minimal") {
+    const existingIntegrations = await loadIntegrations();
+    if (existingIntegrations.brave === undefined) {
+      const raw = await password({
+        mask: true,
+        message: "Brave Search API key (leave blank to skip):",
+      });
+      if (raw.length > 0) {
+        braveApiKey = raw;
+      }
+    } else {
+      info("Brave Search API key already configured — skipping.");
+    }
+  }
+
+  // Channel setup
+  const channel = await select<"none" | "discord">({
+    choices: [
+      { description: "Skip channel setup for now", name: "None", value: "none" },
+      { description: "Configure a Discord bot for this agent", name: "Discord", value: "discord" },
+    ],
+    message: "Channel:",
+  });
+
+  let discordConfig: { ownerId: string; token: string } | undefined = undefined;
+  if (channel === "discord") {
+    const token = await password({
+      mask: true,
+      message: "Discord bot token:",
+      validate: (value) => value.length > 0 || "Bot token is required",
+    });
+    const ownerId = await input({
+      message: "Discord owner ID (your user ID):",
+      validate: (value) => /^[0-9]+$/.test(value) || "Must be a numeric Discord user ID",
+    });
+    discordConfig = { ownerId, token };
+  }
+
+  const writeSpinner = ora("Writing agent files...").start();
+
   for (const dir of ["blocks", "config", "memories", "skills", "workspace"]) {
     await mkdir(join(agentRoot, dir), { recursive: true });
   }
 
-  // Write block stubs
   for (const label of blockLabels) {
     await writeFile(
       join(agentRoot, "blocks", `${label}.md`),
@@ -240,22 +421,37 @@ async function run(_flags: Flags): Promise<void> {
     );
   }
 
-  // Write base instructions stub
   await writeFile(join(agentRoot, "core.md"), baseInstructionStub(), "utf8");
-
-  // Write config stubs
   await writeFile(
     join(agentRoot, "config", "engine.toml"),
-    `apiBase = ""\napiKey = "not-needed"\nmodel = ""\n`,
+    stringify({ apiBase, apiKey, model }),
+    "utf8",
+  );
+  await writeFile(
+    join(agentRoot, "config", "tools.toml"),
+    stringify(buildToolsConfig(preset, execBinaries)),
     "utf8",
   );
 
-  const knownTools = Object.keys(toolRegistry);
-  const toolText = knownTools.map((it) => `${it} = true`).join("\n");
+  if (braveApiKey !== undefined) {
+    const existingIntegrations = await loadIntegrations();
+    await writeFile(
+      join(base, "config", "integrations.toml"),
+      stringify({ ...existingIntegrations, brave: { apiKey: braveApiKey } }),
+      "utf8",
+    );
+  }
 
-  await writeFile(join(agentRoot, "config", "tools.toml"), toolText, "utf8");
+  if (discordConfig !== undefined) {
+    await mkdir(join(agentRoot, "config", "channels"), { recursive: true });
+    await writeFile(
+      join(agentRoot, "config", "channels", "discord.toml"),
+      stringify(discordConfig),
+      "utf8",
+    );
+  }
 
-  info("Agent", colors.keyword(slug), "created at", colors.path(agentRoot));
+  writeSpinner.succeed(`Agent ${colors.keyword(slug)} created at ${colors.path(agentRoot)}`);
 }
 
 export const initCommand = buildCommand({
