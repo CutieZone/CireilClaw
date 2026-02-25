@@ -8,7 +8,7 @@ import { initDb } from "$/db/index.js";
 import { flushAllSessions, loadSessions } from "$/db/sessions.js";
 import { Harness } from "$/harness/index.js";
 import colors from "$/output/colors.js";
-import { config, debug, info } from "$/output/log.js";
+import { config, debug, info, setLogFile } from "$/output/log.js";
 import { root } from "$/util/paths.js";
 import { onShutdown, registerSigint } from "$/util/shutdown.js";
 import { buildCommand } from "@stricli/core";
@@ -65,6 +65,7 @@ interface Flags {
 
 async function run(flags: Flags): Promise<void> {
   config.level = flags.logLevel;
+  setLogFile(path.join(root(), "logs", "cireilclaw.log"));
 
   info("Initializing", colors.keyword("cireilclaw"));
 
