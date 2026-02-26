@@ -2,8 +2,12 @@ import type { EngineConfig } from "$/config/schemas.js";
 import { Engine } from "$/engine/index.js";
 import type { Session } from "$/harness/session.js";
 
-type SendFn = (session: Session, content: string) => Promise<void>;
+type SendFn = (session: Session, content: string, attachments?: string[]) => Promise<void>;
 type ReactFn = (session: Session, emoji: string, messageId?: string) => Promise<void>;
+type DownloadDiscordAttachmentsFn = (
+  session: Session,
+  messageId: string,
+) => Promise<{ filename: string; data: Buffer }[]>;
 
 export class Agent {
   private _engine: Engine;
@@ -11,6 +15,7 @@ export class Agent {
   private readonly _sessions: Map<string, Session>;
   private _send: SendFn | undefined = undefined;
   private _react: ReactFn | undefined = undefined;
+  private _downloadDiscordAttachments: DownloadDiscordAttachmentsFn | undefined = undefined;
 
   constructor(slug: string, cfg: EngineConfig, sessions: Map<string, Session>) {
     this._engine = new Engine(cfg);
@@ -42,7 +47,11 @@ export class Agent {
     this._react = fn;
   }
 
-  async send(session: Session, content: string): Promise<void> {
+  registerDownloadDiscordAttachments(fn: DownloadDiscordAttachmentsFn): void {
+    this._downloadDiscordAttachments = fn;
+  }
+
+  async send(session: Session, content: string, attachments?: string[]): Promise<void> {
     // Allow the session to intercept and optionally suppress delivery.
     if (session.sendFilter !== undefined && !session.sendFilter(content)) {
       return;
@@ -51,12 +60,12 @@ export class Agent {
     if (this._send === undefined) {
       throw new Error(`Agent ${this._slug} has no send handler registered`);
     }
-    await this._send(session, content);
+    await this._send(session, content, attachments);
   }
 
   async runTurn(session: Session): Promise<void> {
-    const send = async (content: string): Promise<void> => {
-      await this.send(session, content);
+    const send = async (content: string, attachments?: string[]): Promise<void> => {
+      await this.send(session, content, attachments);
     };
     const react =
       this._react === undefined
@@ -64,6 +73,13 @@ export class Agent {
         : async (emoji: string, messageId?: string): Promise<void> => {
             await this._react?.(session, emoji, messageId);
           };
-    await this._engine.runTurn(session, this._slug, send, react);
+    const downloadDiscordAttachments =
+      this._downloadDiscordAttachments === undefined
+        ? undefined
+        : async (messageId: string): Promise<{ filename: string; data: Buffer }[]> => {
+            const result = await this._downloadDiscordAttachments?.(session, messageId);
+            return result ?? [];
+          };
+    await this._engine.runTurn(session, this._slug, send, react, downloadDiscordAttachments);
   }
 }

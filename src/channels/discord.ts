@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 import * as clearCommand from "$/channels/discord/clear-command.js";
 import type { HandlerCtx } from "$/channels/discord/handler-ctx.js";
@@ -14,7 +15,7 @@ import { DiscordSession } from "$/harness/session.js";
 import colors from "$/output/colors.js";
 import { debug, error as logError, info, warning } from "$/output/log.js";
 import { toWebp } from "$/util/image.js";
-import { root } from "$/util/paths.js";
+import { root, sandboxToReal } from "$/util/paths.js";
 import type {
   AnyInteractionGateway,
   Client as OceanicClient,
@@ -460,16 +461,47 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
     rest: {},
   });
 
-  agent.registerSend(async (session, content) => {
+  agent.registerSend(async (session, content, attachments) => {
     if (!(session instanceof DiscordSession)) {
       throw new Error("Somehow, `session` was not a DiscordSession");
     }
 
     const ds = session;
     const chunks = splitMessage(content);
-    for (const chunk of chunks) {
-      await client.rest.channels.createMessage(ds.channelId, { content: chunk });
+
+    const files: { contents: Buffer; name: string }[] | undefined =
+      attachments !== undefined && attachments.length > 0
+        ? await Promise.all(
+            attachments.map(async (sandboxPath) => {
+              const realPath = sandboxToReal(sandboxPath, agentSlug);
+              const contents = await readFile(realPath);
+              return { contents, name: basename(realPath) };
+            }),
+          )
+        : undefined;
+
+    for (const [idx, chunk] of chunks.entries()) {
+      const isLast = idx === chunks.length - 1;
+      await client.rest.channels.createMessage(ds.channelId, {
+        content: chunk,
+        ...(isLast && files !== undefined ? { files } : {}),
+      });
     }
+  });
+
+  agent.registerDownloadDiscordAttachments(async (session, messageId) => {
+    if (!(session instanceof DiscordSession)) {
+      throw new Error("downloadDiscordAttachments only works on Discord sessions");
+    }
+
+    const msg = await client.rest.channels.getMessage(session.channelId, messageId);
+    const results: { filename: string; data: Buffer }[] = [];
+    for (const attachment of msg.attachments.values()) {
+      const response = await fetch(attachment.url);
+      const data = Buffer.from(await response.arrayBuffer());
+      results.push({ data, filename: attachment.filename });
+    }
+    return results;
   });
 
   agent.registerReact(async (session, emoji, messageId) => {

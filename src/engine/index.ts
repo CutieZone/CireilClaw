@@ -224,11 +224,14 @@ export class Engine {
   async runTurn(
     session: Session,
     agentSlug: string,
-    send: (content: string) => Promise<void>,
+    send: (content: string, attachments?: string[]) => Promise<void>,
     react?: (emoji: string, messageId?: string) => Promise<void>,
+    downloadDiscordAttachments?: (
+      messageId: string,
+    ) => Promise<{ filename: string; data: Buffer }[]>,
   ): Promise<void> {
     const tools = await buildTools(agentSlug, session);
-    const ctx: ToolContext = { agentSlug, react, send, session };
+    const ctx: ToolContext = { agentSlug, downloadDiscordAttachments, react, send, session };
 
     debug("Turn start", colors.keyword(agentSlug), colors.keyword(session.id()));
 
