@@ -214,7 +214,12 @@ export async function generate(
 
   if (reason !== "tool_calls") {
     debug("Failing due to wrong end reason.");
-    debug("Content:", choice.message.content);
+    debug("Message object:", choice.message);
+
+    if (choice.message.tool_calls !== undefined && choice.message.tool_calls?.length > 0) {
+      debug("Had at least one tool call.");
+    }
+
     throw new Error(
       `Expected 'tool_calls' finish reason (tool_choice is required), got '${reason}'`,
     );
