@@ -519,7 +519,7 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
 
   // oxlint-disable-next-line typescript/no-misused-promises
   client.on("ready", async () => {
-    info("Channel", colors.keyword("discord"), "is now listening");
+    info("Channel", colors.keyword(`${agentSlug}:discord`), "is now listening");
 
     const appId = client.application.id;
 
