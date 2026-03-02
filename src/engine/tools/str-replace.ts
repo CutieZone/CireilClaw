@@ -65,7 +65,7 @@ export const strReplace: ToolDef = {
         };
       }
 
-      const newContent = content.replace(data.old_text, data.new_text);
+      const newContent = content.replace(data.old_text, () => data.new_text);
       await writeFile(path, newContent, "utf8");
 
       // Find line numbers for context (from new content)
