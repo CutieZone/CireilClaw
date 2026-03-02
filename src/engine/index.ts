@@ -7,6 +7,7 @@ import type { Context } from "$/engine/context.js";
 import type { AssistantMessage, Message, ToolMessage } from "$/engine/message.js";
 import type { ProviderKind } from "$/engine/provider/index.js";
 import { generate } from "$/engine/provider/oai.js";
+import type { UsageInfo } from "$/engine/provider/oai.js";
 import type { Tool } from "$/engine/tool.js";
 import type { ToolContext } from "$/engine/tools/tool-def.js";
 import { DiscordSession, MatrixSession } from "$/harness/session.js";
@@ -179,6 +180,35 @@ async function buildTools(agentSlug: string, _session: Session): Promise<Tool[]>
   return tools;
 }
 
+function logUsage(
+  agentSlug: string,
+  sessionId: string,
+  systemPromptLength: number,
+  usage: UsageInfo | undefined,
+): void {
+  const sysEst = Math.round(systemPromptLength / 4);
+
+  if (usage === undefined) {
+    // No usage info from API — log the system prompt estimate only.
+    debug(
+      "Token usage (estimated)",
+      colors.keyword(agentSlug),
+      colors.keyword(sessionId),
+      `sys est: ~${colors.number(sysEst)} tokens`,
+    );
+  } else {
+    const sysPct = Math.round((sysEst / usage.promptTokens) * 100);
+    debug(
+      "Token usage",
+      colors.keyword(agentSlug),
+      colors.keyword(sessionId),
+      `ctx: ${colors.number(usage.promptTokens)} tokens`,
+      `sys: ~${colors.number(sysPct)}%`,
+      `gen: ${colors.number(usage.completionTokens)} tokens`,
+    );
+  }
+}
+
 export class Engine {
   private readonly _apiKey: string;
   private readonly _apiBase: string;
@@ -271,18 +301,28 @@ export class Engine {
         tools,
       };
 
-      let assistantMsg: AssistantMessage | undefined = undefined;
+      // oxlint-disable-next-line init-declarations
+      let assistantMsg: AssistantMessage;
+      let usage: UsageInfo | undefined = undefined;
       switch (this._type) {
         // oxlint-disable-next-line typescript/no-unnecessary-condition
-        case "openai":
-          assistantMsg = await generate(context, effectiveApiBase, effectiveApikey, effectiveModel);
+        case "openai": {
+          ({ message: assistantMsg, usage } = await generate(
+            context,
+            effectiveApiBase,
+            effectiveApikey,
+            effectiveModel,
+          ));
           break;
+        }
 
         default: {
           const _exhaustive: never = this._type;
           throw new Error(`Unsupported provider type: ${String(_exhaustive)}`);
         }
       }
+
+      logUsage(agentSlug, session.id(), context.systemPrompt.length, usage);
 
       // Pending messages have been sent to the API in this call — commit them to history.
       session.history.push(...session.pendingToolMessages);

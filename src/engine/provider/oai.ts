@@ -133,12 +133,19 @@ function translateTool(tool: Tool): ChatCompletionTool {
   };
 }
 
+export interface UsageInfo {
+  promptTokens: number;
+  completionTokens: number;
+  /** Estimated system prompt token count (length / 4 heuristic). */
+  systemPromptTokensEst: number;
+}
+
 export async function generate(
   context: Context,
   apiBase: string,
   apiKey: string,
   model: string,
-): Promise<AssistantMessage> {
+): Promise<{ message: AssistantMessage; usage?: UsageInfo }> {
   const client = new OpenAI({
     apiKey: apiKey,
     baseURL: apiBase,
@@ -216,7 +223,7 @@ export async function generate(
     debug("Failing due to wrong end reason.");
     debug("Message object:", choice.message);
 
-    if (choice.message.tool_calls !== undefined && choice.message.tool_calls?.length > 0) {
+    if (choice.message.tool_calls !== undefined && choice.message.tool_calls.length > 0) {
       debug("Had at least one tool call.");
     }
 
@@ -233,7 +240,7 @@ export async function generate(
     throw new Error("Expected at least one tool call, but got empty array");
   }
 
-  return {
+  const message: AssistantMessage = {
     content: choice.message.tool_calls.map((it) => {
       if (it.type === "function") {
         try {
@@ -256,4 +263,15 @@ export async function generate(
     }),
     role: "assistant",
   };
+
+  let usage: UsageInfo | undefined = undefined;
+  if (resp.usage !== undefined) {
+    usage = {
+      completionTokens: resp.usage.completion_tokens,
+      promptTokens: resp.usage.prompt_tokens,
+      systemPromptTokensEst: Math.round(context.systemPrompt.length / 4),
+    };
+  }
+
+  return { message, usage };
 }
