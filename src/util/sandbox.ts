@@ -63,6 +63,7 @@ function buildCommonArgs(home: string, agentSlug: string): string[] {
   return [
     "bwrap",
     "--die-with-parent",
+    "--no-new-privileges",
     "--unshare-pid",
     "--unshare-ipc",
     "--unshare-uts",
