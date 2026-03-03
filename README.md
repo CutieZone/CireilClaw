@@ -9,6 +9,10 @@
 - Speedy: Should run well even in a limited environment
 - Composability: Should be completely configurable without editing code; disabling components, enabling features. Hot-reload possibility.
 
+## Getting Started
+
+See [INSTALLATION.md](INSTALLATION.md) for setup instructions, configuration reference, and agent creation.
+
 ## Project State
 
 Ready for usage.
