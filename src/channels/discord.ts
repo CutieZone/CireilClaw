@@ -93,6 +93,16 @@ function formatReplyContext(msg: DiscordMessage): TextContent {
   };
 }
 
+// Formats a bot's own message as assistant context for history loading.
+function formatAssistantContext(msg: DiscordMessage): TextContent {
+  const timestamp = msg.createdAt.toISOString();
+
+  return {
+    content: `<assistant-context msgId="${msg.id}" timestamp="${timestamp}">${msg.content}</assistant-context>`,
+    type: "text",
+  };
+}
+
 // Crawls the reply chain from a starting message, collecting all ancestor messages.
 // Returns messages in chronological order (oldest first).
 async function crawlReplyTree(
@@ -160,6 +170,90 @@ async function fetchAttachmentImages(msg: DiscordMessage): Promise<ImageContent[
     }
   }
   return images;
+}
+
+// Fetches the last N messages from a Discord channel, including images.
+// Returns messages in chronological order (oldest first). Messages are
+// formatted as reply context since they're historical conversation.
+async function fetchMessageHistory(
+  client: OceanicClient,
+  channelId: string,
+  limit = 30,
+): Promise<DiscordMessage[]> {
+  try {
+    const fetched = await client.rest.channels.getMessages(channelId, { limit });
+    // Discord returns messages newest-first, reverse for chronological order
+    return fetched.toReversed();
+  } catch {
+    // Channel may not be readable, permissions issues, etc.
+    return [];
+  }
+}
+
+// Discord message flag for suppress notifications (silent messages)
+const SUPPRESS_NOTIFICATIONS = 4096; // 1 << 12
+
+// Checks if a message has the suppress notifications flag.
+function isSuppressNotifications(msg: DiscordMessage): boolean {
+  return (msg.flags & SUPPRESS_NOTIFICATIONS) !== 0;
+}
+
+// Populates session history with recent Discord messages. Filters out the
+// current message (since it's being processed separately), empty messages,
+// and messages with SUPPRESS_NOTIFICATIONS flag (unless in reply chain).
+async function populateHistoryFromDiscord(
+  client: OceanicClient,
+  session: DiscordSession,
+  botId: string,
+  currentMessageId: string,
+  limit = 30,
+): Promise<void> {
+  const messages = await fetchMessageHistory(client, session.channelId, limit);
+
+  for (const msg of messages) {
+    // Skip the current message - it's being processed separately
+    if (msg.id === currentMessageId) {
+      continue;
+    }
+
+    // Skip messages already in history (shouldn't happen on new sessions, but safe to check)
+    if (isMessageInHistory(session.history, msg.id)) {
+      continue;
+    }
+
+    // Skip suppressed notification messages (silent messages) - they shouldn't
+    // make it to the LLM unless they're in the reply chain (which is handled
+    // separately by crawlReplyTree)
+    if (isSuppressNotifications(msg)) {
+      continue;
+    }
+
+    // Check if message has any content we care about
+    const hasImages = msg.attachments.some(
+      (attachment) =>
+        attachment.contentType !== undefined &&
+        SUPPORTED_IMAGE_TYPES.has(attachment.contentType.split(";")[0]?.trim() ?? ""),
+    );
+    const hasText = msg.content.trim().length > 0;
+
+    if (!hasText && !hasImages) {
+      continue;
+    }
+
+    // Bot's own messages are assistant role, others are user role
+    const isFromBot = msg.author.id === botId;
+    const role = isFromBot ? ("assistant" as const) : ("user" as const);
+
+    const textContent = isFromBot ? formatAssistantContext(msg) : formatReplyContext(msg);
+    const images = await fetchAttachmentImages(msg);
+
+    session.history.push({
+      content: images.length > 0 ? [textContent, ...images] : textContent,
+      id: msg.id,
+      persist: false, // Historical context, don't persist to DB
+      role,
+    });
+  }
 }
 
 // Split a response on newline boundaries while respecting CHUNK_LIMIT.
@@ -294,6 +388,10 @@ async function handleMessageCreate(
     }
 
     agent.sessions.set(sessionId, session);
+
+    // Fetch and populate message history for new sessions
+    const botId = client.application.id;
+    await populateHistoryFromDiscord(client, session, botId, msg.id, 30);
   } else {
     const { channelID } = msg;
     const channel = await client.rest.channels.get(channelID);
