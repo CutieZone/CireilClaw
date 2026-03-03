@@ -1,5 +1,5 @@
 import type { Content, ToolCallContent } from "$/engine/content.js";
-import type { Context } from "$/engine/context.js";
+import type { Context, UsageInfo } from "$/engine/context.js";
 import type { AssistantMessage, Message } from "$/engine/message.js";
 import type { Tool } from "$/engine/tool.js";
 import { debug } from "$/output/log.js";
@@ -131,13 +131,6 @@ function translateTool(tool: Tool): ChatCompletionTool {
     },
     type: "function",
   };
-}
-
-export interface UsageInfo {
-  promptTokens: number;
-  completionTokens: number;
-  /** Estimated system prompt token count (length / 4 heuristic). */
-  systemPromptTokensEst: number;
 }
 
 export async function generate(

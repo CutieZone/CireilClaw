@@ -122,6 +122,7 @@ export async function runHeartbeat(agent: Agent, cfg: HeartbeatConfig): Promise<
             apiKey: cfg.model.apiKey ?? agent.engine.apiKey,
             channel: agent.engine.overrides,
             model: cfg.model.model ?? agent.engine.model,
+            provider: agent.engine.provider,
           });
 
     await engine.runTurn(session, agent.slug, async (content: string): Promise<void> => {

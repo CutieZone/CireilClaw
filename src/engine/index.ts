@@ -3,11 +3,11 @@ import { readFile, stat } from "node:fs/promises";
 import { loadTools } from "$/config/index.js";
 import type { EngineConfig, EngineOverride, EngineOverrides } from "$/config/schemas.js";
 import type { ToolCallContent } from "$/engine/content.js";
-import type { Context } from "$/engine/context.js";
+import type { Context, UsageInfo } from "$/engine/context.js";
 import type { AssistantMessage, Message, ToolMessage } from "$/engine/message.js";
+import { generate as generateAnthropicOauth } from "$/engine/provider/anthropic-oauth/index.js";
 import type { ProviderKind } from "$/engine/provider/index.js";
 import { generate } from "$/engine/provider/oai.js";
-import type { UsageInfo } from "$/engine/provider/oai.js";
 import type { Tool } from "$/engine/tool.js";
 import type { ToolContext } from "$/engine/tools/tool-def.js";
 import { DiscordSession, MatrixSession } from "$/harness/session.js";
@@ -213,6 +213,7 @@ export class Engine {
   private readonly _apiKey: string;
   private readonly _apiBase: string;
   private readonly _model: string;
+  private readonly _provider: string;
   private readonly _type: ProviderKind;
   private readonly _overrides: EngineOverrides;
 
@@ -220,7 +221,8 @@ export class Engine {
     this._apiKey = cfg.apiKey;
     this._apiBase = cfg.apiBase;
     this._model = cfg.model;
-    this._type = "openai";
+    this._provider = cfg.provider;
+    this._type = cfg.provider === "anthropic-oauth" ? "anthropic-oauth" : "openai";
 
     this._overrides = cfg.channel;
   }
@@ -239,6 +241,10 @@ export class Engine {
 
   get overrides(): EngineOverrides {
     return this._overrides;
+  }
+
+  get provider(): string {
+    return this._provider;
   }
 
   static resolveOverride(session: Session, overrides: EngineOverrides): EngineOverride | undefined {
@@ -310,6 +316,15 @@ export class Engine {
           ({ message: assistantMsg, usage } = await generate(
             context,
             effectiveApiBase,
+            effectiveApikey,
+            effectiveModel,
+          ));
+          break;
+        }
+
+        case "anthropic-oauth": {
+          ({ message: assistantMsg, usage } = await generateAnthropicOauth(
+            context,
             effectiveApikey,
             effectiveModel,
           ));

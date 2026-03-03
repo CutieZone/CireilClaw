@@ -32,6 +32,7 @@ const EngineConfigSchema = vb.strictObject({
   apiKey: vb.exactOptional(nonEmptyString, "not-needed"),
   channel: vb.exactOptional(EngineOverridesSchema, {}),
   model: nonEmptyString,
+  provider: vb.exactOptional(nonEmptyString, "openai-compatible"),
 });
 
 type EngineConfig = vb.InferOutput<typeof EngineConfigSchema>;
@@ -88,26 +89,26 @@ interface ConfigChangeEvent {
 type Watchers = AsyncIterableIterator<ConfigChangeEvent>;
 
 export {
-  EngineOverrideSchema,
-  ToolConfigSchema,
-  ToolsConfigSchema,
+  DiscordSchema,
   EngineConfigSchema,
+  EngineOverrideSchema,
   EngineOverridesSchema,
   ExecToolConfigSchema,
   IntegrationsConfigSchema,
-  DiscordSchema,
   MatrixSchema,
+  ToolConfigSchema,
+  ToolsConfigSchema,
 };
 
 export type {
-  ToolsConfig,
-  ExecToolConfig,
-  ToolConfig,
-  EngineOverride,
-  EngineOverrides,
-  EngineConfig,
-  IntegrationsConfig,
   ChannelConfigMap,
   ConfigChangeEvent,
+  EngineConfig,
+  EngineOverride,
+  EngineOverrides,
+  ExecToolConfig,
+  IntegrationsConfig,
+  ToolConfig,
+  ToolsConfig,
   Watchers,
 };

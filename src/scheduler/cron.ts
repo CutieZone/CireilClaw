@@ -106,6 +106,7 @@ async function runMainSession(agent: Agent, job: CronJobConfig): Promise<void> {
             apiKey: job.model.apiKey ?? agent.engine.apiKey,
             channel: agent.engine.overrides,
             model: job.model.model ?? agent.engine.model,
+            provider: agent.engine.provider,
           });
 
     await engine.runTurn(session, agent.slug, async (content: string): Promise<void> => {
@@ -144,6 +145,7 @@ async function runIsolatedSession(agent: Agent, job: CronJobConfig): Promise<voi
             apiKey: job.model.apiKey ?? agent.engine.apiKey,
             channel: agent.engine.overrides,
             model: job.model.model ?? agent.engine.model,
+            provider: agent.engine.provider,
           });
 
     await engine.runTurn(session, agent.slug, async (content: string): Promise<void> => {

@@ -3,7 +3,6 @@ import { buildApplication, buildRouteMap } from "@stricli/core";
 
 import { clearCommand } from "./clear-command.js";
 import { initCommand } from "./init-command.js";
-
 const routes = buildRouteMap({
   defaultCommand: "run",
   docs: {

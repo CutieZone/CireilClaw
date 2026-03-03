@@ -1,3 +1,3 @@
-type ProviderKind = "openai";
+type ProviderKind = "openai" | "anthropic-oauth";
 
 export type { ProviderKind };
