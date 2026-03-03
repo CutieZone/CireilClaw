@@ -1,5 +1,8 @@
 import { loadIntegrations } from "$/config/index.js";
+import type { ApiKey } from "$/config/schemas.js";
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
+import { debug } from "$/output/log.js";
+import { KeyPool } from "$/util/key-pool.js";
 import * as vb from "valibot";
 
 const Schema = vb.strictObject({
@@ -29,7 +32,7 @@ function isBraveSearchResponse(value: unknown): value is BraveSearchResponse {
 
 function hasApiKey(
   integrations: Awaited<ReturnType<typeof loadIntegrations>>,
-): integrations is { brave: { apiKey: string } } {
+): integrations is { brave: { apiKey: ApiKey } } {
   return integrations.brave?.apiKey !== undefined;
 }
 
@@ -53,45 +56,69 @@ export const braveSearch: ToolDef = {
         };
       }
 
+      const keyPool = new KeyPool(integrations.brave.apiKey);
       const params = new URLSearchParams();
       params.set("count", String(data.count));
       params.set("q", data.query);
 
-      const response = await fetch(
-        `https://api.search.brave.com/res/v1/web/search?${params.toString()}`,
-        {
-          headers: {
-            Accept: "application/json",
-            "X-Subscription-Token": integrations.brave.apiKey,
-          },
-        },
-      );
+      // Track attempted keys to avoid infinite loops
+      const attemptedKeys = new Set<string>();
 
-      if (!response.ok) {
-        return {
-          error: `Brave Search API error: ${response.status} ${response.statusText}`,
-          success: false,
-        };
-      }
+      for (;;) {
+        const apiKey = keyPool.getNextKey();
 
-      const json = await response.json();
-      if (!isBraveSearchResponse(json)) {
-        return { error: "Unexpected response format from Brave Search API", success: false };
-      }
-
-      const results: BraveSearchResult[] = [];
-
-      for (const result of json.web?.results ?? []) {
-        if (result.title !== undefined && result.url !== undefined) {
-          results.push({
-            description: result.description ?? "",
-            title: result.title,
-            url: result.url,
-          });
+        // If we've already tried this key, all keys have been exhausted
+        if (attemptedKeys.has(apiKey)) {
+          return {
+            error: `All Brave Search API keys have been rate-limited. Please try again later.`,
+            success: false,
+          };
         }
-      }
+        attemptedKeys.add(apiKey);
 
-      return { query: data.query, results, success: true };
+        const response = await fetch(
+          `https://api.search.brave.com/res/v1/web/search?${params.toString()}`,
+          {
+            headers: {
+              Accept: "application/json",
+              "X-Subscription-Token": apiKey,
+            },
+          },
+        );
+
+        // Check for rate limit (429) - try next key
+        if (response.status === 429) {
+          debug(`Rate limited (429) on Brave Search API key, trying next key...`);
+          keyPool.reportFailure(apiKey);
+          continue;
+        }
+
+        if (!response.ok) {
+          return {
+            error: `Brave Search API error: ${response.status} ${response.statusText}`,
+            success: false,
+          };
+        }
+
+        const json = await response.json();
+        if (!isBraveSearchResponse(json)) {
+          return { error: "Unexpected response format from Brave Search API", success: false };
+        }
+
+        const results: BraveSearchResult[] = [];
+
+        for (const result of json.web?.results ?? []) {
+          if (result.title !== undefined && result.url !== undefined) {
+            results.push({
+              description: result.description ?? "",
+              title: result.title,
+              url: result.url,
+            });
+          }
+        }
+
+        return { query: data.query, results, success: true };
+      }
     } catch (error: unknown) {
       if (error instanceof vb.ValiError) {
         return { error: error.message, issues: error.issues, success: false };

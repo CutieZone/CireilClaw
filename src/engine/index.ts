@@ -1,7 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 
 import { loadTools } from "$/config/index.js";
-import type { EngineConfig, EngineOverride, EngineOverrides } from "$/config/schemas.js";
+import type { ApiKey, EngineConfig, EngineOverride, EngineOverrides } from "$/config/schemas.js";
 import type { ToolCallContent } from "$/engine/content.js";
 import type { Context, UsageInfo } from "$/engine/context.js";
 import type { AssistantMessage, Message, ToolMessage } from "$/engine/message.js";
@@ -14,6 +14,8 @@ import { DiscordSession, MatrixSession } from "$/harness/session.js";
 import type { Session } from "$/harness/session.js";
 import colors from "$/output/colors.js";
 import { debug } from "$/output/log.js";
+import type { KeyPool } from "$/util/key-pool.js";
+import { KeyPool as KeyPoolClass } from "$/util/key-pool.js";
 import { loadBlocks, loadBaseInstructions, loadSkills } from "$/util/load.js";
 import { sandboxToReal } from "$/util/paths.js";
 
@@ -210,7 +212,8 @@ function logUsage(
 }
 
 export class Engine {
-  private readonly _apiKey: string;
+  private readonly _apiKey: ApiKey;
+  private readonly _apiKeyPool: KeyPoolClass;
   private readonly _apiBase: string;
   private readonly _model: string;
   private readonly _provider: string;
@@ -219,6 +222,7 @@ export class Engine {
 
   constructor(cfg: EngineConfig) {
     this._apiKey = cfg.apiKey;
+    this._apiKeyPool = new KeyPoolClass(cfg.apiKey);
     this._apiBase = cfg.apiBase;
     this._model = cfg.model;
     this._provider = cfg.provider;
@@ -231,8 +235,12 @@ export class Engine {
     return this._apiBase;
   }
 
-  get apiKey(): string {
+  get apiKey(): ApiKey {
     return this._apiKey;
+  }
+
+  get apiKeyPool(): KeyPoolClass {
+    return this._apiKeyPool;
   }
 
   get model(): string {
@@ -245,6 +253,16 @@ export class Engine {
 
   get provider(): string {
     return this._provider;
+  }
+
+  /**
+   * Resolve an override's apiKey to a KeyPool, or return the default pool.
+   */
+  private _resolveKeyPool(override: EngineOverride | undefined): KeyPoolClass {
+    if (override?.apiKey !== undefined) {
+      return new KeyPoolClass(override.apiKey);
+    }
+    return this._apiKeyPool;
   }
 
   static resolveOverride(session: Session, overrides: EngineOverrides): EngineOverride | undefined {
@@ -273,7 +291,7 @@ export class Engine {
 
     const override = Engine.resolveOverride(session, this._overrides);
 
-    const effectiveApikey: string = override?.apiKey ?? this._apiKey;
+    const effectiveKeyPool: KeyPool = this._resolveKeyPool(override);
     const effectiveApiBase: string = override?.apiBase ?? this._apiBase;
     const effectiveModel: string = override?.model ?? this._model;
 
@@ -316,7 +334,7 @@ export class Engine {
           ({ message: assistantMsg, usage } = await generate(
             context,
             effectiveApiBase,
-            effectiveApikey,
+            effectiveKeyPool,
             effectiveModel,
           ));
           break;
@@ -325,7 +343,7 @@ export class Engine {
         case "anthropic-oauth": {
           ({ message: assistantMsg, usage } = await generateAnthropicOauth(
             context,
-            effectiveApikey,
+            effectiveKeyPool,
             effectiveModel,
           ));
           break;

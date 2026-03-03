@@ -2,10 +2,15 @@ import * as vb from "valibot";
 
 const nonEmptyString = vb.pipe(vb.string(), vb.nonEmpty());
 
+// API key can be a single string or an array of strings for failover
+const ApiKeySchema = vb.union([nonEmptyString, vb.pipe(vb.array(nonEmptyString), vb.minLength(1))]);
+
+type ApiKey = vb.InferOutput<typeof ApiKeySchema>;
+
 const EngineOverrideSchema = vb.partial(
   vb.strictObject({
     apiBase: vb.pipe(nonEmptyString, vb.url()),
-    apiKey: nonEmptyString,
+    apiKey: ApiKeySchema,
     model: nonEmptyString,
   }),
 );
@@ -29,7 +34,7 @@ type EngineOverrides = vb.InferOutput<typeof EngineOverridesSchema>;
 
 const EngineConfigSchema = vb.strictObject({
   apiBase: vb.pipe(nonEmptyString, vb.url()),
-  apiKey: vb.exactOptional(nonEmptyString, "not-needed"),
+  apiKey: vb.exactOptional(ApiKeySchema, "not-needed"),
   channel: vb.exactOptional(EngineOverridesSchema, {}),
   model: nonEmptyString,
   provider: vb.exactOptional(nonEmptyString, "openai-compatible"),
@@ -59,7 +64,7 @@ type ToolsConfig = vb.InferOutput<typeof ToolsConfigSchema>;
 const IntegrationsConfigSchema = vb.strictObject({
   brave: vb.exactOptional(
     vb.strictObject({
-      apiKey: vb.pipe(vb.string(), vb.nonEmpty()),
+      apiKey: ApiKeySchema,
     }),
   ),
 });
@@ -89,6 +94,7 @@ interface ConfigChangeEvent {
 type Watchers = AsyncIterableIterator<ConfigChangeEvent>;
 
 export {
+  ApiKeySchema,
   DiscordSchema,
   EngineConfigSchema,
   EngineOverrideSchema,
@@ -101,6 +107,7 @@ export {
 };
 
 export type {
+  ApiKey,
   ChannelConfigMap,
   ConfigChangeEvent,
   EngineConfig,

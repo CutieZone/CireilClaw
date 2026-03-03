@@ -9,6 +9,7 @@ import type { AssistantMessage, Message } from "$/engine/message.js";
 import type { Tool } from "$/engine/tool.js";
 import { debug } from "$/output/log.js";
 import { encode } from "$/util/base64.js";
+import type { KeyPool } from "$/util/key-pool.js";
 import { toJsonSchema } from "@valibot/to-json-schema";
 
 const API_URL = "https://api.anthropic.com/v1/messages";
@@ -174,7 +175,7 @@ function translateTool(tool: Tool): Record<string, unknown> {
 
 export async function generate(
   context: Context,
-  token: string,
+  keyPool: KeyPool,
   model: string,
 ): Promise<{ message: AssistantMessage; usage?: UsageInfo }> {
   // Required preamble for the claude-code-20250219 beta — the model checks for this.
@@ -189,79 +190,105 @@ export async function generate(
     tools: context.tools.map(translateTool),
   };
 
-  debug("Starting Anthropic message generation...");
-  const resp = await fetch(API_URL, {
-    body: JSON.stringify(body),
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      "anthropic-beta": "oauth-2025-04-20,claude-code-20250219",
-      "anthropic-version": "2023-06-01",
-    },
-    method: "POST",
-  });
-  debug("Finished Anthropic message generation...");
+  // Track attempted keys to avoid infinite loops
+  const attemptedKeys = new Set<string>();
 
-  if (!resp.ok) {
-    const errorText = await resp.text();
-    throw new Error(
-      `Anthropic API error (${resp.status}): ${errorText}\n` +
-        `  - Model: ${model}\n` +
-        `  - Tools: ${context.tools.map((tool) => tool.name).join(", ")}\n` +
-        `  - Messages: ${context.messages.length}`,
-    );
-  }
+  for (;;) {
+    const token = keyPool.getNextKey();
 
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  const data = (await resp.json()) as {
-    content: {
-      id?: string;
-      input?: unknown;
-      name?: string;
-      text?: string;
-      type: string;
-    }[];
-    stop_reason: string;
-    usage: {
-      input_tokens: number;
-      output_tokens: number;
-    };
-  };
+    // If we've already tried this key, all keys have been exhausted
+    if (attemptedKeys.has(token)) {
+      throw new Error(
+        `All API keys have been rate-limited. Please try again later.\n` +
+          `Request info:\n` +
+          `  - Model: ${model}\n` +
+          `  - Keys in pool: ${keyPool.totalCount}\n` +
+          `  - Keys available: ${keyPool.availableCount}`,
+      );
+    }
+    attemptedKeys.add(token);
 
-  if (data.stop_reason !== "tool_use") {
-    throw new Error(
-      `Expected 'tool_use' stop_reason (tool_choice is any), got '${data.stop_reason}'`,
-    );
-  }
+    debug("Starting Anthropic message generation...");
+    const resp = await fetch(API_URL, {
+      body: JSON.stringify(body),
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "anthropic-beta": "oauth-2025-04-20,claude-code-20250219",
+        "anthropic-version": "2023-06-01",
+      },
+      method: "POST",
+    });
+    debug("Finished Anthropic message generation...");
 
-  const toolUseBlocks = data.content.filter((block) => block.type === "tool_use");
-
-  if (toolUseBlocks.length === 0) {
-    throw new Error("Expected at least one tool_use block, but got none");
-  }
-
-  const message: AssistantMessage = {
-    content: toolUseBlocks.map((block) => {
-      if (block.id === undefined || block.name === undefined) {
-        throw new Error(
-          `Anthropic returned tool_use block missing id or name: ${JSON.stringify(block)}`,
-        );
+    if (!resp.ok) {
+      // Check for rate limit (429) - try next key
+      if (resp.status === 429) {
+        debug(`Rate limited (429) on API key, trying next key...`);
+        keyPool.reportFailure(token);
+        continue;
       }
-      return {
-        id: block.id,
-        input: block.input ?? {},
-        name: block.name,
-        type: "toolCall",
-      } as ToolCallContent;
-    }),
-    role: "assistant",
-  };
 
-  const usage: UsageInfo = {
-    completionTokens: data.usage.output_tokens,
-    promptTokens: data.usage.input_tokens,
-    systemPromptTokensEst: Math.round(system.length / 4),
-  };
+      const errorText = await resp.text();
+      throw new Error(
+        `Anthropic API error (${resp.status}): ${errorText}\n` +
+          `  - Model: ${model}\n` +
+          `  - Tools: ${context.tools.map((tool) => tool.name).join(", ")}\n` +
+          `  - Messages: ${context.messages.length}`,
+      );
+    }
 
-  return { message, usage };
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const data = (await resp.json()) as {
+      content: {
+        id?: string;
+        input?: unknown;
+        name?: string;
+        text?: string;
+        type: string;
+      }[];
+      stop_reason: string;
+      usage: {
+        input_tokens: number;
+        output_tokens: number;
+      };
+    };
+
+    if (data.stop_reason !== "tool_use") {
+      throw new Error(
+        `Expected 'tool_use' stop_reason (tool_choice is any), got '${data.stop_reason}'`,
+      );
+    }
+
+    const toolUseBlocks = data.content.filter((block) => block.type === "tool_use");
+
+    if (toolUseBlocks.length === 0) {
+      throw new Error("Expected at least one tool_use block, but got none");
+    }
+
+    const message: AssistantMessage = {
+      content: toolUseBlocks.map((block) => {
+        if (block.id === undefined || block.name === undefined) {
+          throw new Error(
+            `Anthropic returned tool_use block missing id or name: ${JSON.stringify(block)}`,
+          );
+        }
+        return {
+          id: block.id,
+          input: block.input ?? {},
+          name: block.name,
+          type: "toolCall",
+        } as ToolCallContent;
+      }),
+      role: "assistant",
+    };
+
+    const usage: UsageInfo = {
+      completionTokens: data.usage.output_tokens,
+      promptTokens: data.usage.input_tokens,
+      systemPromptTokensEst: Math.round(system.length / 4),
+    };
+
+    return { message, usage };
+  }
 }
