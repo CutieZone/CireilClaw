@@ -17,7 +17,7 @@ See [INSTALLATION.md](INSTALLATION.md) for setup instructions, configuration ref
 
 Ready for usage.
 
-Core functionality is stable and good for production use. Discord integration is fully functional; Matrix remains a stub. The scheduler (heartbeat + cron) and all 12 tools work as expected.
+Core functionality is stable and good for production use. Discord integration is fully functional; Matrix remains a stub. The scheduler (heartbeat + cron) and all 15 tools work as expected.
 
 ## Platform Requirements
 
