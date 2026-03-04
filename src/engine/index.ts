@@ -282,7 +282,13 @@ export class Engine {
     ) => Promise<{ filename: string; data: Buffer }[]>,
   ): Promise<void> {
     const tools = await buildTools(agentSlug, session);
-    const ctx: ToolContext = { agentSlug, downloadDiscordAttachments, react, send, session };
+    const ctx: ToolContext = {
+      agentSlug,
+      downloadDiscordAttachments,
+      react,
+      send,
+      session,
+    };
 
     debug("Turn start", colors.keyword(agentSlug), colors.keyword(session.id()));
 
@@ -291,8 +297,7 @@ export class Engine {
     const effectiveKeyPool: KeyPool = this._resolveKeyPool(override);
     const effectiveApiBase: string = override?.apiBase ?? this._apiBase;
     const effectiveModel: string = override?.model ?? this._model;
-    const effectiveProvider: ProviderKind =
-      override?.provider === "anthropic-oauth" ? "anthropic-oauth" : "openai";
+    const effectiveProvider: ProviderKind = (override?.provider ?? this._provider) as ProviderKind;
 
     if (session.history.length > MAX_TURNS * 3) {
       debug(

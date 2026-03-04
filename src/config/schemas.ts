@@ -12,7 +12,7 @@ const EngineOverrideSchema = vb.partial(
     apiBase: vb.pipe(nonEmptyString, vb.url()),
     apiKey: ApiKeySchema,
     model: nonEmptyString,
-    provider: vb.exactOptional(nonEmptyString, "openai-compatible"),
+    provider: vb.exactOptional(nonEmptyString, "openai"),
   }),
 );
 
@@ -38,7 +38,7 @@ const EngineConfigSchema = vb.strictObject({
   apiKey: vb.exactOptional(ApiKeySchema, "not-needed"),
   channel: vb.exactOptional(EngineOverridesSchema, {}),
   model: nonEmptyString,
-  provider: vb.exactOptional(nonEmptyString, "openai-compatible"),
+  provider: vb.exactOptional(nonEmptyString, "openai"),
 });
 
 type EngineConfig = vb.InferOutput<typeof EngineConfigSchema>;
