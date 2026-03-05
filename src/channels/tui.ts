@@ -171,6 +171,18 @@ function startTui(harness: Harness, agentSlug: string): void {
       return;
     }
 
+    // /clear command — wipe conversation history and chat log, keep files/memories.
+    if (text === "/clear") {
+      session.history.length = 0;
+      session.openedFiles.clear();
+      session.pendingToolMessages.length = 0;
+      session.pendingImages.length = 0;
+      saveSession(agent.slug, session);
+      chatLog.setContent("");
+      appendChat("{yellow-fg}[system]{/}", "Conversation cleared.");
+      return;
+    }
+
     if (processing || session.busy) {
       appendChat("{red-fg}[system]{/}", "Please wait — agent is still processing.");
       return;
