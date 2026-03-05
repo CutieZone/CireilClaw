@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 
 import { saveSession } from "$/db/sessions.js";
+import type { ChannelHandler } from "$/harness/channel-handler.js";
 import type { Harness } from "$/harness/index.js";
 import { TuiSession } from "$/harness/session.js";
 import { setTuiSink } from "$/output/log.js";
@@ -180,16 +181,23 @@ function startTui(harness: Harness, agentSlug: string): void {
   // --- Replay existing history on startup ---
   replayHistory(session, appendChat);
 
-  // --- Register send/react handlers ---
-  // oxlint-disable-next-line typescript/require-await
-  agent.registerSend("tui", async (_session, content, _attachments) => {
-    appendChat("{green-fg}[agent]{/}", formatMarkdown(content));
-  });
-
-  // oxlint-disable-next-line typescript/require-await
-  agent.registerReact("tui", async (_session, emoji, _messageId) => {
-    appendChat("{yellow-fg}[react]{/}", emoji);
-  });
+  // --- Register TUI channel handler ---
+  const tuiHandler: ChannelHandler = {
+    capabilities: {
+      supportsAttachments: false,
+      supportsDownloadAttachments: false,
+      supportsReactions: true,
+    },
+    // oxlint-disable-next-line typescript/require-await
+    react: async (_session, emoji, _messageId) => {
+      appendChat("{yellow-fg}[react]{/}", emoji);
+    },
+    // oxlint-disable-next-line typescript/require-await
+    send: async (_session, content, _attachments) => {
+      appendChat("{green-fg}[agent]{/}", formatMarkdown(content));
+    },
+  };
+  agent.registerChannel("tui", tuiHandler);
 
   // --- Input handling ---
   let processing = false;

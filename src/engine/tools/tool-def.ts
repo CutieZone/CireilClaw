@@ -6,7 +6,7 @@ interface ToolContext {
   agentSlug: string;
   send: (content: string, attachments?: string[]) => Promise<void>;
   react?: (emoji: string, messageId?: string) => Promise<void>;
-  downloadDiscordAttachments?: (messageId: string) => Promise<{ filename: string; data: Buffer }[]>;
+  downloadAttachments?: (messageId: string) => Promise<{ filename: string; data: Buffer }[]>;
 }
 
 interface ToolDef extends Tool {

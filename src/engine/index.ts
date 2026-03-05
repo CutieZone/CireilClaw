@@ -201,13 +201,12 @@ function logUsage(
       `sys est: ~${colors.number(sysEst)} tokens`,
     );
   } else {
-    const sysPct = Math.round((sysEst / usage.promptTokens) * 100);
     debug(
       "Token usage",
       colors.keyword(agentSlug),
       colors.keyword(sessionId),
       `ctx: ${colors.number(usage.promptTokens)} tokens`,
-      `sys: ~${colors.number(sysPct)}%`,
+      `sys est: ~${colors.number(sysEst)} tokens`,
       `gen: ${colors.number(usage.completionTokens)} tokens`,
     );
   }
@@ -283,14 +282,22 @@ export class Engine {
     agentSlug: string,
     send: (content: string, attachments?: string[]) => Promise<void>,
     react?: (emoji: string, messageId?: string) => Promise<void>,
-    downloadDiscordAttachments?: (
-      messageId: string,
-    ) => Promise<{ filename: string; data: Buffer }[]>,
+    downloadAttachments?: (messageId: string) => Promise<{ filename: string; data: Buffer }[]>,
   ): Promise<void> {
-    const tools = await buildTools(agentSlug, session);
+    const allTools = await buildTools(agentSlug, session);
+    // Strip tools whose capabilities are absent on this channel to save tokens.
+    const tools = allTools.filter((tool) => {
+      if (tool.name === "download-attachments" && downloadAttachments === undefined) {
+        return false;
+      }
+      if (tool.name === "react" && react === undefined) {
+        return false;
+      }
+      return true;
+    });
     const ctx: ToolContext = {
       agentSlug,
-      downloadDiscordAttachments,
+      downloadAttachments,
       react,
       send,
       session,
@@ -303,6 +310,7 @@ export class Engine {
     const effectiveKeyPool: KeyPool = this._resolveKeyPool(override);
     const effectiveApiBase: string = override?.apiBase ?? this._apiBase;
     const effectiveModel: string = override?.model ?? this._model;
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const effectiveProvider: ProviderKind = (override?.provider ?? this._provider) as ProviderKind;
 
     if (session.history.length > MAX_TURNS * 3) {
@@ -339,7 +347,6 @@ export class Engine {
       let assistantMsg: AssistantMessage;
       let usage: UsageInfo | undefined = undefined;
       switch (effectiveProvider) {
-        // oxlint-disable-next-line typescript/no-unnecessary-condition
         case "openai": {
           ({ message: assistantMsg, usage } = await generate(
             context,

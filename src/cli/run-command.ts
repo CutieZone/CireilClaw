@@ -3,6 +3,7 @@ import path from "node:path";
 import { Agent } from "$/agent/index.js";
 import { startDiscord } from "$/channels/discord.js";
 import { loadAgents, loadEngine, watcher } from "$/config/index.js";
+import { runMigrations } from "$/config/migrations/runner.js";
 import type { ConfigChangeEvent } from "$/config/schemas.js";
 import { initDb } from "$/db/index.js";
 import { flushAllSessions, loadSessions } from "$/db/sessions.js";
@@ -69,6 +70,9 @@ async function run(flags: Flags): Promise<void> {
   setLogFile(path.join(root(), "logs", "cireilclaw.log"));
 
   info("Initializing", colors.keyword("cireilclaw"));
+
+  // RUN MIGRATIONS FIRST - before any config loading
+  await runMigrations();
 
   const sc = new AbortController();
 

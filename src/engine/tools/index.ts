@@ -1,6 +1,6 @@
 import { braveSearch } from "$/engine/tools/brave-search.js";
 import { closeFile } from "$/engine/tools/close-file.js";
-import { discordDownloadAttachments } from "$/engine/tools/discord-download-attachments.js";
+import { downloadAttachments } from "$/engine/tools/download-attachments.js";
 import { exec } from "$/engine/tools/exec.js";
 import { listDir } from "$/engine/tools/list-dir.js";
 import { noResponse } from "$/engine/tools/no-response.js";
@@ -18,7 +18,7 @@ import { write } from "$/engine/tools/write.js";
 export const toolRegistry: Record<string, ToolDef> = {
   "brave-search": braveSearch,
   "close-file": closeFile,
-  "discord-download-attachments": discordDownloadAttachments,
+  "download-attachments": downloadAttachments,
   exec,
   "list-dir": listDir,
   "no-response": noResponse,
