@@ -135,7 +135,7 @@ function startTui(harness: Harness, agentSlug: string): void {
     parent: screen,
     scrollable: true,
     scrollbar: { ch: " ", style: { bg: "cyan" } },
-    style: { bg: "black", fg: "white" },
+    style: { bg: 235, fg: "white" },
     tags: true,
     top: 1,
     vi: true,
@@ -151,7 +151,7 @@ function startTui(harness: Harness, agentSlug: string): void {
     left: 0,
     parent: screen,
     style: {
-      bg: "black",
+      bg: 235,
       border: { fg: "cyan" },
       fg: "white",
     },
