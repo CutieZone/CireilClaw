@@ -10,7 +10,7 @@ import { root } from "$/util/paths.js";
 import { confirm, select } from "@inquirer/prompts";
 import { stringify } from "smol-toml";
 
-const MIGRATIONS_DIR = fileURLToPath(new URL("../", import.meta.url));
+const MIGRATIONS_DIR = fileURLToPath(new URL("./", import.meta.url));
 const STATE_FILE = join(root(), "config", "migrations.json");
 const BACKUPS_DIR = join(root(), "config", "backups");
 
