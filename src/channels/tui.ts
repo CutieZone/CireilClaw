@@ -53,10 +53,10 @@ function formatMarkdown(text: string): string {
   // Bold: **text** — bold + white to stand out against default gray text.
   result = result.replaceAll(/\*\*(.+?)\*\*/g, "{bold}{white-fg}$1{/}");
 
-  // Italic: *text* — ANSI italic + cyan color as fallback for terminals without italic.
+  // Italic: *text* — ANSI italic + magenta as fallback (cyan is used by [you] tag).
   result = result.replaceAll(
     /(?<!\*)\*([^*]+)\*(?!\*)/g,
-    `${ANSI_ITALIC_ON}{cyan-fg}$1{/}${ANSI_ITALIC_OFF}`,
+    `${ANSI_ITALIC_ON}{magenta-fg}$1{/}${ANSI_ITALIC_OFF}`,
   );
 
   // Strikethrough: ~~text~~ — ANSI strikethrough + red as fallback.
