@@ -112,29 +112,29 @@ function setLogFile(filePath: string): void {
 }
 
 function debug(...data: unknown[]): void {
+  writeToFile("debug", data);
   if (isEnabled("debug")) {
     console.debug(color.debug("[DEBUG]"), ...data);
-    writeToFile("debug", data);
   }
 }
 
 function info(...data: unknown[]): void {
+  writeToFile("info", data);
   if (isEnabled("info")) {
     console.info(color.info("[ INFO]"), ...data);
-    writeToFile("info", data);
   }
 }
 
 function warning(...data: unknown[]): void {
+  writeToFile("warning", data);
   if (isEnabled("warning")) {
     console.warn(color.warning("[ WARN]"), ...data);
-    writeToFile("warning", data);
   }
 }
 
 function error(...data: unknown[]): void {
-  console.error(color.error("[ERROR]"), ...data);
   writeToFile("error", data);
+  console.error(color.error("[ERROR]"), ...data);
 }
 
 export { config, debug, error, info, setLogFile, warning };

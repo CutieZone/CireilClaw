@@ -1,4 +1,5 @@
 import { runCommand } from "$/cli/run-command.js";
+import { tuiCommand } from "$/cli/tui-command.js";
 import { buildApplication, buildRouteMap } from "@stricli/core";
 
 import { clearCommand } from "./clear-command.js";
@@ -14,6 +15,7 @@ const routes = buildRouteMap({
     init: initCommand,
     migrate: migrateCommand,
     run: runCommand,
+    tui: tuiCommand,
   },
 });
 

@@ -88,6 +88,8 @@ async function buildSystemPrompt(agentSlug: string, session: Session): Promise<s
     }
   } else if (session.channel === "internal") {
     lines.push(`This is an internal cron session (job ID: ${session.jobId})`);
+  } else if (session.channel === "tui") {
+    lines.push("This is a TUI session with your person. SFW/NSFW depending on their preferences.");
   } else {
     throw new Error(`Unimplemented channel: ${session.channel}`);
   }

@@ -84,6 +84,8 @@ interface ChannelConfigMap {
   matrix: MatrixConfig;
   // oxlint-disable-next-line typescript/no-invalid-void-type
   internal: void;
+  // oxlint-disable-next-line typescript/no-invalid-void-type
+  tui: void;
 }
 
 interface ConfigChangeEvent {

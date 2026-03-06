@@ -177,7 +177,7 @@ function _flushSession(agentSlug: string, session: Session): void {
       guildId: session.guildId,
       isNsfw: session.isNsfw,
     } satisfies DiscordMeta;
-  } else {
+  } else if (session.channel === "matrix") {
     meta = { roomId: session.roomId };
   }
 

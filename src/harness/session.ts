@@ -1,7 +1,8 @@
+import type { TuiBridge } from "$/channels/tui/bridge.js";
 import type { ImageContent } from "$/engine/content.js";
 import type { Message } from "$/engine/message.js";
 
-const channelTypes = ["discord", "matrix", "internal"] as const;
+const channelTypes = ["discord", "matrix", "internal", "tui"] as const;
 type ChannelType = (typeof channelTypes)[number];
 
 abstract class BaseSession {
@@ -79,7 +80,28 @@ class InternalSession extends BaseSession {
   }
 }
 
-type Session = DiscordSession | MatrixSession | InternalSession;
+class TuiSession extends BaseSession {
+  override readonly channel = "tui";
+  readonly bridge: TuiBridge;
 
-export { DiscordSession, MatrixSession, InternalSession, channelTypes as channelTypeList };
+  constructor(bridge: TuiBridge) {
+    super();
+    this.bridge = bridge;
+  }
+
+  // oxlint-disable-next-line class-methods-use-this
+  override id(): string {
+    return "tui";
+  }
+}
+
+type Session = DiscordSession | MatrixSession | InternalSession | TuiSession;
+
+export {
+  DiscordSession,
+  MatrixSession,
+  InternalSession,
+  TuiSession,
+  channelTypes as channelTypeList,
+};
 export type { Session, ChannelType };
