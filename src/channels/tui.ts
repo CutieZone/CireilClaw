@@ -50,8 +50,8 @@ function formatMarkdown(text: string): string {
   // Inline code: `text`
   result = result.replaceAll(/`([^`]+)`/g, "{yellow-fg}$1{/}");
 
-  // Bold: **text**
-  result = result.replaceAll(/\*\*(.+?)\*\*/g, "{bold}$1{/bold}");
+  // Bold: **text** — bold + white to stand out against default gray text.
+  result = result.replaceAll(/\*\*(.+?)\*\*/g, "{bold}{white-fg}$1{/}");
 
   // Italic: *text* — ANSI italic + cyan color as fallback for terminals without italic.
   result = result.replaceAll(
