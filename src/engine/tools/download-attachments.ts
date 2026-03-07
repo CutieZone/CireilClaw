@@ -6,20 +6,25 @@ import { sandboxToReal } from "$/util/paths.js";
 import * as vb from "valibot";
 
 const Schema = vb.strictObject({
-  message_id: vb.pipe(vb.string(), vb.nonEmpty()),
-  to: vb.pipe(vb.string(), vb.nonEmpty()),
+  message_id: vb.pipe(
+    vb.string(),
+    vb.nonEmpty(),
+    vb.description("ID of the message whose attachments to download."),
+  ),
+  to: vb.pipe(
+    vb.string(),
+    vb.nonEmpty(),
+    vb.description("Sandbox directory path to save files into (e.g. /workspace/downloads)."),
+  ),
 });
 
 const downloadAttachments: ToolDef = {
   description:
-    "Download all file attachments from a message into the sandbox.\n\n" +
-    "Parameters:\n" +
-    "- `message_id`: The message ID whose attachments to download.\n" +
-    "- `to`: Sandbox directory path to save files into (e.g. `/workspace/downloads`).\n\n" +
-    "Returns the list of saved sandbox paths. Only available on platforms that support attachment downloads.",
+    "Download all file attachments from a message into the sandbox. Returns the list of saved sandbox paths.\n\n" +
+    "Only works on platforms that support attachment downloads (check capabilities in system prompt).",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     if (ctx.downloadAttachments === undefined) {
-      return { error: "This channel does not support downloading attachments" };
+      return { error: "This channel does not support downloading attachments", success: false };
     }
 
     const { message_id, to } = vb.parse(Schema, input);
@@ -35,7 +40,7 @@ const downloadAttachments: ToolDef = {
       saved.push(sandboxPath);
     }
 
-    return { count: saved.length, saved };
+    return { count: saved.length, saved, success: true };
   },
   name: "download-attachments",
   parameters: Schema,

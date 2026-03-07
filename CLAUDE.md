@@ -10,6 +10,8 @@ An opinionated, security-focused agent system for running sandboxed AI assistant
 
 ```bash
 pnpm start              # Run via tsx (tsx ./src/entrypoint.ts)
+pnpm start tui <agent>  # Run interactive TUI session with a single agent
+pnpm start migrate      # Apply pending config migrations
 pnpm lint               # Lint with OxLint (type-aware)
 pnpm lint:fix           # Lint and auto-fix
 pnpm format             # Format with OxFmt
@@ -39,6 +41,7 @@ CLI (`@stricli/core`) → Config (TOML) → Harness (multi-channel) → Agent (p
 ### Channel Support
 
 - **Discord** — Full integration via oceanic.js with message handling, image attachments, typing indicators, and automatic message chunking.
+- **TUI** — Interactive terminal UI built with Ink (React). Single-agent mode via `tui` CLI command. No attachment or reaction support.
 - **Matrix** — Stub only (`MatrixSession` class exists but no channel handler).
 - **Internal** — Ephemeral sessions for heartbeat and isolated cron jobs. Never persisted to DB.
 
@@ -55,13 +58,15 @@ Each agent turn:
 ### Key Modules
 
 - **`src/engine/`** — LLM interaction core. Builds system prompts from base instructions + memory blocks + opened files + skills, manages tool registry, calls APIs via provider abstraction (`openai` or `anthropic-oauth`). Uses `tool_choice: "required"` — agents must call tools, cannot respond with plain text.
-- **`src/engine/tools/`** — Extensible tool system (15 tools). Each tool implements `ToolDef` with a Valibot schema. Tools include: `read`, `write`, `open-file`, `close-file`, `str-replace`, `list-dir`, `exec` (sandboxed), `brave-search`, `read-skill`, `respond`, `schedule`, `session-info`, `discord-download-attachments`, `react`, and `no-response`.
+- **`src/engine/tools/`** — Extensible tool system (15 tools). Each tool implements `ToolDef` with a Valibot schema. Tools include: `read`, `write`, `open-file`, `close-file`, `str-replace`, `list-dir`, `exec` (sandboxed), `brave-search`, `read-skill`, `respond`, `schedule`, `session-info`, `download-attachments`, `react`, and `no-response`.
 - **`src/scheduler/`** — Manages heartbeat and cron jobs. Heartbeat runs `HEARTBEAT.md` checklist in target session. Cron jobs execute in main or isolated sessions with configurable delivery (announce/webhook).
 - **`src/agent/`** — Wraps Engine with a slug identifier and per-channel session management.
 - **`src/harness/`** — Multi-agent orchestrator with file watcher for config hot-reload. Manages Discord channels and internal sessions. Delegates to channel handlers for sending responses.
 - **`src/harness/session.ts`** — Abstract session base class with `DiscordSession`, `MatrixSession` (stub), and `InternalSession` implementations. Tracks conversation history, opened files, pending messages/images, and channel-specific metadata.
 - **`src/channels/discord.ts`** — Discord integration with oceanic.js. Handles message creation/updates/deletes, image attachment fetching, typing indicators, and message chunking for Discord's 2000-char limit. The `src/channels/discord/` subdirectory contains handler utilities for message clearing and context types.
+- **`src/channels/tui.ts`** — TUI channel handler (Ink/React). Used exclusively by the `tui` CLI command for interactive single-agent terminal sessions. The `src/channels/tui/` subdirectory contains the Ink app, bridge, and message types.
 - **`src/config/`** — Loads and validates TOML config via Valibot. Global configs: `engine.toml`, `integrations.toml` (Brave Search), `channels/discord.toml`. Agent configs: `engine.toml`, `tools.toml`, `heartbeat.toml`, `cron.toml`. Engine config supports per-channel overrides (Discord guild, Matrix room) for provider, API base, model, and API key pools. Watches both global and agent-specific directories for hot-reload.
+- **`src/config/migrations/`** — Config migration system. Migrations transform TOML config files in-place (both global and per-agent). Each migration has a timestamped ID (`YYYYMMDDHHMMSS_name`), declares which config files it targets, and implements a `transform` function. Applied automatically on `run`/`tui` startup and manually via `pnpm migrate`.
 - **`src/db/`** — SQLite persistence with Drizzle ORM. WAL-mode enabled for concurrent read safety. Three tables: `sessions` (history, opened files), `images` (blake3 hash-based image index for deduplication), and `cron_jobs` (recurring and one-shot scheduled jobs with status and retry tracking).
 - **`src/util/paths.ts`** — Sandbox enforcement. Only 4 paths are allowed: `/blocks/`, `/memories/`, `/workspace/`, `/skills/`. Prevents symlink escape and path traversal. Maps sandbox paths to real filesystem under `~/.cireilclaw/`.
 - **`src/util/sandbox.ts`** — Bubblewrap sandbox builder. NixOS-aware with `nix-store` queries for dependency binding. Generic Linux fallback binds `/usr`, `/bin`, `/lib`. Reads `.env` from workspace for environment variables. 64MB tmpfs for `/tmp`, timeout enforcement via `SIGKILL`.
@@ -69,7 +74,7 @@ Each agent turn:
 - **`src/util/load.ts`** — Loads memory blocks (person, identity, long-term, soul, style-notes) and skills with TOML frontmatter + markdown content into the system prompt.
 - **`src/util/image.ts`** — WebP image conversion (quality 90) for vision API. Handles format conversion and buffer management.
 - **`src/output/`** — Logging and color utilities for console output.
-- **`src/cli/`** — CLI commands built with `@stricli/core`. `init` interactively sets up a new agent directory, `run` starts the harness, `clear` deletes one or all sessions from DB.
+- **`src/cli/`** — CLI commands built with `@stricli/core`. `init` interactively sets up a new agent directory, `run` starts the harness, `tui <agent>` runs an interactive TUI session with a single agent, `migrate` applies pending config migrations without starting the harness, `clear` deletes one or all sessions from DB.
 
 ### Agent Directory Layout (`~/.cireilclaw/agents/{slug}/`)
 

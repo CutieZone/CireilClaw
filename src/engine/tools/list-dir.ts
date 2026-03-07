@@ -5,7 +5,11 @@ import { sandboxToReal, sanitizeError } from "$/util/paths.js";
 import * as vb from "valibot";
 
 const Schema = vb.strictObject({
-  path: vb.pipe(vb.string(), vb.nonEmpty()),
+  path: vb.pipe(
+    vb.string(),
+    vb.nonEmpty(),
+    vb.description("Sandbox directory path to list (e.g. /workspace/)."),
+  ),
 });
 
 export const listDir: ToolDef = {

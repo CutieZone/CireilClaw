@@ -2,7 +2,11 @@ import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import * as vb from "valibot";
 
 const Schema = vb.strictObject({
-  path: vb.pipe(vb.string(), vb.nonEmpty()),
+  path: vb.pipe(
+    vb.string(),
+    vb.nonEmpty(),
+    vb.description("Sandbox path of the pinned file to unpin."),
+  ),
 });
 
 export const closeFile: ToolDef = {

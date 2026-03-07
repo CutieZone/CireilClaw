@@ -231,10 +231,13 @@ function loadSessions(agentSlug: string): Map<string, Session> {
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       const meta = JSON.parse(row.meta) as DiscordMeta;
       session = new DiscordSession(meta.channelId, meta.guildId, meta.isNsfw);
-    } else {
+    } else if (row.channel === "matrix") {
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       const meta = JSON.parse(row.meta) as { roomId: string };
       session = new MatrixSession(meta.roomId);
+    } else {
+      // Unknown or legacy channel type — skip.
+      continue;
     }
 
     session.history = history;

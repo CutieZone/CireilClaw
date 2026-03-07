@@ -72,6 +72,13 @@ export class Agent {
             return result ?? [];
           };
 
-    await this._engine.runTurn(session, this._slug, send, react, downloadAttachments);
+    await this._engine.runTurn(
+      session,
+      this._slug,
+      send,
+      react,
+      downloadAttachments,
+      handler.capabilities,
+    );
   }
 }

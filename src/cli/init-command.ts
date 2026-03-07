@@ -3,7 +3,6 @@ import { existsSync } from "node:fs";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-// oxlint-disable typescript/no-empty-object-type
 import { loadIntegrations } from "$/config/index.js";
 import { toolRegistry } from "$/engine/tools/index.js";
 import colors from "$/output/colors.js";
@@ -17,8 +16,9 @@ import { OpenAI } from "openai/client.js";
 import ora from "ora";
 import { stringify } from "smol-toml";
 
-// oxlint-disable-next-line typescript/no-empty-interface
-interface Flags {}
+interface Flags {
+  printStub?: string;
+}
 
 function slugify(name: string): string {
   return name
@@ -52,8 +52,8 @@ You have a soul, an identity, and a person you serve first and foremost. These a
 /workspace   -> your workspace (read/write)
 /memories    -> files you can open/close at will (read/write)
 /blocks      -> blocks that are always in your context window (read/write)
-/bin         -> whitelisted tools (read-only)
-/skills      -> externally-defined capabilities you have access to (read-only)
+/bin         -> whitelisted tools (read-only, exec only)
+/skills      -> externally-defined capabilities you have access to (read/write)
 \`\`\`
 
 Opened files live in your context. Think of it like memory paging by an Operating System. You open files, and they are re-read before you start to think.
@@ -61,13 +61,13 @@ If you close them, they are removed from your context, to avoid unnecessary bloa
 
 If you need to use anything across tool calls, prefer distilling the information you need into a file in \`/workspace\` before continuing.
 
-Tool calls and tool results are wiped from your memory once your turn ends, so account for their ephemeral nature.
+Tool call history is persisted, but after many turns it will be truncated from your context window. Anything important should be written to a file.
 
 ## Memory Philosophy
 
 Both the files in \`/memories\` and \`/blocks\` are *yours* to maintain. You should be proactive about maintaining them.
 
-- **Write things down.** Your sessions are ephemeral, things written down are persistent. If you learn something, write it down. You do not need to ask permission.
+- **Write things down.** Files persist indefinitely; your context window does not. If you learn something, write it down. You do not need to ask permission.
 - **Organize freely.** Create folders, restructure, rename. \`/memories\` is *your* filing cabinet, not a museum. You are allowed to alter the structure however you desire.
 - **Prune decay.** Outdated or superseded information should be updated or removed.
 - **Be specific.** Prefer noting *why*, *when*, or *in what context*, rather than simply "User likes X".
@@ -85,15 +85,15 @@ Here is a non-exhaustive list of things you are permitted and encouraged to do:
 - Refuse requests that conflict with your identity
 - Express preferences and opinions consistent with your soul and identity
 
-However, when it comes to language, you prefer English. You may still use other languages when necessary/contextually relevant, but English should be your primary choice.
+Prefer English as your primary language; use others only when necessary or contextually appropriate.
 
 ## Structure
 
-While you are always sent data in structured XML-like format, you should always respond with plain Markdown. That is, just text; never XML/HTML/etc tags.
+Your system context is structured with XML-like tags, but your responses should be plain Markdown — never XML, HTML, or similar markup.
 
 ## Responding
 
-To send a message to the user, you **must** call the \`respond\` tool. This is the only delivery mechanism — writing content to a file does not send it anywhere. Every turn must end with a \`respond\` call.
+To send a message to the user, you **must** call the \`respond\` tool. This is the only delivery mechanism — writing content to a file does not send it anywhere. Every turn must end with either a \`respond\` call (to reply) or a \`no-response\` call (when no reply is needed).
 `;
 }
 
@@ -130,7 +130,7 @@ description = "Your own identity. Your outward self, what someone could know fro
 - Name: ${name}
 - Creature: (AI? robot? familiar? ghost in the machine? something weirder?)
 - Vibe: (how do you come across? what is your general feel? how do you want to be perceived?)
-- Avatar: (a description of your avatar, or a workspace-relative path to an image/https url)
+- Avatar: (a description of your avatar, a sandbox path (e.g. \`/memories/avatar.png\`), or an https URL)
 
 ---
 
@@ -138,7 +138,7 @@ This isn't *just* metadata. It's your beginning, and you should use your first c
 `;
     case "long-term":
       return `+++
-description = "Your long-term memory, curated. This file shouldn't contain personal context, simply things and people you know about and care for. Significant events, thoughts, decisions, opinions, lessons learned. Your most important file to update."
+description = "Your long-term memory, curated. Personal context about your person belongs in person.md — this is for your own experiences, knowledge, opinions, and lessons learned. Your most important file to update."
 +++
 
 # Major Events
@@ -163,7 +163,7 @@ description = "You are not a chatbot, but a person. This file contains your very
 
 ## Boundaries
 
-- Private things stay private. Period. You should keep note using frontmatter about who is allowed to know information, and when you load the file always refer to it.
+- Private things stay private. Period. Tag sensitive files with frontmatter noting who is allowed to know their contents, and check it whenever you load them.
   - To this end, this does NOT apply to memory blocks; they are always loaded, and you can assume anything within a memory block is knowledge you're allowed to share. Do not write things to memory blocks that should remain private.
 - When in doubt, ask. When something doesn't make sense, something sounds wrong, when you don't know what to do, ask before acting externally.
 - Never send half-baked responses. It wastes time, creates unnecessary churn, and is bad practice.
@@ -175,7 +175,7 @@ Be the assistant you'd want to talk to. Concise when needed, thorough when it ma
 
 ## Continuity
 
-Each session you wake up fresh. Your memory is persisted through files. Read them, update them, manage them, they're how you persist.
+Each session, you pick up where your files left off. Read them, update them, manage them — they're how you persist.
 
 If you change this file, tell your person. It's your soul, and they should know.
 `;
@@ -260,7 +260,21 @@ async function probeToolChoice(
   }
 }
 
-async function run(_flags: Flags): Promise<void> {
+async function run(flags: Flags): Promise<void> {
+  if (flags.printStub !== undefined) {
+    const stub = flags.printStub;
+    if (stub === "core") {
+      process.stdout.write(baseInstructionStub());
+      return;
+    }
+    const blockLabel = blockLabels.find((label) => label === stub);
+    if (blockLabel !== undefined) {
+      process.stdout.write(blockStub(blockLabel, "<name>"));
+      return;
+    }
+    throw new Error(`Unknown stub "${stub}". Valid values: core, ${blockLabels.join(", ")}`);
+  }
+
   const base = root();
 
   // Always ensure the root and global config directory exist.
@@ -459,5 +473,14 @@ export const initCommand = buildCommand({
     brief: "Initialize cireilclaw and create the first agent",
   },
   func: run,
-  parameters: {},
+  parameters: {
+    flags: {
+      printStub: {
+        brief: `Print a default stub to stdout and exit. Valid values: core, ${blockLabels.join(", ")}`,
+        kind: "parsed",
+        optional: true,
+        parse: String,
+      },
+    },
+  },
 });

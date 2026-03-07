@@ -10,6 +10,7 @@ import type { ProviderKind } from "$/engine/provider/index.js";
 import { generate } from "$/engine/provider/oai.js";
 import type { Tool } from "$/engine/tool.js";
 import type { ToolContext } from "$/engine/tools/tool-def.js";
+import type { ChannelCapabilities } from "$/harness/channel-handler.js";
 import { DiscordSession, MatrixSession } from "$/harness/session.js";
 import type { Session } from "$/harness/session.js";
 import colors from "$/output/colors.js";
@@ -66,7 +67,17 @@ function squashMessages(messages: Message[]): Message[] {
   return result;
 }
 
-async function buildSystemPrompt(agentSlug: string, session: Session): Promise<string> {
+const NO_CAPABILITIES: ChannelCapabilities = {
+  supportsAttachments: false,
+  supportsDownloadAttachments: false,
+  supportsReactions: false,
+};
+
+async function buildSystemPrompt(
+  agentSlug: string,
+  session: Session,
+  capabilities: ChannelCapabilities,
+): Promise<string> {
   const baseInstructions = await loadBaseInstructions(agentSlug);
   const blocks = await loadBlocks(agentSlug);
 
@@ -93,6 +104,12 @@ async function buildSystemPrompt(agentSlug: string, session: Session): Promise<s
   } else {
     throw new Error(`Unimplemented channel: ${session.channel}`);
   }
+
+  lines.push(
+    `- reactions supported: ${capabilities.supportsReactions}`,
+    `- file attachments in respond supported: ${capabilities.supportsAttachments}`,
+    `- attachment downloads supported: ${capabilities.supportsDownloadAttachments}`,
+  );
 
   lines.push(
     "</metadata>",
@@ -279,6 +296,7 @@ export class Engine {
     send: (content: string, attachments?: string[]) => Promise<void>,
     react?: (emoji: string, messageId?: string) => Promise<void>,
     downloadAttachments?: (messageId: string) => Promise<{ filename: string; data: Buffer }[]>,
+    capabilities: ChannelCapabilities = NO_CAPABILITIES,
   ): Promise<void> {
     const tools = await buildTools(agentSlug, session);
     const ctx: ToolContext = {
@@ -318,7 +336,7 @@ export class Engine {
         session.pendingToolMessages.push({ content: images, role: "user" });
       }
 
-      const prompt = await buildSystemPrompt(agentSlug, session);
+      const prompt = await buildSystemPrompt(agentSlug, session, capabilities);
       const history = truncateToTurns(session.history, MAX_TURNS);
       const messages = squashMessages([...history, ...session.pendingToolMessages]);
 

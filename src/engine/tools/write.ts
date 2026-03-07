@@ -7,7 +7,10 @@ import * as vb from "valibot";
 
 // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment -- valibot custom validation
 const Schema = vb.strictObject({
-  content: vb.string(),
+  content: vb.pipe(
+    vb.string(),
+    vb.description("File content to write. May be empty string to create an empty file."),
+  ),
   path: vb.pipe(
     vb.string(),
     vb.nonEmpty(),
@@ -17,6 +20,9 @@ const Schema = vb.strictObject({
       }
       return true;
     }, "Files in /blocks/ must end with .md extension"),
+    vb.description(
+      "Sandbox path to write (e.g. /workspace/output.txt). Files in /blocks/ must end with .md.",
+    ),
   ),
 });
 
