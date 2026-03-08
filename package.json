@@ -29,7 +29,8 @@
     "react": "^19.2.4",
     "sharp": "^0.34.5",
     "smol-toml": "^1.6.0",
-    "valibot": "^1.2.0"
+    "valibot": "^1.2.0",
+    "yaml": "^2.8.2"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

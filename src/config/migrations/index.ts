@@ -13,6 +13,8 @@ interface ConfigMigration {
   id: string; // Format: YYYYMMDDHHMMSS_descriptive_name
   targets: MigrationTargets[];
   transform(data: TomlTable, context: MigrationContext): TomlTable | Promise<TomlTable>;
+  /** Optional: run arbitrary filesystem operations per agent after TOML transforms. */
+  migrateAgent?(agentSlug: string, agentPath: string): Promise<void>;
 }
 
 interface MigrationContext {

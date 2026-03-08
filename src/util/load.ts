@@ -7,6 +7,7 @@ import colors from "$/output/colors.js";
 import { root } from "$/util/paths.js";
 import { parse } from "smol-toml";
 import * as vb from "valibot";
+import { parse as parseYaml } from "yaml";
 
 type Frontmatter = Omit<MemoryBlock, "content" | "label" | "metadata">;
 
@@ -88,13 +89,12 @@ async function loadBaseInstructions(slug: string): Promise<string> {
 
 interface Skill {
   slug: string;
-  summary: string;
-  whenToUse: string;
+  description: string;
 }
 
 const FrontmatterSchema = vb.strictObject({
-  summary: vb.pipe(vb.string(), vb.nonEmpty()),
-  whenToUse: vb.pipe(vb.string(), vb.nonEmpty()),
+  description: vb.pipe(vb.string(), vb.nonEmpty()),
+  name: vb.pipe(vb.string(), vb.nonEmpty()),
 });
 
 async function loadSkills(agentSlug: string): Promise<Skill[]> {
@@ -104,39 +104,42 @@ async function loadSkills(agentSlug: string): Promise<Skill[]> {
     return [];
   }
 
-  const entries = await readdir(skillsPath);
+  const entries = await readdir(skillsPath, { withFileTypes: true });
   const skills: Skill[] = [];
 
   for (const entry of entries) {
-    if (!entry.endsWith(".md")) {
+    if (!entry.isDirectory()) {
       continue;
     }
 
-    const slug = entry.slice(0, -3);
-    const filePath = join(skillsPath, entry);
+    const slug = entry.name;
+    const filePath = join(skillsPath, slug, "SKILL.md");
+
+    if (!existsSync(filePath)) {
+      continue;
+    }
+
     const content = await readFile(filePath, { encoding: "utf8" });
 
-    if (content.indexOf("+++", 0) !== 0) {
+    if (!content.startsWith("---")) {
       throw new Error(
-        `Skill file ${colors.keyword(slug)} at path ${colors.path(filePath)} has an invalid frontmatter (expected TOML, but file does not start with '${colors.keyword("+++")}')`,
+        `Skill file ${colors.keyword(slug)} at path ${colors.path(filePath)} has invalid frontmatter (expected YAML, file does not start with '${colors.keyword("---")}')`,
       );
     }
 
-    const ending = content.indexOf("+++", 3);
+    const ending = content.indexOf("---", 3);
     if (ending === -1) {
       throw new Error(
-        `Skill file ${colors.keyword(slug)} at path ${colors.path(filePath)} has an invalid frontmatter (expected closing '${colors.keyword("+++")}', but none found)`,
+        `Skill file ${colors.keyword(slug)} at path ${colors.path(filePath)} has invalid frontmatter (expected closing '${colors.keyword("---")}', but none found)`,
       );
     }
 
-    const tomlData = content.slice(3, ending);
-    const tomlObj = parse(tomlData);
-    const frontmatter = vb.parse(FrontmatterSchema, tomlObj);
+    const yamlData = content.slice(3, ending);
+    const frontmatter = vb.parse(FrontmatterSchema, parseYaml(yamlData));
 
     skills.push({
+      description: frontmatter.description,
       slug,
-      summary: frontmatter.summary,
-      whenToUse: frontmatter.whenToUse,
     });
   }
 

@@ -146,8 +146,7 @@ async function buildSystemPrompt(
     for (const skill of skills) {
       lines.push(
         `<skill slug="${skill.slug}">`,
-        `<summary>${skill.summary}</summary>`,
-        `<when>${skill.whenToUse}</when>`,
+        `<description>${skill.description}</description>`,
         `</skill>`,
       );
     }

@@ -251,6 +251,13 @@ async function applyMigration(
     }
   }
 
+  if (migration.migrateAgent !== undefined) {
+    for (const slug of agentSlugs) {
+      const agentPath = join(root(), "agents", slug);
+      await migration.migrateAgent(slug, agentPath);
+    }
+  }
+
   info(`  ${colors.success("✓")} Applied migration ${colors.path(migration.id)}`);
   return true;
 }

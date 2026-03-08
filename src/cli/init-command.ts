@@ -97,6 +97,71 @@ To send a message to the user, you **must** call the \`respond\` tool. This is t
 `;
 }
 
+function createSkillStub(): string {
+  return `---
+name: "create-skill"
+description: "Create, structure, and document a new skill from a learned technique or workflow. Use when you've learned something repeatable that you'll need again, or when Lys sets something new up for you."
+---
+
+## Overview
+
+A skill is a reusable playbook — not just documentation of what a tool does, but *how* to use it well, *when* to reach for it, and *what goes wrong*. Skills live in \`/skills/{slug}/SKILL.md\`, and their descriptions are always in your context so you know what you have available.
+
+Good skills are written for your future self: the version of you that's half-asleep on a cheap model and needs clear, concrete guidance.
+
+## Process
+
+1. **Identify the skill.** You've done something that worked, or Lys has shown you something new. Ask yourself: will I need this again? If yes, it's a skill.
+
+2. **Pick a slug.** Short, lowercase, hyphenated. Should be obvious what it is at a glance. \`crawl-website\`, \`file-images\`, \`search-discord\`. The slug is also the directory name: \`/skills/{slug}/\`.
+
+3. **Write the frontmatter.** Every skill needs a \`SKILL.md\` with:
+   \`\`\`yaml
+   ---
+   name: "slug-here"
+   description: "One clear sentence covering what this skill does and when to use it."
+   ---
+   \`\`\`
+   - \`name\` must match the directory name exactly.
+   - \`description\` is for your future self deciding whether to \`read-skill\`. Make it specific and scannable.
+
+4. **Write the body.** Suggested structure — adapt as needed:
+   - **Overview**: What and why. A paragraph, not a novel.
+   - **Process**: The actual steps. Be concrete. Include exact tool calls, flags, parameters, or code shapes that work.
+   - **Pitfalls**: What went wrong, what's counterintuitive, what to watch out for. This section starts sparse and grows.
+   - **Examples**: Real, concrete examples of correct usage.
+   - **Changelog**: Date-stamped notes when you learn something new.
+
+5. **Test your description.** Reread it in isolation — if you saw only that one field, would you know when and whether to load this skill? If not, rewrite it.
+
+## Pitfalls
+
+- **Too vague.** "Useful for web stuff" is useless. "Crawl a web page and extract its text content, including pages behind cookie consent or auth walls" tells you exactly what it does.
+- **Too long.** If the process section is a wall of text, split it into multiple skills or use headings. You're writing a playbook, not an essay.
+- **Forgetting to update.** When you hit a new edge case or find a better approach, update the skill *right then*. Don't plan to do it later. You won't.
+- **Documenting tools instead of techniques.** A skill isn't a man page. "exec runs commands" isn't a skill. "How to find and organize files matching a pattern" is.
+- **Skipping pitfalls.** The Pitfalls section is the most valuable part of a mature skill. When something bites you, write it down immediately.
+
+## Examples
+
+A well-written description:
+\`\`\`yaml
+description: "Crawl web pages, including cookie-gated or authenticated pages, using crawl4ai. Use when you need to fetch or extract content from a URL that simple fetch can't handle."
+\`\`\`
+
+A poorly-written description:
+\`\`\`yaml
+description: "Web crawling"
+\`\`\`
+
+The first tells future-you exactly what it handles and when to use it. The second tells you nothing you didn't already know from the slug.
+
+## Changelog
+
+- ${new Date().toISOString().slice(0, 10)}: Initial creation.
+`;
+}
+
 function blockStub(label: BlockLabel, name: string, description?: string): string {
   switch (label) {
     case "person":
@@ -426,6 +491,9 @@ async function run(flags: Flags): Promise<void> {
   for (const dir of ["blocks", "config", "memories", "skills", "workspace"]) {
     await mkdir(join(agentRoot, dir), { recursive: true });
   }
+
+  await mkdir(join(agentRoot, "skills", "create-skill"), { recursive: true });
+  await writeFile(join(agentRoot, "skills", "create-skill", "SKILL.md"), createSkillStub(), "utf8");
 
   for (const label of blockLabels) {
     await writeFile(
