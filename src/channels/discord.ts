@@ -25,7 +25,7 @@ import type {
   PossiblyUncachedMessage,
   TextableChannel,
 } from "oceanic.js";
-import { InteractionTypes, TextableChannelTypes } from "oceanic.js";
+import { InteractionTypes, StickerFormatTypes, TextableChannelTypes } from "oceanic.js";
 
 // oceanic.js's ESM shim breaks under tsx's module loader (.default.default chain
 // resolves to undefined). Force CJS to get the real constructors.
@@ -89,6 +89,18 @@ function formatUserMessage(msg: DiscordMessage): TextContent {
     innerContent += `\n${attachmentInfo}`;
   }
 
+  // Append sticker metadata so the model knows what stickers are present
+  if (msg.stickerItems && msg.stickerItems.length > 0) {
+    const stickerInfo = msg.stickerItems
+      .map((sticker) => {
+        const hint =
+          sticker.format_type === StickerFormatTypes.LOTTIE ? ' hint="cannot be displayed"' : "";
+        return `<sticker name="${sticker.name}"${hint}>`;
+      })
+      .join("\n");
+    innerContent += `\n${stickerInfo}`;
+  }
+
   return {
     content: `<msg msgId="${msg.id}" from="${username} <${authorId}>" displayName="${displayName}" timestamp="${timestamp}">${innerContent}</msg>`,
     type: "text",
@@ -116,6 +128,18 @@ function formatReplyContext(msg: DiscordMessage): TextContent {
       )
       .join("\n");
     innerContent += `\n${attachmentInfo}`;
+  }
+
+  // Append sticker metadata so the model knows what stickers are present
+  if (msg.stickerItems && msg.stickerItems.length > 0) {
+    const stickerInfo = msg.stickerItems
+      .map((sticker) => {
+        const hint =
+          sticker.format_type === StickerFormatTypes.LOTTIE ? ' hint="cannot be displayed"' : "";
+        return `<sticker name="${sticker.name}"${hint}>`;
+      })
+      .join("\n");
+    innerContent += `\n${stickerInfo}`;
   }
 
   return {
@@ -178,29 +202,100 @@ function isMessageInHistory(history: Message[], messageId: string): boolean {
   return false;
 }
 
-// Fetches image attachments from a Discord message, filtering to types
+// Fetches image attachments from a Discord message in parallel, filtering to types
 // supported by the vision API and silently dropping any that fail to fetch.
+// Results are sorted by attachment ID for consistent ordering.
 async function fetchAttachmentImages(msg: DiscordMessage): Promise<ImageContent[]> {
-  const images: ImageContent[] = [];
-  for (const attachment of msg.attachments.values()) {
-    const mediaType = attachment.contentType?.split(";")[0]?.trim();
-    if (mediaType === undefined || !SUPPORTED_IMAGE_TYPES.has(mediaType)) {
-      continue;
-    }
-    try {
-      const response = await fetch(attachment.url);
-      const raw = await response.arrayBuffer();
-      const data = await toWebp(raw);
-      images.push({ data, mediaType: "image/webp", type: "image" });
-    } catch (error) {
-      warning(
-        "Failed to fetch attachment:",
-        attachment.url,
-        error instanceof Error ? error.message : String(error),
-      );
-    }
+  const fetchPromises = [...msg.attachments.values()].map(
+    async (attachment): Promise<(ImageContent & { id: string }) | undefined> => {
+      const mediaType = attachment.contentType?.split(";")[0]?.trim();
+      if (mediaType === undefined || !SUPPORTED_IMAGE_TYPES.has(mediaType)) {
+        return undefined;
+      }
+      try {
+        const response = await fetch(attachment.url);
+        const raw = await response.arrayBuffer();
+        const data = await toWebp(raw);
+        return {
+          data,
+          id: attachment.id,
+          mediaType: "image/webp",
+          type: "image",
+        } as const;
+      } catch (error) {
+        warning(
+          "Failed to fetch attachment:",
+          attachment.url,
+          error instanceof Error ? error.message : String(error),
+        );
+        return undefined;
+      }
+    },
+  );
+
+  const results = await Promise.all(fetchPromises);
+  return results
+    .filter((img): img is NonNullable<typeof img> => img !== undefined)
+    .toSorted((first, second) => first.id.localeCompare(second.id))
+    .map(({ id: _id, ...imageContent }) => imageContent);
+}
+
+// Fetches sticker images from a Discord message in parallel, converting to WebP.
+// LOTTIE format stickers are skipped (cannot be displayed as raster images).
+// Results are sorted by sticker ID for consistent ordering.
+async function fetchStickerImages(msg: DiscordMessage): Promise<ImageContent[]> {
+  if (!msg.stickerItems || msg.stickerItems.length === 0) {
+    return [];
   }
-  return images;
+
+  const fetchPromises = msg.stickerItems.map(
+    async (sticker): Promise<(ImageContent & { id: string }) | undefined> => {
+      // Skip LOTTIE format - vector format that can't be converted to raster
+      if (sticker.format_type === StickerFormatTypes.LOTTIE) {
+        return undefined;
+      }
+
+      try {
+        const url =
+          sticker.format_type === StickerFormatTypes.GIF
+            ? `https://media.discordapp.net/stickers/${sticker.id}.gif`
+            : `https://cdn.discordapp.com/stickers/${sticker.id}.png`;
+
+        const response = await fetch(url);
+        const raw = await response.arrayBuffer();
+        const data = await toWebp(raw);
+        return {
+          data,
+          id: sticker.id,
+          mediaType: "image/webp",
+          type: "image",
+        } as const;
+      } catch (error) {
+        warning(
+          "Failed to fetch sticker:",
+          sticker.name,
+          error instanceof Error ? error.message : String(error),
+        );
+        return undefined;
+      }
+    },
+  );
+
+  const results = await Promise.all(fetchPromises);
+  return results
+    .filter((img): img is NonNullable<typeof img> => img !== undefined)
+    .toSorted((first, second) => first.id.localeCompare(second.id))
+    .map(({ id: _id, ...imageContent }) => imageContent);
+}
+
+// Fetches both attachments and sticker images in parallel, with attachments
+// ordered first (sorted by ID), then stickers (sorted by ID).
+async function fetchAllImages(msg: DiscordMessage): Promise<ImageContent[]> {
+  const [attachmentImages, stickerImages] = await Promise.all([
+    fetchAttachmentImages(msg),
+    fetchStickerImages(msg),
+  ]);
+  return [...attachmentImages, ...stickerImages];
 }
 
 // Fetches the last N messages from a Discord channel, including images.
@@ -212,7 +307,9 @@ async function fetchMessageHistory(
   limit = 30,
 ): Promise<DiscordMessage[]> {
   try {
-    const fetched = await client.rest.channels.getMessages(channelId, { limit });
+    const fetched = await client.rest.channels.getMessages(channelId, {
+      limit,
+    });
     // Discord returns messages newest-first, reverse for chronological order
     return fetched.toReversed();
   } catch {
@@ -276,7 +373,7 @@ async function populateHistoryFromDiscord(
     const role = isFromBot ? ("assistant" as const) : ("user" as const);
 
     const textContent = isFromBot ? formatAssistantContext(msg) : formatReplyContext(msg);
-    const images = await fetchAttachmentImages(msg);
+    const images = await fetchAllImages(msg);
 
     session.history.push({
       content: images.length > 0 ? [textContent, ...images] : textContent,
@@ -504,7 +601,7 @@ async function handleMessageCreate(
       }
 
       const ancestorContent = formatReplyContext(ancestor);
-      const ancestorImages = await fetchAttachmentImages(ancestor);
+      const ancestorImages = await fetchAllImages(ancestor);
       ds.history.push({
         content: ancestorImages.length > 0 ? [ancestorContent, ...ancestorImages] : ancestorContent,
         id: ancestor.id,
@@ -516,7 +613,7 @@ async function handleMessageCreate(
     // Add direct reply only if not already in history
     if (!isMessageInHistory(ds.history, directReply.id)) {
       const replyContent = formatReplyContext(directReply);
-      const replyImages = await fetchAttachmentImages(directReply);
+      const replyImages = await fetchAllImages(directReply);
       ds.history.push({
         content: replyImages.length > 0 ? [replyContent, ...replyImages] : replyContent,
         id: directReply.id,
@@ -528,7 +625,7 @@ async function handleMessageCreate(
 
   // Push user message into history, including any image attachments.
   const textContent = formatUserMessage(msg);
-  const imageContents = await fetchAttachmentImages(msg);
+  const imageContents = await fetchAllImages(msg);
   const historyLengthBeforeTurn = session.history.length;
   session.history.push({
     content: imageContents.length > 0 ? [textContent, ...imageContents] : textContent,
@@ -563,7 +660,9 @@ async function handleMessageCreate(
     }
     const reason = error instanceof Error ? error.message : String(error);
     try {
-      await msg.channel?.createMessage({ content: `⚠️ Engine error: ${reason}` });
+      await msg.channel?.createMessage({
+        content: `⚠️ Engine error: ${reason}`,
+      });
     } catch {
       // Best-effort.
     }
