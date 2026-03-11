@@ -32,8 +32,8 @@ function imagePath(agentSlug: string, id: string, mediaType: string): string {
   return join(imageDir(agentSlug), `${id}${ext}`);
 }
 
-function hashImage(data: ArrayBufferLike): string {
-  return Buffer.from(blake3(new Uint8Array(data))).toString("hex");
+function hashImage(data: Uint8Array): string {
+  return Buffer.from(blake3(data)).toString("hex");
 }
 
 // ---------------------------------------------------------------------------
@@ -52,7 +52,7 @@ interface PendingImage {
   id: string;
   mediaType: string;
   path: string;
-  data: ArrayBufferLike;
+  data: Uint8Array;
 }
 
 function serializeHistory(
@@ -109,8 +109,7 @@ function deserializeHistory(json: string, agentSlug: string): Message[] {
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       const ref = ct as ImageRef;
       const path = imagePath(agentSlug, ref.id, ref.mediaType);
-      const buf = readFileSync(path);
-      const data = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+      const data = readFileSync(path);
       return { data, mediaType: ref.mediaType, type: "image" } satisfies ImageContent;
     }
     return ct;

@@ -1,5 +1,3 @@
-export function encode(buf: ArrayBufferLike): string {
-  const buffer = Buffer.from(buf);
-
-  return buffer.toString("base64");
+export function encode(data: Uint8Array): string {
+  return Buffer.from(data).toString("base64");
 }
