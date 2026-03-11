@@ -65,11 +65,13 @@ Each agent turn:
 - **`src/harness/session.ts`** — Abstract session base class with `DiscordSession`, `MatrixSession` (stub), and `InternalSession` implementations. Tracks conversation history, opened files, pending messages/images, and channel-specific metadata.
 - **`src/channels/discord.ts`** — Discord integration with oceanic.js. Handles message creation/updates/deletes, image attachment fetching, typing indicators, and message chunking for Discord's 2000-char limit. The `src/channels/discord/` subdirectory contains handler utilities for message clearing and context types.
 - **`src/channels/tui.ts`** — TUI channel handler (Ink/React). Used exclusively by the `tui` CLI command for interactive single-agent terminal sessions. The `src/channels/tui/` subdirectory contains the Ink app, bridge, and message types.
-- **`src/config/`** — Loads and validates TOML config via Valibot. Global configs: `engine.toml`, `integrations.toml` (Brave Search), `channels/discord.toml`. Agent configs: `engine.toml`, `tools.toml`, `heartbeat.toml`, `cron.toml`. Engine config supports per-channel overrides (Discord guild, Matrix room) for provider, API base, model, and API key pools. Watches both global and agent-specific directories for hot-reload.
+- **`src/config/`** — Loads and validates TOML config via Valibot. Global configs: `engine.toml`, `integrations.toml` (Brave Search), `channels/discord.toml`. Agent configs: `engine.toml`, `tools.toml`, `heartbeat.toml`, `cron.toml`, `conditions.toml` (conditional access rules). Engine config supports per-channel overrides (Discord guild, Matrix room) for provider, API base, model, and API key pools. Watches both global and agent-specific directories for hot-reload.
+- **`src/config/conditions.ts`** — Schema for `conditions.toml` which enables conditional block loading and path access control based on session context (e.g., `discord:nsfw`, `discord:dm`, `tui`, `internal`, specific guilds/channels).
+- **`src/util/conditions.ts`** — Evaluates conditions against session context. Used for loading conditional memory blocks (`blocks/conditional/`) and enforcing path access rules for `/memories/` and `/workspace/`. Note: Does NOT affect the `exec` tool due to the difficulty of reliably restricting sandboxed command execution.
 - **`src/config/migrations/`** — Config migration system. Migrations transform TOML config files in-place (both global and per-agent). Each migration has a timestamped ID (`YYYYMMDDHHMMSS_name`), declares which config files it targets, and implements a `transform` function. Applied automatically on `run`/`tui` startup and manually via `pnpm migrate`.
 - **`src/db/`** — SQLite persistence with Drizzle ORM. WAL-mode enabled for concurrent read safety. Three tables: `sessions` (history, opened files), `images` (blake3 hash-based image index for deduplication), and `cron_jobs` (recurring and one-shot scheduled jobs with status and retry tracking).
-- **`src/util/paths.ts`** — Sandbox enforcement. Only 5 paths are allowed: `/blocks/`, `/memories/`, `/workspace/`, `/skills/`, `/tasks/`. Prevents symlink escape and path traversal. Maps sandbox paths to real filesystem under `~/.cireilclaw/`.
-- **`src/util/sandbox.ts`** — Bubblewrap sandbox builder. NixOS-aware with `nix-store` queries for dependency binding. Generic Linux fallback binds `/usr`, `/bin`, `/lib`. Reads `.env` from workspace for environment variables. 64MB tmpfs for `/tmp`, timeout enforcement via `SIGKILL`.
+- **`src/util/paths.ts`** — Sandbox enforcement. Only 5 paths are allowed: `/blocks/`, `/memories/`, `/workspace/`, `/skills/`, `/tasks/`. Prevents symlink escape and path traversal. Maps sandbox paths to real filesystem under `~/.cireilclaw/`. Enforces conditional access rules for `/memories/` and `/workspace/` via `checkConditionalAccess()`.
+- **`src/util/sandbox.ts`** — Bubblewrap sandbox builder. NixOS-aware with `nix-store` queries for dependency binding. Generic Linux fallback binds `/usr`, `/bin`, `/lib`. Reads `.env` from workspace for environment variables. 64MB tmpfs for `/tmp`, timeout enforcement via `SIGKILL`. Binds `/workspace`, `/memories`, `/skills`, and `/tasks` into the sandbox.
 - **`src/util/key-pool.ts`** — API key pooling with failover and cooldown. Rotates through multiple keys, tracking rate-limited keys (429 responses) with 30-minute cooldown before retry.
 - **`src/util/load.ts`** — Loads memory blocks (person, identity, long-term, soul, style-notes) and skills with TOML frontmatter + markdown content into the system prompt.
 - **`src/util/image.ts`** — WebP image conversion (quality 90) for vision API. Handles format conversion and buffer management.
@@ -80,7 +82,8 @@ Each agent turn:
 
 ```
 blocks/          # Memory blocks (person.md, identity.md, long-term.md, soul.md, style-notes.md)
-config/          # engine.toml (API config), tools.toml (tool toggles, exec config), heartbeat.toml, cron.toml
+  conditional/   # Conditional blocks loaded based on conditions.toml rules
+config/          # engine.toml (API config), tools.toml (tool toggles, exec config), heartbeat.toml, cron.toml, conditions.toml
 core.md          # Base system instructions
 skills/          # Reusable skill documents (markdown with TOML frontmatter)
 tasks/           # Scheduled task checklists (HEARTBEAT.md) and related data
