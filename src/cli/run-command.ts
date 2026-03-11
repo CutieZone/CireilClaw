@@ -2,7 +2,7 @@ import path from "node:path";
 
 import { Agent } from "$/agent/index.js";
 import { startDiscord } from "$/channels/discord.js";
-import { loadAgents, loadEngine, watcher } from "$/config/index.js";
+import { loadAgents, loadConditions, loadEngine, watcher } from "$/config/index.js";
 import { runMigrations } from "$/config/migrations/runner.js";
 import type { ConfigChangeEvent } from "$/config/schemas.js";
 import { initDb } from "$/db/index.js";
@@ -33,30 +33,48 @@ async function handleConfigChange(
   agents: Map<string, Agent>,
 ): Promise<void> {
   // Handle both "change" and "rename" events (some editors use atomic renames)
-  if (event.filename !== "engine.toml") {
-    return;
-  }
+  const filename = event.filename ?? "";
+  if (filename === "engine.toml") {
+    const slug = extractSlugFromPath(event.basePath);
+    if (slug === undefined) {
+      // Global config changed - would need to reload all agents
+      // For now, skip as agent-specific config overrides global
+      info("Global engine.toml changed - restart required to apply");
+      return;
+    }
 
-  const slug = extractSlugFromPath(event.basePath);
-  if (slug === undefined) {
-    // Global config changed - would need to reload all agents
-    // For now, skip as agent-specific config overrides global
-    info("Global engine.toml changed - restart required to apply");
-    return;
-  }
+    const agent = agents.get(slug);
+    if (agent === undefined) {
+      info("Unknown agent", colors.keyword(slug), "- skipping reload");
+      return;
+    }
 
-  const agent = agents.get(slug);
-  if (agent === undefined) {
-    info("Unknown agent", colors.keyword(slug), "- skipping reload");
-    return;
-  }
+    try {
+      const cfg = await loadEngine(slug);
+      agent.updateEngine(cfg);
+      info("Reloaded engine config for", colors.keyword(slug));
+    } catch (error) {
+      info("Failed to reload engine config for", colors.keyword(slug), "-", error);
+    }
+  } else if (filename === "conditions.toml") {
+    const slug = extractSlugFromPath(event.basePath);
+    if (slug === undefined) {
+      info("Global conditions.toml changed - restart required to apply");
+      return;
+    }
 
-  try {
-    const cfg = await loadEngine(slug);
-    agent.updateEngine(cfg);
-    info("Reloaded engine config for", colors.keyword(slug));
-  } catch (error) {
-    info("Failed to reload engine config for", colors.keyword(slug), "-", error);
+    const agent = agents.get(slug);
+    if (agent === undefined) {
+      info("Unknown agent", colors.keyword(slug), "- skipping reload");
+      return;
+    }
+
+    try {
+      await agent.updateConditions();
+      info("Reloaded conditions config for", colors.keyword(slug));
+    } catch (error) {
+      info("Failed to reload conditions config for", colors.keyword(slug), "-", error);
+    }
   }
 }
 
@@ -88,8 +106,9 @@ async function run(flags: Flags): Promise<void> {
   for (const slug of slugs) {
     initDb(slug);
     const cfg = await loadEngine(slug);
+    const conditions = await loadConditions(slug);
     const sessions = loadSessions(slug);
-    agents.set(slug, new Agent(slug, cfg, sessions));
+    agents.set(slug, new Agent(slug, cfg, sessions, conditions));
     info("Loaded agent", colors.keyword(slug));
   }
 

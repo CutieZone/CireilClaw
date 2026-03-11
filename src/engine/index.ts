@@ -1,6 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 
 import { loadTools } from "$/config/index.js";
+import type { ConditionsConfig } from "$/config/index.js";
 import type { ApiKey, EngineConfig, EngineOverride, EngineOverrides } from "$/config/schemas.js";
 import type { ToolCallContent } from "$/engine/content.js";
 import type { Context, UsageInfo } from "$/engine/context.js";
@@ -17,7 +18,12 @@ import colors from "$/output/colors.js";
 import { debug } from "$/output/log.js";
 import type { KeyPool } from "$/util/key-pool.js";
 import { KeyPool as KeyPoolClass } from "$/util/key-pool.js";
-import { loadBlocks, loadBaseInstructions, loadSkills } from "$/util/load.js";
+import {
+  loadBlocks,
+  loadBaseInstructions,
+  loadConditionalBlocks,
+  loadSkills,
+} from "$/util/load.js";
 import { sandboxToReal } from "$/util/paths.js";
 
 import { toolRegistry } from "./tools/index.js";
@@ -75,9 +81,13 @@ async function buildSystemPrompt(
   agentSlug: string,
   session: Session,
   capabilities: ChannelCapabilities,
+  conditions?: ConditionsConfig,
 ): Promise<string> {
   const baseInstructions = await loadBaseInstructions(agentSlug);
   const blocks = await loadBlocks(agentSlug);
+  const conditionalBlocks = conditions
+    ? await loadConditionalBlocks(agentSlug, conditions, session)
+    : [];
 
   const lines: string[] = [
     "<base_instructions>",
@@ -130,6 +140,26 @@ async function buildSystemPrompt(
       value.content.trim(),
       "</content>",
       `</${key}>`,
+      "",
+    );
+  }
+
+  // Add conditional blocks if any were loaded
+  for (const block of conditionalBlocks) {
+    lines.push(
+      `<${block.label}>`,
+      "<description>",
+      block.description.trim(),
+      "</description>",
+      "<metadata>",
+      `- chars_current: ${block.metadata.chars_current}`,
+      `- file_path: ${block.filePath}`,
+      "- conditional: true",
+      "</metadata>",
+      "<content>",
+      block.content.trim(),
+      "</content>",
+      `</${block.label}>`,
       "",
     );
   }
@@ -300,10 +330,12 @@ export class Engine {
     react?: (emoji: string, messageId?: string) => Promise<void>,
     downloadAttachments?: (messageId: string) => Promise<{ filename: string; data: Buffer }[]>,
     capabilities: ChannelCapabilities = NO_CAPABILITIES,
+    conditions?: ConditionsConfig,
   ): Promise<void> {
     const tools = await buildTools(agentSlug, session);
     const ctx: ToolContext = {
       agentSlug,
+      conditions,
       downloadAttachments,
       react,
       send,
@@ -339,7 +371,7 @@ export class Engine {
         session.pendingToolMessages.push({ content: images, role: "user" });
       }
 
-      const prompt = await buildSystemPrompt(agentSlug, session, capabilities);
+      const prompt = await buildSystemPrompt(agentSlug, session, capabilities, conditions);
       const history = truncateToTurns(session.history, this._maxTurns);
       const messages = squashMessages([...history, ...session.pendingToolMessages]);
 

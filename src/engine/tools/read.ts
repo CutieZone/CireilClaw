@@ -3,7 +3,7 @@ import { extname } from "node:path";
 
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import { toWebp } from "$/util/image.js";
-import { sandboxToReal, sanitizeError } from "$/util/paths.js";
+import { checkConditionalAccess, sandboxToReal, sanitizeError } from "$/util/paths.js";
 import * as vb from "valibot";
 
 const Schema = vb.strictObject({
@@ -38,6 +38,12 @@ export const read: ToolDef = {
     try {
       const data = vb.parse(Schema, input);
       const realPath = sandboxToReal(data.path, ctx.agentSlug);
+
+      // Check conditional access rules if conditions are available
+      if (ctx.conditions !== undefined) {
+        checkConditionalAccess(data.path, ctx.agentSlug, ctx.conditions, ctx.session);
+      }
+
       const { size } = await stat(realPath);
 
       const mediaType = IMAGE_EXT_TO_MEDIA_TYPE[extname(data.path).toLowerCase()];

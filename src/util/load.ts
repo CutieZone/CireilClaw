@@ -2,8 +2,11 @@ import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { format, join } from "node:path";
 
+import type { ConditionsConfig } from "$/config/conditions.js";
 import type { MemoryBlock } from "$/engine/block.js";
+import type { Session } from "$/harness/session.js";
 import colors from "$/output/colors.js";
+import { getMatchingBlockNames } from "$/util/conditions.js";
 import { root } from "$/util/paths.js";
 import { parse } from "smol-toml";
 import * as vb from "valibot";
@@ -146,5 +149,69 @@ async function loadSkills(agentSlug: string): Promise<Skill[]> {
   return skills;
 }
 
+async function loadConditionalBlocks(
+  agentSlug: string,
+  conditions: ConditionsConfig,
+  session: Session,
+): Promise<MemoryBlock[]> {
+  const matchingNames = getMatchingBlockNames(conditions.blocks, session);
+  if (matchingNames.length === 0) {
+    return [];
+  }
+
+  const conditionalPath = join(root(), "agents", agentSlug, "blocks", "conditional");
+  if (!existsSync(conditionalPath)) {
+    return [];
+  }
+
+  const blocks: MemoryBlock[] = [];
+
+  for (const name of matchingNames) {
+    const filePath = join(conditionalPath, `${name}.md`);
+
+    if (!existsSync(filePath)) {
+      continue;
+    }
+
+    const content = await readFile(filePath, { encoding: "utf8" });
+
+    if (content.indexOf("+++", 0) !== 0) {
+      throw new Error(
+        `Conditional block ${colors.keyword(name)} at path ${colors.path(filePath)} has an invalid frontmatter (expected TOML, but file does not start with '${colors.keyword("+++")}')`,
+      );
+    }
+
+    const ending = content.indexOf("+++", 2);
+    if (ending === -1) {
+      throw new Error(
+        `Conditional block ${colors.keyword(name)} at path ${colors.path(filePath)} has an invalid frontmatter (expected closing '${colors.keyword("+++")}', but none found)`,
+      );
+    }
+
+    const tomlData = content.slice(3, ending);
+
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const frontmatter = parse(tomlData) as Frontmatter;
+
+    blocks.push({
+      content,
+      description: frontmatter.description,
+      filePath: `/blocks/conditional/${name}.md`,
+      label: `conditional/${name}`,
+      metadata: {
+        chars_current: content.length - tomlData.length - 6,
+      },
+    });
+  }
+
+  return blocks;
+}
+
 export type { Frontmatter, BlockLabel, Skill };
-export { labels as blockLabels, loadBlocks, loadBaseInstructions, loadSkills };
+export {
+  labels as blockLabels,
+  loadBlocks,
+  loadBaseInstructions,
+  loadSkills,
+  loadConditionalBlocks,
+};

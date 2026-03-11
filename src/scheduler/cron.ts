@@ -116,9 +116,17 @@ async function runMainSession(agent: Agent, job: CronJobConfig): Promise<void> {
             provider: job.model.provider ?? agent.engine.provider,
           });
 
-    await engine.runTurn(session, agent.slug, async (content: string): Promise<void> => {
-      await agent.send(session, content);
-    });
+    await engine.runTurn(
+      session,
+      agent.slug,
+      async (content: string): Promise<void> => {
+        await agent.send(session, content);
+      },
+      undefined,
+      undefined,
+      undefined,
+      agent.conditions,
+    );
     debug("Cron: main-session job", colors.keyword(job.id), "completed");
   } catch (error) {
     session.history.length = historyLengthBefore;
@@ -156,9 +164,17 @@ async function runIsolatedSession(agent: Agent, job: CronJobConfig): Promise<voi
             provider: job.model.provider ?? agent.engine.provider,
           });
 
-    await engine.runTurn(session, agent.slug, async (content: string): Promise<void> => {
-      await agent.send(session, content);
-    });
+    await engine.runTurn(
+      session,
+      agent.slug,
+      async (content: string): Promise<void> => {
+        await agent.send(session, content);
+      },
+      undefined,
+      undefined,
+      undefined,
+      agent.conditions,
+    );
     debug("Cron: isolated job", colors.keyword(job.id), "completed");
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);

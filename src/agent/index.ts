@@ -1,3 +1,5 @@
+import type { ConditionsConfig } from "$/config/index.js";
+import { loadConditions } from "$/config/index.js";
 import type { EngineConfig } from "$/config/schemas.js";
 import { Engine } from "$/engine/index.js";
 import { MINIMAL_HANDLER } from "$/harness/channel-handler.js";
@@ -9,11 +11,18 @@ export class Agent {
   private readonly _slug: string;
   private readonly _sessions: Map<string, Session>;
   private readonly _channelHandlers = new Map<string, ChannelHandler>();
+  private _conditions: ConditionsConfig;
 
-  constructor(slug: string, cfg: EngineConfig, sessions: Map<string, Session>) {
+  constructor(
+    slug: string,
+    cfg: EngineConfig,
+    sessions: Map<string, Session>,
+    conditions?: ConditionsConfig,
+  ) {
     this._engine = new Engine(cfg);
     this._slug = slug;
     this._sessions = sessions;
+    this._conditions = conditions ?? { blocks: {}, memories: {}, workspace: {} };
   }
 
   get engine(): Engine {
@@ -22,6 +31,14 @@ export class Agent {
 
   updateEngine(cfg: EngineConfig): void {
     this._engine = new Engine(cfg);
+  }
+
+  async updateConditions(): Promise<void> {
+    this._conditions = await loadConditions(this._slug);
+  }
+
+  get conditions(): ConditionsConfig {
+    return this._conditions;
   }
 
   get slug(): string {
@@ -84,6 +101,7 @@ export class Agent {
       react,
       downloadAttachments,
       handler.capabilities,
+      this._conditions,
     );
   }
 }

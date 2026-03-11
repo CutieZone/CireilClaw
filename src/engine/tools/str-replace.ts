@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
-import { sandboxToReal, sanitizeError } from "$/util/paths.js";
+import { checkConditionalAccess, sandboxToReal, sanitizeError } from "$/util/paths.js";
 import * as vb from "valibot";
 
 const Schema = vb.strictObject({
@@ -43,6 +43,12 @@ export const strReplace: ToolDef = {
       const data = vb.parse(Schema, input);
 
       const path = sandboxToReal(data.path, ctx.agentSlug);
+
+      // Check conditional access rules if conditions are available
+      if (ctx.conditions !== undefined) {
+        checkConditionalAccess(data.path, ctx.agentSlug, ctx.conditions, ctx.session);
+      }
+
       if (!existsSync(path)) {
         return {
           error: `File at ${data.path} does not exist.`,

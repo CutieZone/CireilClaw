@@ -2,7 +2,7 @@ import path from "node:path";
 
 import { Agent } from "$/agent/index.js";
 import { startTui } from "$/channels/tui/TuiApp.js";
-import { loadAgents, loadEngine } from "$/config/index.js";
+import { loadAgents, loadConditions, loadEngine } from "$/config/index.js";
 import { runMigrations } from "$/config/migrations/runner.js";
 import { initDb } from "$/db/index.js";
 import { flushAllSessions, loadSessions } from "$/db/sessions.js";
@@ -33,8 +33,9 @@ async function run(_noFlags: {}, agentSlug: string): Promise<void> {
 
   initDb(agentSlug);
   const cfg = await loadEngine(agentSlug);
+  const conditions = await loadConditions(agentSlug);
   const sessions = loadSessions(agentSlug);
-  const agent = new Agent(agentSlug, cfg, sessions);
+  const agent = new Agent(agentSlug, cfg, sessions, conditions);
 
   await startTui(agent);
 }
