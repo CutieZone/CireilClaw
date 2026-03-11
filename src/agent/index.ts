@@ -40,14 +40,19 @@ export class Agent {
     return this._channelHandlers.get(session.channel) ?? MINIMAL_HANDLER;
   }
 
-  async send(session: Session, content: string, attachments?: string[]): Promise<void> {
+  async send(
+    session: Session,
+    content: string,
+    attachments?: string[],
+    flags?: number,
+  ): Promise<void> {
     // Allow the session to intercept and optionally suppress delivery.
     if (session.sendFilter !== undefined && !session.sendFilter(content)) {
       return;
     }
 
     const handler = this._getHandler(session);
-    await handler.send(session, content, attachments);
+    await handler.send(session, content, attachments, flags);
   }
 
   async runTurn(session: Session): Promise<void> {

@@ -6,6 +6,7 @@ import { basename, join } from "node:path";
 
 import * as clearCommand from "$/channels/discord/clear-command.js";
 import type { HandlerCtx } from "$/channels/discord/handler-ctx.js";
+import * as repairCommand from "$/channels/discord/repair-command.js";
 import { loadChannel } from "$/config/index.js";
 import { saveSession } from "$/db/sessions.js";
 import type { ImageContent, TextContent } from "$/engine/content.js";
@@ -25,7 +26,12 @@ import type {
   PossiblyUncachedMessage,
   TextableChannel,
 } from "oceanic.js";
-import { InteractionTypes, StickerFormatTypes, TextableChannelTypes } from "oceanic.js";
+import {
+  InteractionTypes,
+  MessageFlags,
+  StickerFormatTypes,
+  TextableChannelTypes,
+} from "oceanic.js";
 
 // oceanic.js's ESM shim breaks under tsx's module loader (.default.default chain
 // resolves to undefined). Force CJS to get the real constructors.
@@ -44,10 +50,13 @@ const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "
 
 // All registered slash commands. Add new command modules here — the hash
 // check on startup will detect changes and re-register with Discord's API.
-const SLASH_COMMANDS = [clearCommand.definition];
+const SLASH_COMMANDS = [clearCommand.definition, repairCommand.definition];
 
 type SlashHandler = (interaction: CommandInteraction, ctx: HandlerCtx) => Promise<void>;
-const SLASH_HANDLERS = new Map<string, SlashHandler>([["clear", clearCommand.handle]]);
+const SLASH_HANDLERS = new Map<string, SlashHandler>([
+  ["clear", clearCommand.handle],
+  ["repair", repairCommand.handle],
+]);
 
 // Persisted hash of SLASH_COMMANDS to avoid re-registering on every startup.
 const COMMANDS_HASH = createHash("sha256").update(JSON.stringify(SLASH_COMMANDS)).digest("hex");
@@ -662,6 +671,7 @@ async function handleMessageCreate(
     try {
       await msg.channel?.createMessage({
         content: `⚠️ Engine error: ${reason}`,
+        flags: MessageFlags.EPHEMERAL,
       });
     } catch {
       // Best-effort.
@@ -748,7 +758,7 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
 
       await client.rest.channels.createReaction(session.channelId, targetId, emoji);
     },
-    send: async (session, content, attachments) => {
+    send: async (session, content, attachments, flags) => {
       if (!(session instanceof DiscordSession)) {
         throw new Error("Somehow, `session` was not a DiscordSession");
       }
@@ -771,6 +781,7 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
         const isLast = idx === chunks.length - 1;
         await client.rest.channels.createMessage(ds.channelId, {
           content: chunk,
+          flags,
           ...(isLast && files !== undefined ? { files } : {}),
         });
       }

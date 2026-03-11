@@ -20,7 +20,8 @@ function sandboxToReal(path: string, agentSlug: string): string {
   const origin = agentRoot(agentSlug);
 
   let sandboxPath = "";
-  let expectedSubdir: "blocks" | "memories" | "skills" | "tasks" | "workspace" | undefined = undefined;
+  let expectedSubdir: "blocks" | "memories" | "skills" | "tasks" | "workspace" | undefined =
+    undefined;
 
   if (path === "/blocks" || path.startsWith("/blocks/")) {
     expectedSubdir = "blocks";

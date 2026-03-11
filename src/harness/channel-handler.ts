@@ -13,7 +13,7 @@ interface ChannelHandler {
     messageId: string,
   ): Promise<{ filename: string; data: Buffer }[]>;
   react?(session: Session, emoji: string, messageId?: string): Promise<void>;
-  send(session: Session, content: string, attachments?: string[]): Promise<void>;
+  send(session: Session, content: string, attachments?: string[], flags?: number): Promise<void>;
 }
 
 const MINIMAL_HANDLER: ChannelHandler = {
