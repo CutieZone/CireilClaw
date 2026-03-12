@@ -726,6 +726,10 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
     rest: {},
   });
 
+  // Store client and ownerId on the agent for channel resolution
+  agent.setDiscordClient(client);
+  agent.setOwnerId(ownerId);
+
   const discordHandler: ChannelHandler = {
     capabilities: {
       supportsAttachments: true,
@@ -757,6 +761,31 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
       }
 
       await client.rest.channels.createReaction(session.channelId, targetId, emoji);
+    },
+    resolveChannel: async (spec, sessions, ownerUserId) => {
+      // "owner" resolves to DM channel with the bot owner
+      if (spec === "owner") {
+        if (ownerUserId === undefined) {
+          return { error: "ownerId not configured" };
+        }
+
+        try {
+          const dmChannel = await client.rest.users.createDM(ownerUserId);
+          // Check for existing session with this DM channel
+          const existing = sessions.get(`discord:${dmChannel.id}`);
+          if (existing !== undefined) {
+            return existing;
+          }
+          // Return a new session for this DM channel
+          return new DiscordSession(dmChannel.id, undefined, false);
+        } catch {
+          return { error: "failed to create DM channel with owner" };
+        }
+      }
+
+      // Explicit session ID like "discord:123|456" or "discord:123"
+      const match = sessions.get(spec);
+      return match ?? { error: `session not found: ${spec}` };
     },
     send: async (session, content, attachments, flags) => {
       if (!(session instanceof DiscordSession)) {

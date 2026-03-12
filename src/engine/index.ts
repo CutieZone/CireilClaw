@@ -11,7 +11,7 @@ import type { ProviderKind } from "$/engine/provider/index.js";
 import { generate } from "$/engine/provider/oai.js";
 import type { Tool } from "$/engine/tool.js";
 import type { ToolContext } from "$/engine/tools/tool-def.js";
-import type { ChannelCapabilities } from "$/harness/channel-handler.js";
+import type { ChannelCapabilities, ChannelResolution } from "$/harness/channel-handler.js";
 import { DiscordSession, MatrixSession } from "$/harness/session.js";
 import type { Session } from "$/harness/session.js";
 import colors from "$/output/colors.js";
@@ -327,8 +327,10 @@ export class Engine {
     session: Session,
     agentSlug: string,
     send: (content: string, attachments?: string[]) => Promise<void>,
+    sendTo: (targetSession: Session, content: string, attachments?: string[]) => Promise<void>,
     react?: (emoji: string, messageId?: string) => Promise<void>,
     downloadAttachments?: (messageId: string) => Promise<{ filename: string; data: Buffer }[]>,
+    resolveChannel?: (spec: string) => Promise<ChannelResolution>,
     capabilities: ChannelCapabilities = NO_CAPABILITIES,
     conditions?: ConditionsConfig,
   ): Promise<void> {
@@ -338,7 +340,15 @@ export class Engine {
       conditions,
       downloadAttachments,
       react,
+      resolveChannel:
+        resolveChannel ??
+        // oxlint-disable-next-line typescript/require-await
+        (async () => {
+          const error = { error: "channel resolution not supported" };
+          return error;
+        }),
       send,
+      sendTo,
       session,
     };
 

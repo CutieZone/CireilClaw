@@ -132,6 +132,10 @@ export async function runHeartbeat(agent: Agent, cfg: HeartbeatConfig): Promise<
       async (content: string): Promise<void> => {
         await agent.send(session, content);
       },
+      async (targetSession: Session, content: string): Promise<void> => {
+        await agent.send(targetSession, content);
+      },
+      undefined,
       undefined,
       undefined,
       undefined,

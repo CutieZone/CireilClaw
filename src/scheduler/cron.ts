@@ -122,6 +122,10 @@ async function runMainSession(agent: Agent, job: CronJobConfig): Promise<void> {
       async (content: string): Promise<void> => {
         await agent.send(session, content);
       },
+      async (targetSession: Session, content: string): Promise<void> => {
+        await agent.send(targetSession, content);
+      },
+      undefined,
       undefined,
       undefined,
       undefined,
@@ -170,6 +174,10 @@ async function runIsolatedSession(agent: Agent, job: CronJobConfig): Promise<voi
       async (content: string): Promise<void> => {
         await agent.send(session, content);
       },
+      async (targetSession: Session, content: string): Promise<void> => {
+        await agent.send(targetSession, content);
+      },
+      undefined,
       undefined,
       undefined,
       undefined,

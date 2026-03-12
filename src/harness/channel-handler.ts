@@ -6,6 +6,9 @@ interface ChannelCapabilities {
   supportsReactions: boolean;
 }
 
+// Channel resolution result for cross-channel messaging
+type ChannelResolution = Session | { error: string };
+
 interface ChannelHandler {
   readonly capabilities: ChannelCapabilities;
   downloadAttachments?(
@@ -14,6 +17,11 @@ interface ChannelHandler {
   ): Promise<{ filename: string; data: Buffer }[]>;
   react?(session: Session, emoji: string, messageId?: string): Promise<void>;
   send(session: Session, content: string, attachments?: string[], flags?: number): Promise<void>;
+  resolveChannel?(
+    spec: string,
+    sessions: Map<string, Session>,
+    ownerId?: string,
+  ): Promise<ChannelResolution>;
 }
 
 const MINIMAL_HANDLER: ChannelHandler = {
@@ -27,4 +35,4 @@ const MINIMAL_HANDLER: ChannelHandler = {
   },
 };
 
-export { type ChannelCapabilities, type ChannelHandler, MINIMAL_HANDLER };
+export { type ChannelCapabilities, type ChannelHandler, type ChannelResolution, MINIMAL_HANDLER };

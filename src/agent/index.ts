@@ -3,8 +3,9 @@ import { loadConditions } from "$/config/index.js";
 import type { EngineConfig } from "$/config/schemas.js";
 import { Engine } from "$/engine/index.js";
 import { MINIMAL_HANDLER } from "$/harness/channel-handler.js";
-import type { ChannelHandler } from "$/harness/channel-handler.js";
+import type { ChannelHandler, ChannelResolution } from "$/harness/channel-handler.js";
 import type { Session } from "$/harness/session.js";
+import type { Client as OceanicClient } from "oceanic.js";
 
 export class Agent {
   private _engine: Engine;
@@ -12,6 +13,8 @@ export class Agent {
   private readonly _sessions: Map<string, Session>;
   private readonly _channelHandlers = new Map<string, ChannelHandler>();
   private _conditions: ConditionsConfig;
+  private _discordClient?: OceanicClient;
+  private _ownerId?: string;
 
   constructor(
     slug: string,
@@ -49,6 +52,22 @@ export class Agent {
     return this._sessions;
   }
 
+  setDiscordClient(client: OceanicClient): void {
+    this._discordClient = client;
+  }
+
+  get discordClient(): OceanicClient | undefined {
+    return this._discordClient;
+  }
+
+  setOwnerId(ownerId: string): void {
+    this._ownerId = ownerId;
+  }
+
+  get ownerId(): string | undefined {
+    return this._ownerId;
+  }
+
   registerChannel(channel: string, handler: ChannelHandler): void {
     this._channelHandlers.set(channel, handler);
   }
@@ -72,11 +91,50 @@ export class Agent {
     await handler.send(session, content, attachments, flags);
   }
 
+  // oxlint-disable-next-line require-await
+  async resolveChannel(spec: string, currentSession: Session): Promise<ChannelResolution> {
+    // "current" returns the current session
+    if (spec === "current") {
+      return currentSession;
+    }
+
+    // "last" returns the most recently active session
+    if (spec === "last") {
+      let best: Session | undefined = undefined;
+      for (const session of this._sessions.values()) {
+        if (best === undefined || session.lastActivity > best.lastActivity) {
+          best = session;
+        }
+      }
+      return best ?? { error: "no active sessions found" };
+    }
+
+    // Strip channel prefix (e.g., "discord:") before delegating to handler
+    const handler = this._getHandler(currentSession);
+    if (handler.resolveChannel !== undefined) {
+      const prefix = `${currentSession.channel}:`;
+      const bareSpec = spec.startsWith(prefix) ? spec.slice(prefix.length) : spec;
+      const result = handler.resolveChannel(bareSpec, this._sessions, this._ownerId);
+      return result;
+    }
+
+    // Fallback: direct session lookup
+    return this._sessions.get(spec) ?? { error: `session not found: ${spec}` };
+  }
+
   async runTurn(session: Session): Promise<void> {
     const handler = this._getHandler(session);
 
     const send = async (content: string, attachments?: string[]): Promise<void> => {
       await this.send(session, content, attachments);
+    };
+
+    const sendTo = async (
+      targetSession: Session,
+      content: string,
+      attachments?: string[],
+    ): Promise<void> => {
+      await this.send(targetSession, content, attachments);
     };
 
     const react =
@@ -94,12 +152,18 @@ export class Agent {
             return result ?? [];
           };
 
+    // oxlint-disable-next-line require-await
+    const resolveChannel = async (spec: string): Promise<ChannelResolution> =>
+      this.resolveChannel(spec, session);
+
     await this._engine.runTurn(
       session,
       this._slug,
       send,
+      sendTo,
       react,
       downloadAttachments,
+      resolveChannel,
       handler.capabilities,
       this._conditions,
     );
