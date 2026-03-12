@@ -1,10 +1,12 @@
 import { getDb } from "$/db/index.js";
 import { sessions } from "$/db/schema.js";
 import { updateSessionImages } from "$/db/sessions.js";
+import { DiscordMetaSchema, isImageRef, SerializedHistorySchema } from "$/db/validation.js";
 import { toWebp } from "$/util/image.js";
 import { eq } from "drizzle-orm";
 import type { Client as OceanicClient } from "oceanic.js";
 import { ChannelTypes } from "oceanic.js";
+import * as vb from "valibot";
 
 const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 
@@ -66,39 +68,27 @@ async function repairSessionImages(
     return { failed: 0, skipped: 0, updated: 0 };
   }
 
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  const meta = JSON.parse(row.meta) as { channelId: string; guildId?: string };
+  const meta = vb.parse(DiscordMetaSchema, JSON.parse(row.meta));
   const { channelId } = meta;
 
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  const history = JSON.parse(row.history) as Record<string, unknown>[];
+  const history = vb.parse(SerializedHistorySchema, JSON.parse(row.history));
 
-  const result: RepairResult = { failed: 0, skipped: 0, updated: 0 };
-  const newImages = new Map<string, Uint8Array>();
+  const toFetch: { msgId: string; url: string }[] = [];
+  let skipped = 0;
 
   for (const msg of history) {
-    if (msg["role"] !== "user" || msg["id"] === undefined) {
+    if (msg.role !== "user" || msg.id === undefined) {
       continue;
     }
 
-    const { content, id: msgId } = msg;
-
-    if (typeof msgId !== "string") {
-      continue;
-    }
+    const msgId = msg.id;
+    const { content } = msg;
 
     if (!Array.isArray(content)) {
       continue;
     }
 
-    const hasImageRefs = content.some(
-      (block) =>
-        typeof block === "object" &&
-        block !== null &&
-        "type" in block &&
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-        (block as { type: string }).type === "image_ref",
-    );
+    const hasImageRefs = content.some((block) => isImageRef(block));
 
     if (!hasImageRefs) {
       continue;
@@ -114,39 +104,51 @@ async function repairSessionImages(
         })
         .toSorted((first, second) => first.id.localeCompare(second.id));
 
-      if (imageAttachments.length === 0) {
-        result.skipped++;
-        continue;
-      }
-
       const [firstAttachment] = imageAttachments;
       if (firstAttachment === undefined) {
-        result.skipped++;
-        continue;
+        skipped++;
+      } else {
+        toFetch.push({ msgId, url: firstAttachment.url });
       }
+    } catch (caughtError) {
+      if (caughtError instanceof Error && caughtError.message.includes("Unknown Message")) {
+        skipped++;
+      }
+      // else: failed, will be counted after parallel fetch
+    }
+  }
 
+  const fetchResults = await Promise.all(
+    toFetch.map(async ({ msgId, url }) => {
       try {
-        const response = await fetch(firstAttachment.url);
+        const response = await fetch(url);
         if (!response.ok) {
-          result.failed++;
-          continue;
+          return { status: "failed" as const };
         }
 
         const raw = await response.arrayBuffer();
         const data = await toWebp(raw);
-        newImages.set(msgId, data);
-        result.updated++;
+        return { data, msgId, status: "updated" as const };
       } catch {
-        result.failed++;
+        return { status: "failed" as const };
       }
-    } catch (caughtError) {
-      if (caughtError instanceof Error && caughtError.message.includes("Unknown Message")) {
-        result.skipped++;
-      } else {
-        result.failed++;
-      }
+    }),
+  );
+
+  const newImages = new Map<string, Uint8Array>();
+  let failed = 0;
+  let updated = 0;
+
+  for (const res of fetchResults) {
+    if (res.status === "updated") {
+      newImages.set(res.msgId, res.data);
+      updated++;
+    } else {
+      failed++;
     }
   }
+
+  const result: RepairResult = { failed, skipped, updated };
 
   if (newImages.size > 0) {
     updateSessionImages(agentSlug, sessionId, newImages);
