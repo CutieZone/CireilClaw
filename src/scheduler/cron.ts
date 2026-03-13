@@ -3,6 +3,7 @@ import type { CronJobConfig } from "$/config/cron.js";
 import { deleteCronJob, updateLastRun } from "$/db/cron.js";
 import { saveSession } from "$/db/sessions.js";
 import { Engine } from "$/engine/index.js";
+import type { ChannelResolution } from "$/harness/channel-handler.js";
 import type { Session } from "$/harness/session.js";
 import { InternalSession } from "$/harness/session.js";
 import colors from "$/output/colors.js";
@@ -101,7 +102,16 @@ async function runMainSession(agent: Agent, job: CronJobConfig): Promise<void> {
 
   session.busy = true;
   const historyLengthBefore = session.history.length;
-  session.history.push({ content: { content: job.prompt, type: "text" }, role: "user" });
+  session.history.push({
+    content: { content: job.prompt, type: "text" },
+    role: "user",
+  });
+
+  async function resolveChannel(spec: string): Promise<ChannelResolution> {
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion, typescript/no-non-null-assertion
+    const result = await agent.resolveChannel(spec, session!);
+    return result;
+  }
 
   try {
     const engine =
@@ -127,7 +137,7 @@ async function runMainSession(agent: Agent, job: CronJobConfig): Promise<void> {
       },
       undefined,
       undefined,
-      undefined,
+      resolveChannel,
       undefined,
       agent.conditions,
     );
@@ -153,7 +163,15 @@ async function runIsolatedSession(agent: Agent, job: CronJobConfig): Promise<voi
     return false;
   };
 
-  session.history.push({ content: { content: job.prompt, type: "text" }, role: "user" });
+  session.history.push({
+    content: { content: job.prompt, type: "text" },
+    role: "user",
+  });
+
+  async function resolveChannel(spec: string): Promise<ChannelResolution> {
+    const result = await agent.resolveChannel(spec, session);
+    return result;
+  }
 
   try {
     const engine =
@@ -179,7 +197,7 @@ async function runIsolatedSession(agent: Agent, job: CronJobConfig): Promise<voi
       },
       undefined,
       undefined,
-      undefined,
+      resolveChannel,
       undefined,
       agent.conditions,
     );
