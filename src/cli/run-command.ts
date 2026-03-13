@@ -152,6 +152,12 @@ async function run(flags: Flags): Promise<void> {
         choices: slugs.map((sl) => ({ name: sl, value: sl })),
         message: "Which agent should the TUI connect to?",
       });
+
+      // Inquirer enables mouse tracking for the selection UI but doesn't
+      // clean it up. Disable all mouse reporting modes before handing off
+      // to the TUI, otherwise mouse movements produce escape sequences
+      // that get interpreted as text input.
+      process.stdout.write("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l");
     }
 
     startTui(harness, tuiSlug);
