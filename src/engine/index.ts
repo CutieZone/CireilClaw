@@ -29,6 +29,16 @@ import { sandboxToReal } from "$/util/paths.js";
 
 import { toolRegistry } from "./tools/index.js";
 
+interface SamplingParams {
+  maxTokens?: number;
+  minP?: number;
+  presencePenalty?: number;
+  temperature?: number;
+  topP?: number;
+}
+
+export type { SamplingParams };
+
 function truncateToTurns(messages: Message[], maxTurns: number): Message[] {
   const turns: Message[][] = [];
 
@@ -266,20 +276,24 @@ export class Engine {
   private readonly _overrides: EngineOverrides;
   private readonly _maxTurns: number;
   private readonly _compactPrompts: boolean;
-  private readonly _maxTokens: number | undefined;
-  private readonly _temperature: number | undefined;
+  private readonly _sampling: SamplingParams;
 
   constructor(cfg: EngineConfig) {
     this._apiKey = cfg.apiKey;
     this._apiKeyPool = new KeyPoolClass(cfg.apiKey);
     this._apiBase = cfg.apiBase;
     this._compactPrompts = cfg.compactPrompts;
-    this._maxTokens = cfg.maxTokens;
     this._maxTurns = cfg.maxTurns;
     this._model = cfg.model;
     this._provider = cfg.provider;
     this._overrides = cfg.channel;
-    this._temperature = cfg.temperature;
+    this._sampling = {
+      maxTokens: cfg.maxTokens,
+      minP: cfg.minP,
+      presencePenalty: cfg.presencePenalty,
+      temperature: cfg.temperature,
+      topP: cfg.topP,
+    };
   }
 
   get apiBase(): string {
@@ -314,12 +328,8 @@ export class Engine {
     return this._compactPrompts;
   }
 
-  get maxTokens(): number | undefined {
-    return this._maxTokens;
-  }
-
-  get temperature(): number | undefined {
-    return this._temperature;
+  get sampling(): SamplingParams {
+    return this._sampling;
   }
 
   /**
@@ -421,6 +431,7 @@ export class Engine {
             effectiveApiBase,
             effectiveKeyPool,
             effectiveModel,
+            this._sampling,
           ));
           break;
         }
@@ -430,6 +441,7 @@ export class Engine {
             context,
             effectiveKeyPool,
             effectiveModel,
+            this._sampling,
           ));
           break;
         }

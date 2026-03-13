@@ -40,9 +40,12 @@ const EngineConfigSchema = vb.strictObject({
   compactPrompts: vb.exactOptional(vb.boolean(), false),
   maxTokens: vb.exactOptional(vb.pipe(vb.number(), vb.integer(), vb.minValue(1))),
   maxTurns: vb.exactOptional(vb.pipe(vb.number(), vb.integer(), vb.minValue(1)), 30),
+  minP: vb.exactOptional(vb.pipe(vb.number(), vb.minValue(0), vb.maxValue(1))),
   model: nonEmptyString,
+  presencePenalty: vb.exactOptional(vb.pipe(vb.number(), vb.minValue(-2), vb.maxValue(2))),
   provider: vb.exactOptional(nonEmptyString, "openai"),
   temperature: vb.exactOptional(vb.pipe(vb.number(), vb.minValue(0), vb.maxValue(2))),
+  topP: vb.exactOptional(vb.pipe(vb.number(), vb.minValue(0), vb.maxValue(1))),
 });
 
 type EngineConfig = vb.InferOutput<typeof EngineConfigSchema>;
@@ -114,8 +117,6 @@ interface ChannelConfigMap {
   tui: TuiConfig;
   // oxlint-disable-next-line typescript/no-invalid-void-type
   internal: void;
-  // oxlint-disable-next-line typescript/no-invalid-void-type
-  tui: void;
 }
 
 interface ConfigChangeEvent {

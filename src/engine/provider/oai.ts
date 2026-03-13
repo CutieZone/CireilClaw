@@ -139,11 +139,10 @@ export async function generate(
   apiBase: string,
   keyPool: KeyPool,
   model: string,
-  maxTokens?: number,
-  temperature?: number,
+  sampling: { maxTokens?: number; minP?: number; presencePenalty?: number; temperature?: number; topP?: number } = {},
 ): Promise<{ message: AssistantMessage; usage?: UsageInfo }> {
   // Build params once - they don't change between retries
-  const params: ChatCompletionCreateParamsNonStreaming = {
+  const params: ChatCompletionCreateParamsNonStreaming & Record<string, unknown> = {
     messages: [
       { content: context.systemPrompt, role: "system" },
       ...context.messages.map(translateMsg),
@@ -153,12 +152,24 @@ export async function generate(
     tools: context.tools.map(translateTool),
   };
 
-  if (maxTokens !== undefined) {
-    params.max_completion_tokens = maxTokens;
+  if (sampling.maxTokens !== undefined) {
+    params.max_completion_tokens = sampling.maxTokens;
   }
 
-  if (temperature !== undefined) {
-    params.temperature = temperature;
+  if (sampling.temperature !== undefined) {
+    params.temperature = sampling.temperature;
+  }
+
+  if (sampling.topP !== undefined) {
+    params.top_p = sampling.topP;
+  }
+
+  if (sampling.minP !== undefined) {
+    params["min_p"] = sampling.minP;
+  }
+
+  if (sampling.presencePenalty !== undefined) {
+    params.presence_penalty = sampling.presencePenalty;
   }
 
   if (model.includes("kimi") && model.includes("2.5")) {
