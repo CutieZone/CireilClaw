@@ -93,11 +93,11 @@ async function loadMigrations(): Promise<ConfigMigration[]> {
 
 async function promptForMode(pendingMigrations: ConfigMigration[]): Promise<MigrationMode> {
   info("");
-  info(`${colors.keyword("cireilclaw")} Pending configuration migrations:`);
+  info(`There are ${colors.number(pendingMigrations.length)} pending migrations:`);
   info("");
 
   for (const migration of pendingMigrations) {
-    info(`  ${colors.keyword("•")} ${colors.path(migration.id)}`);
+    info(`  ${colors.keyword("•")} ${colors.name(migration.id)}`);
     info(`    ${migration.description}`);
     info("");
   }
@@ -280,7 +280,7 @@ async function applyMigration(
   return true;
 }
 
-export async function runMigrations(): Promise<void> {
+export async function runMigrations(dryRun = false): Promise<number> {
   const state = await getMigrationState();
   const migrations = await loadMigrations();
 
@@ -289,7 +289,7 @@ export async function runMigrations(): Promise<void> {
   const pendingMigrations = migrations.filter((migration) => !appliedSet.has(migration.id));
 
   if (pendingMigrations.length === 0) {
-    return;
+    return 0;
   }
 
   // Get all agent slugs
@@ -299,6 +299,37 @@ export async function runMigrations(): Promise<void> {
   if (existsSync(agentsDir)) {
     const entries = await readdir(agentsDir, { withFileTypes: true });
     agentSlugs = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+  }
+
+  // Dry run: show what would happen without applying
+  if (dryRun) {
+    info("");
+    info(
+      `${colors.keyword("Dry run:")} ${colors.number(pendingMigrations.length)} pending migration(s) would be applied:`,
+    );
+    info("");
+
+    for (const migration of pendingMigrations) {
+      info(`  ${colors.name(migration.id)}`);
+      info(`    ${colors.debug(migration.description)}`);
+
+      // Show targeted files
+      const globalFiles = migration.targets.filter(
+        (tgt) => tgt === "integrations.toml" || tgt === "engine.toml",
+      );
+      const agentFiles = migration.targets.filter((tgt) => tgt !== "integrations.toml");
+
+      if (globalFiles.length > 0) {
+        info(`    ${colors.path("→ Global:")} ${globalFiles.join(", ")}`);
+      }
+      if (agentFiles.length > 0 && agentSlugs.length > 0) {
+        info(`    ${colors.path("→ Agents:")} ${agentSlugs.join(", ")}`);
+        info(`      Files: ${agentFiles.join(", ")}`);
+      }
+      info("");
+    }
+
+    return pendingMigrations.length;
   }
 
   // Prompt user for mode
@@ -327,4 +358,6 @@ export async function runMigrations(): Promise<void> {
   }
 
   info("");
+
+  return newlyApplied.length;
 }
