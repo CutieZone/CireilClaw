@@ -2,13 +2,26 @@ import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
-import { sandboxToReal, sanitizeError } from "$/util/paths.js";
+import { checkConditionalAccess, sandboxToReal, sanitizeError } from "$/util/paths.js";
 import * as vb from "valibot";
 
 const Schema = vb.strictObject({
-  new_text: vb.pipe(vb.string(), vb.nonEmpty()),
-  old_text: vb.pipe(vb.string(), vb.nonEmpty()),
-  path: vb.pipe(vb.string(), vb.nonEmpty()),
+  new_text: vb.pipe(
+    vb.string(),
+    vb.description("Replacement text. Pass an empty string to delete old_text."),
+  ),
+  old_text: vb.pipe(
+    vb.string(),
+    vb.nonEmpty(),
+    vb.description(
+      "Exact literal string to find. Whitespace, indentation, and newlines all matter.",
+    ),
+  ),
+  path: vb.pipe(
+    vb.string(),
+    vb.nonEmpty(),
+    vb.description("Sandbox path of the file to edit (e.g. /workspace/main.ts)."),
+  ),
 });
 
 // oxlint-disable-next-line sort-keys
@@ -17,13 +30,11 @@ export const strReplace: ToolDef = {
   parameters: Schema,
   description:
     "Find and replace exactly one occurrence of a literal string in an existing file.\n\n" +
-    "Both `old_text` and `new_text` must be non-empty. The match is exact — whitespace, indentation, and newlines all matter. On success, returns a few lines of context around the replacement.\n\n" +
+    "`old_text` must be non-empty; `new_text` may be empty to delete. The match is exact — whitespace, indentation, and newlines all matter. On success, returns a few lines of context around the replacement.\n\n" +
     "Error conditions:\n" +
     "- `old_text` not found in the file → include more surrounding context to verify your match.\n" +
     "- `old_text` found more than once → include additional surrounding lines to disambiguate.\n\n" +
-    "Tips:\n" +
-    "- To delete lines, set `new_text` to the surrounding context with the target lines removed.\n" +
-    "- Use `read` or `open-file` first to see the current file contents and craft an accurate match.\n\n" +
+    "Tip: Use `read` or `open-file` first to see the current file contents and craft an accurate match.\n\n" +
     "When NOT to use:\n" +
     "- Creating new files or rewriting an entire file — use `write` instead.\n" +
     "- The file doesn't exist yet — use `write` instead.",
@@ -32,6 +43,12 @@ export const strReplace: ToolDef = {
       const data = vb.parse(Schema, input);
 
       const path = sandboxToReal(data.path, ctx.agentSlug);
+
+      // Check conditional access rules if conditions are available
+      if (ctx.conditions !== undefined) {
+        checkConditionalAccess(data.path, ctx.agentSlug, ctx.conditions, ctx.session);
+      }
+
       if (!existsSync(path)) {
         return {
           error: `File at ${data.path} does not exist.`,

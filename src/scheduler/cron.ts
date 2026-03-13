@@ -3,10 +3,12 @@ import type { CronJobConfig } from "$/config/cron.js";
 import { deleteCronJob, updateLastRun } from "$/db/cron.js";
 import { saveSession } from "$/db/sessions.js";
 import { Engine } from "$/engine/index.js";
+import type { ChannelResolution } from "$/harness/channel-handler.js";
 import type { Session } from "$/harness/session.js";
 import { InternalSession } from "$/harness/session.js";
 import colors from "$/output/colors.js";
 import { debug, warning } from "$/output/log.js";
+import { MessageFlags } from "oceanic.js";
 
 // Returns the best session to target based on a target string.
 function resolveTarget(agent: Agent, target: string): Session | undefined {
@@ -29,7 +31,12 @@ function resolveTarget(agent: Agent, target: string): Session | undefined {
   return sessions.get(target);
 }
 
-async function deliverOutput(agent: Agent, job: CronJobConfig, content: string): Promise<void> {
+async function deliverOutput(
+  agent: Agent,
+  job: CronJobConfig,
+  content: string,
+  flags?: number,
+): Promise<void> {
   const { delivery } = job;
 
   if (delivery === "none") {
@@ -66,7 +73,7 @@ async function deliverOutput(agent: Agent, job: CronJobConfig, content: string):
   }
 
   try {
-    await agent.send(target, content);
+    await agent.send(target, content, undefined, flags);
   } catch (error) {
     warning(
       "Cron: announce delivery failed for job",
@@ -95,7 +102,16 @@ async function runMainSession(agent: Agent, job: CronJobConfig): Promise<void> {
 
   session.busy = true;
   const historyLengthBefore = session.history.length;
-  session.history.push({ content: { content: job.prompt, type: "text" }, role: "user" });
+  session.history.push({
+    content: { content: job.prompt, type: "text" },
+    role: "user",
+  });
+
+  async function resolveChannel(spec: string): Promise<ChannelResolution> {
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion, typescript/no-non-null-assertion
+    const result = await agent.resolveChannel(spec, session!);
+    return result;
+  }
 
   try {
     const engine =
@@ -106,19 +122,32 @@ async function runMainSession(agent: Agent, job: CronJobConfig): Promise<void> {
             apiKey: job.model.apiKey ?? agent.engine.apiKey,
             channel: agent.engine.overrides,
             compactPrompts: agent.engine.compactPrompts,
+            maxTurns: agent.engine.maxTurns,
             model: job.model.model ?? agent.engine.model,
             provider: job.model.provider ?? agent.engine.provider,
           });
 
-    await engine.runTurn(session, agent.slug, async (content: string): Promise<void> => {
-      await agent.send(session, content);
-    });
+    await engine.runTurn(
+      session,
+      agent.slug,
+      async (content: string): Promise<void> => {
+        await agent.send(session, content);
+      },
+      async (targetSession: Session, content: string): Promise<void> => {
+        await agent.send(targetSession, content);
+      },
+      undefined,
+      undefined,
+      resolveChannel,
+      undefined,
+      agent.conditions,
+    );
     debug("Cron: main-session job", colors.keyword(job.id), "completed");
   } catch (error) {
     session.history.length = historyLengthBefore;
     const reason = error instanceof Error ? error.message : String(error);
     warning("Cron: error in main-session job", colors.keyword(job.id), reason);
-    await deliverOutput(agent, job, `⚠️ Engine error: ${reason}`);
+    await deliverOutput(agent, job, `⚠️ Engine error: ${reason}`, MessageFlags.EPHEMERAL);
   } finally {
     session.busy = false;
     saveSession(agent.slug, session);
@@ -135,7 +164,15 @@ async function runIsolatedSession(agent: Agent, job: CronJobConfig): Promise<voi
     return false;
   };
 
-  session.history.push({ content: { content: job.prompt, type: "text" }, role: "user" });
+  session.history.push({
+    content: { content: job.prompt, type: "text" },
+    role: "user",
+  });
+
+  async function resolveChannel(spec: string): Promise<ChannelResolution> {
+    const result = await agent.resolveChannel(spec, session);
+    return result;
+  }
 
   try {
     const engine =
@@ -146,18 +183,31 @@ async function runIsolatedSession(agent: Agent, job: CronJobConfig): Promise<voi
             apiKey: job.model.apiKey ?? agent.engine.apiKey,
             channel: agent.engine.overrides,
             compactPrompts: agent.engine.compactPrompts,
+            maxTurns: agent.engine.maxTurns,
             model: job.model.model ?? agent.engine.model,
             provider: job.model.provider ?? agent.engine.provider,
           });
 
-    await engine.runTurn(session, agent.slug, async (content: string): Promise<void> => {
-      await agent.send(session, content);
-    });
+    await engine.runTurn(
+      session,
+      agent.slug,
+      async (content: string): Promise<void> => {
+        await agent.send(session, content);
+      },
+      async (targetSession: Session, content: string): Promise<void> => {
+        await agent.send(targetSession, content);
+      },
+      undefined,
+      undefined,
+      resolveChannel,
+      undefined,
+      agent.conditions,
+    );
     debug("Cron: isolated job", colors.keyword(job.id), "completed");
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     warning("Cron: error in isolated job", colors.keyword(job.id), reason);
-    await deliverOutput(agent, job, `⚠️ Engine error: ${reason}`);
+    await deliverOutput(agent, job, `⚠️ Engine error: ${reason}`, MessageFlags.EPHEMERAL);
     return;
   }
 

@@ -1,4 +1,5 @@
 import { debug } from "$/output/log.js";
+import { blake3 } from "@noble/hashes/blake3.js";
 
 const DEFAULT_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -6,7 +7,17 @@ interface KeyFailure {
   timestamp: number;
 }
 
-export class KeyPool {
+/**
+ * Generate a stable cache key for KeyPool instances using blake3 hash.
+ * The keys are never stored directly; only their hash is used.
+ */
+function poolKeyForKeys(keys: string | string[]): string {
+  const normalized = Array.isArray(keys) ? keys : [keys];
+  const input = new TextEncoder().encode(normalized.join("|"));
+  return Buffer.from(blake3(input)).toString("hex");
+}
+
+class KeyPool {
   private readonly keys: string[];
   private readonly cooldownMs: number;
   private readonly failures = new Map<string, KeyFailure>();
@@ -106,3 +117,53 @@ export class KeyPool {
     return this.keys.length;
   }
 }
+
+/**
+ * Singleton manager for KeyPool instances.
+ * Ensures rate limit cooldown state persists across multiple calls.
+ */
+class KeyPoolManagerClass {
+  private readonly pools = new Map<string, KeyPool>();
+
+  /**
+   * Get or create a KeyPool for the given API key(s).
+   * The same pool instance is returned for identical key configurations,
+   * ensuring rate limit state persists across calls.
+   */
+  getPool(keys: string | string[], cooldownMs = DEFAULT_COOLDOWN_MS): KeyPool {
+    const key = poolKeyForKeys(keys);
+    let pool = this.pools.get(key);
+
+    if (pool === undefined) {
+      pool = new KeyPool(keys, cooldownMs);
+      this.pools.set(key, pool);
+      debug(`KeyPoolManager: Created new pool for key ${key}`);
+    }
+
+    return pool;
+  }
+
+  /**
+   * Remove all cached pools.
+   * Useful for testing or forcing a clean slate.
+   */
+  clear(): void {
+    this.pools.clear();
+    debug("KeyPoolManager: Cleared all pools");
+  }
+
+  /**
+   * Get the number of cached pools.
+   */
+  get size(): number {
+    return this.pools.size;
+  }
+}
+
+/**
+ * Global singleton instance for managing KeyPool instances.
+ * Use this to get cached KeyPool instances instead of creating new ones.
+ */
+const KeyPoolManager = new KeyPoolManagerClass();
+
+export { KeyPool, KeyPoolManager };

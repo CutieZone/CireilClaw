@@ -6,6 +6,7 @@ import type { Agent } from "$/agent/index.js";
 import type { HeartbeatConfig } from "$/config/heartbeat.js";
 import { saveSession } from "$/db/sessions.js";
 import { Engine } from "$/engine/index.js";
+import type { ChannelResolution } from "$/harness/channel-handler.js";
 import type { Session } from "$/harness/session.js";
 import colors from "$/output/colors.js";
 import { debug, warning } from "$/output/log.js";
@@ -66,7 +67,7 @@ export async function runHeartbeat(agent: Agent, cfg: HeartbeatConfig): Promise<
     return;
   }
 
-  const checklistPath = join(agentRoot(agent.slug), "workspace", "HEARTBEAT.md");
+  const checklistPath = join(agentRoot(agent.slug), "tasks", "HEARTBEAT.md");
   if (!existsSync(checklistPath)) {
     debug("Heartbeat: no HEARTBEAT.md found — skipping");
     return;
@@ -113,6 +114,12 @@ export async function runHeartbeat(agent: Agent, cfg: HeartbeatConfig): Promise<
     role: "user",
   });
 
+  async function resolveChannel(spec: string): Promise<ChannelResolution> {
+    // oxlint-disable-next-line typescript/no-non-null-assertion
+    const result = await agent.resolveChannel(spec, session!);
+    return result;
+  }
+
   try {
     const engine =
       cfg.model === undefined
@@ -122,13 +129,26 @@ export async function runHeartbeat(agent: Agent, cfg: HeartbeatConfig): Promise<
             apiKey: cfg.model.apiKey ?? agent.engine.apiKey,
             channel: agent.engine.overrides,
             compactPrompts: agent.engine.compactPrompts,
+            maxTurns: agent.engine.maxTurns,
             model: cfg.model.model ?? agent.engine.model,
             provider: cfg.model.provider ?? agent.engine.provider,
           });
 
-    await engine.runTurn(session, agent.slug, async (content: string): Promise<void> => {
-      await agent.send(session, content);
-    });
+    await engine.runTurn(
+      session,
+      agent.slug,
+      async (content: string): Promise<void> => {
+        await agent.send(session, content);
+      },
+      async (targetSession: Session, content: string): Promise<void> => {
+        await agent.send(targetSession, content);
+      },
+      undefined,
+      undefined,
+      resolveChannel,
+      undefined,
+      agent.conditions,
+    );
 
     const cc = capturedContent as string | undefined;
     debug(

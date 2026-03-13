@@ -93,11 +93,11 @@ async function loadMigrations(): Promise<ConfigMigration[]> {
 
 async function promptForMode(pendingMigrations: ConfigMigration[]): Promise<MigrationMode> {
   info("");
-  info(`${colors.keyword("cireilclaw")} Pending configuration migrations:`);
+  info(`There are ${colors.number(pendingMigrations.length)} pending migrations:`);
   info("");
 
   for (const migration of pendingMigrations) {
-    info(`  ${colors.keyword("•")} ${colors.path(migration.id)}`);
+    info(`  ${colors.keyword("•")} ${colors.name(migration.id)}`);
     info(`    ${migration.description}`);
     info("");
   }
@@ -139,33 +139,32 @@ async function shouldApplyMigration(migration: ConfigMigration): Promise<boolean
   return answer;
 }
 
-async function createBackup(
-  migrationId: string,
-  configPath: string,
-  originalData: string,
-): Promise<void> {
+function getBackupFilename(filePath: string): string {
+  const filename = basename(filePath);
+
+  if (filePath.includes("/agents/")) {
+    // Extract agent slug from path
+    const parts = filePath.split("/agents/");
+    if (parts.length > 1 && parts[1] !== undefined) {
+      const [slug, ...rest] = parts[1].split("/");
+      // Include the relative path within the agent directory for uniqueness
+      const relativePath = rest.join("_").replaceAll("/", "_");
+      return `agents_${slug}_${relativePath}_${filename}`;
+    }
+  }
+
+  return `global_${filename}`;
+}
+
+async function createBackup(migrationId: string, filePath: string, content: string): Promise<void> {
   const backupDir = join(BACKUPS_DIR, migrationId);
   if (!existsSync(backupDir)) {
     await mkdir(backupDir, { recursive: true });
   }
 
-  // Create a unique backup filename based on the config path
-  // For agent configs, use "agents_{slug}_config_{filename}"
-  // For global configs, use "global_config_{filename}"
-  const filename = basename(configPath);
-  let backupFilename = `global_config_${filename}`;
-
-  if (configPath.includes("/agents/")) {
-    // Extract agent slug from path
-    const parts = configPath.split("/agents/");
-    if (parts.length > 1 && parts[1] !== undefined) {
-      const [slug] = parts[1].split("/");
-      backupFilename = `agents_${slug}_config_${filename}`;
-    }
-  }
-
+  const backupFilename = getBackupFilename(filePath);
   const backupPath = join(backupDir, backupFilename);
-  await writeFile(backupPath, originalData, { encoding: "utf8" });
+  await writeFile(backupPath, content, { encoding: "utf8" });
 }
 
 async function applyMigrationToFile(
@@ -215,12 +214,24 @@ async function applyMigration(
 
   info(`  Applying migration ${colors.path(migration.id)}...`);
 
+  // Helper to create backup function for this migration
+  function createBackupHelper(): MigrationContext["backupFile"] {
+    return async (filePath: string): Promise<void> => {
+      if (!existsSync(filePath)) {
+        return;
+      }
+      const content = await readFile(filePath, { encoding: "utf8" });
+      await createBackup(migration.id, filePath, content);
+    };
+  }
+
   // Apply to global configs
   const globalConfigFiles = ["integrations.toml", "engine.toml"] as const;
   for (const filename of globalConfigFiles) {
     if (migration.targets.includes(filename)) {
       const configPath = join(root(), "config", filename);
       const context: MigrationContext = {
+        backupFile: createBackupHelper(),
         configPath,
         configType: "global",
       };
@@ -243,6 +254,7 @@ async function applyMigration(
       if (configPath !== undefined) {
         const context: MigrationContext = {
           agentSlug: slug,
+          backupFile: createBackupHelper(),
           configPath,
           configType: "agent",
         };
@@ -251,11 +263,24 @@ async function applyMigration(
     }
   }
 
+  if (migration.migrateAgent !== undefined) {
+    for (const slug of agentSlugs) {
+      const agentPath = join(root(), "agents", slug);
+      const context: MigrationContext = {
+        agentSlug: slug,
+        backupFile: createBackupHelper(),
+        configPath: agentPath,
+        configType: "agent",
+      };
+      await migration.migrateAgent(slug, agentPath, context);
+    }
+  }
+
   info(`  ${colors.success("✓")} Applied migration ${colors.path(migration.id)}`);
   return true;
 }
 
-export async function runMigrations(): Promise<void> {
+export async function runMigrations(dryRun = false): Promise<number> {
   const state = await getMigrationState();
   const migrations = await loadMigrations();
 
@@ -264,7 +289,7 @@ export async function runMigrations(): Promise<void> {
   const pendingMigrations = migrations.filter((migration) => !appliedSet.has(migration.id));
 
   if (pendingMigrations.length === 0) {
-    return;
+    return 0;
   }
 
   // Get all agent slugs
@@ -274,6 +299,37 @@ export async function runMigrations(): Promise<void> {
   if (existsSync(agentsDir)) {
     const entries = await readdir(agentsDir, { withFileTypes: true });
     agentSlugs = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+  }
+
+  // Dry run: show what would happen without applying
+  if (dryRun) {
+    info("");
+    info(
+      `${colors.keyword("Dry run:")} ${colors.number(pendingMigrations.length)} pending migration(s) would be applied:`,
+    );
+    info("");
+
+    for (const migration of pendingMigrations) {
+      info(`  ${colors.name(migration.id)}`);
+      info(`    ${colors.debug(migration.description)}`);
+
+      // Show targeted files
+      const globalFiles = migration.targets.filter(
+        (tgt) => tgt === "integrations.toml" || tgt === "engine.toml",
+      );
+      const agentFiles = migration.targets.filter((tgt) => tgt !== "integrations.toml");
+
+      if (globalFiles.length > 0) {
+        info(`    ${colors.path("→ Global:")} ${globalFiles.join(", ")}`);
+      }
+      if (agentFiles.length > 0 && agentSlugs.length > 0) {
+        info(`    ${colors.path("→ Agents:")} ${agentSlugs.join(", ")}`);
+        info(`      Files: ${agentFiles.join(", ")}`);
+      }
+      info("");
+    }
+
+    return pendingMigrations.length;
   }
 
   // Prompt user for mode
@@ -302,4 +358,6 @@ export async function runMigrations(): Promise<void> {
   }
 
   info("");
+
+  return newlyApplied.length;
 }

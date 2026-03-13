@@ -15,7 +15,7 @@ const migration: ConfigMigration = {
   // oxlint-disable-next-line arrow-body-style
   transform(_data, _context) {
     // data: parsed TOML object (mutate and return)
-    // context: { agentSlug?, configType, configPath }
+    // context: { agentSlug?, configType, configPath, backupFile }
 
     // Example: rename a tool
     // if (_data["old-tool-name"] !== undefined) {
@@ -41,6 +41,23 @@ const migration: ConfigMigration = {
 
     return _data;
   },
+
+  // Optional: run arbitrary filesystem operations per agent after TOML transforms
+  // async migrateAgent(agentSlug, agentPath, context) {
+  //   // agentSlug: the agent's identifier (e.g., "my-agent")
+  //   // agentPath: full path to the agent directory
+  //   // context.backupFile(filePath): backup a file before modifying/deleting
+  //
+  //   // IMPORTANT: Always backup files before modifying or deleting them
+  //   // await context.backupFile(pathToFile);
+  //
+  //   // Example: move a file
+  //   // const oldPath = join(agentPath, "workspace", "HEARTBEAT.md");
+  //   // if (existsSync(oldPath)) {
+  //   //   await context.backupFile(oldPath);
+  //   //   await rename(oldPath, join(agentPath, "tasks", "HEARTBEAT.md"));
+  //   // }
+  // },
 };
 
 export { migration };

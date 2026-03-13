@@ -39,6 +39,7 @@ const EngineConfigSchema = vb.strictObject({
   channel: vb.exactOptional(EngineOverridesSchema, {}),
   compactPrompts: vb.exactOptional(vb.boolean(), false),
   maxTokens: vb.exactOptional(vb.pipe(vb.number(), vb.integer(), vb.minValue(1))),
+  maxTurns: vb.exactOptional(vb.pipe(vb.number(), vb.integer(), vb.minValue(1)), 30),
   model: nonEmptyString,
   provider: vb.exactOptional(nonEmptyString, "openai"),
   temperature: vb.exactOptional(vb.pipe(vb.number(), vb.minValue(0), vb.maxValue(2))),
@@ -74,7 +75,29 @@ const IntegrationsConfigSchema = vb.strictObject({
 });
 type IntegrationsConfig = vb.InferOutput<typeof IntegrationsConfigSchema>;
 
+const SystemConfigSchema = vb.strictObject({
+  timezone: vb.exactOptional(vb.pipe(vb.string(), vb.nonEmpty())),
+});
+type SystemConfig = vb.InferOutput<typeof SystemConfigSchema>;
+
+const DirectMessagesModeSchema = vb.exactOptional(
+  vb.union([vb.literal("owner"), vb.literal("public"), vb.literal("whitelist")]),
+  "owner",
+);
+
+type DirectMessagesMode = vb.InferOutput<typeof DirectMessagesModeSchema>;
+
+const DirectMessagesSchema = vb.optional(
+  vb.strictObject({
+    mode: DirectMessagesModeSchema,
+    users: vb.exactOptional(vb.array(vb.pipe(vb.string(), vb.regex(/[0-9]+/))), []),
+  }),
+);
+
+type DirectMessagesConfig = vb.InferOutput<typeof DirectMessagesSchema>;
+
 const DiscordSchema = vb.strictObject({
+  directMessages: vb.exactOptional(DirectMessagesSchema, { mode: "owner", users: [] }),
   ownerId: vb.pipe(vb.string(), vb.nonEmpty(), vb.regex(/[0-9]+/)),
   token: vb.pipe(vb.string(), vb.nonEmpty()),
 });
@@ -91,6 +114,8 @@ interface ChannelConfigMap {
   tui: TuiConfig;
   // oxlint-disable-next-line typescript/no-invalid-void-type
   internal: void;
+  // oxlint-disable-next-line typescript/no-invalid-void-type
+  tui: void;
 }
 
 interface ConfigChangeEvent {
@@ -103,6 +128,7 @@ type Watchers = AsyncIterableIterator<ConfigChangeEvent>;
 
 export {
   ApiKeySchema,
+  DirectMessagesSchema,
   DiscordSchema,
   EngineConfigSchema,
   EngineOverrideSchema,
@@ -110,6 +136,7 @@ export {
   ExecToolConfigSchema,
   IntegrationsConfigSchema,
   MatrixSchema,
+  SystemConfigSchema,
   ToolConfigSchema,
   ToolsConfigSchema,
   TuiSchema,
@@ -119,11 +146,14 @@ export type {
   ApiKey,
   ChannelConfigMap,
   ConfigChangeEvent,
+  DirectMessagesConfig,
+  DirectMessagesMode,
   EngineConfig,
   EngineOverride,
   EngineOverrides,
   ExecToolConfig,
   IntegrationsConfig,
+  SystemConfig,
   ToolConfig,
   ToolsConfig,
   Watchers,

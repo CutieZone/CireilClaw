@@ -1,11 +1,15 @@
 import { access } from "node:fs/promises";
 
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
-import { sandboxToReal, sanitizeError } from "$/util/paths.js";
+import { checkConditionalAccess, sandboxToReal, sanitizeError } from "$/util/paths.js";
 import * as vb from "valibot";
 
 const Schema = vb.strictObject({
-  path: vb.pipe(vb.string(), vb.nonEmpty()),
+  path: vb.pipe(
+    vb.string(),
+    vb.nonEmpty(),
+    vb.description("Sandbox path to pin (e.g. /workspace/config.json)."),
+  ),
 });
 
 export const openFile: ToolDef = {
@@ -20,6 +24,12 @@ export const openFile: ToolDef = {
     try {
       const data = vb.parse(Schema, input);
       const realPath = sandboxToReal(data.path, ctx.agentSlug);
+
+      // Check conditional access rules if conditions are available
+      if (ctx.conditions !== undefined) {
+        checkConditionalAccess(data.path, ctx.agentSlug, ctx.conditions, ctx.session);
+      }
+
       // Verify the file actually exists before pinning it.
       await access(realPath);
       ctx.session.openedFiles.add(data.path);

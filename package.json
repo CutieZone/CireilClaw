@@ -21,17 +21,19 @@
     "drizzle-orm": "1.0.0-beta.15-859cf75",
     "fast-merge-async-iterators": "^1.1.1",
     "neo-blessed": "^0.2.0",
-    "oceanic.js": "^1.13.0",
-    "openai": "^6.25.0",
+    "oceanic.js": "^1.14.0",
+    "openai": "^6.27.0",
     "ora": "^9.3.0",
+    "react": "^19.2.4",
     "sharp": "^0.34.5",
     "smol-toml": "^1.6.0",
-    "valibot": "^1.2.0"
+    "valibot": "^1.2.0",
+    "yaml": "^2.8.2"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/blessed": "^0.1.27",
-    "@types/node": "^25.3.3",
+    "@types/node": "^25.3.5",
     "drizzle-kit": "1.0.0-beta.15-859cf75",
     "oxfmt": "^0.36.0",
     "oxlint": "^1.51.0",

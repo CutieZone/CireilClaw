@@ -1,15 +1,15 @@
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
-import { DiscordSession, MatrixSession, TuiSession } from "$/harness/session.js";
+import { DiscordSession, InternalSession, MatrixSession, TuiSession } from "$/harness/session.js";
 import * as vb from "valibot";
 
 // No input parameters needed — this just returns session context.
-const Schema = vb.object({});
+const Schema = vb.strictObject({});
 
 export const sessionInfo: ToolDef = {
   description:
     "Get information about the current session context.\n\n" +
     "Returns:\n" +
-    '- `platform`: The platform type ("discord" or "matrix")\n' +
+    '- `platform`: The platform type ("discord", "matrix", "tui", or "internal")\n' +
     "- `channel_id` (Discord only): The Discord channel ID\n" +
     "- `guild_id` (Discord only, optional): The Discord guild/server ID (undefined for DMs)\n" +
     "- `room_id` (Matrix only): The Matrix room ID\n" +
@@ -43,6 +43,10 @@ export const sessionInfo: ToolDef = {
         platform: "tui",
         success: true,
       };
+    }
+
+    if (session instanceof InternalSession) {
+      return { platform: "internal", success: true };
     }
 
     return {

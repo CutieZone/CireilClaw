@@ -2,6 +2,8 @@ import { existsSync } from "node:fs";
 import { readdir, readFile, watch } from "node:fs/promises";
 import { join } from "node:path";
 
+import type { ConditionsConfig } from "$/config/conditions.js";
+import { ConditionsConfigSchema } from "$/config/conditions.js";
 import type { CronConfig } from "$/config/cron.js";
 import { CronConfigSchema } from "$/config/cron.js";
 import type { HeartbeatConfig } from "$/config/heartbeat.js";
@@ -11,6 +13,7 @@ import type {
   ConfigChangeEvent,
   EngineConfig,
   IntegrationsConfig,
+  SystemConfig,
   ToolsConfig,
   Watchers,
 } from "$/config/schemas.js";
@@ -18,6 +21,7 @@ import {
   DiscordSchema,
   EngineConfigSchema,
   IntegrationsConfigSchema,
+  SystemConfigSchema,
   ToolsConfigSchema,
 } from "$/config/schemas.js";
 import type { ChannelType } from "$/harness/session.js";
@@ -204,13 +208,43 @@ async function loadAgents(): Promise<string[]> {
   return entries.filter((it) => it.isDirectory()).map((it) => it.name);
 }
 
+async function loadConditions(agentSlug: string): Promise<ConditionsConfig> {
+  const file = join(root(), "agents", agentSlug, "config", "conditions.toml");
+
+  if (!existsSync(file)) {
+    return { blocks: {}, memories: {}, workspace: {} };
+  }
+
+  const data = await readFile(file, { encoding: "utf8" });
+  const obj = parse(data);
+
+  return vb.parse(ConditionsConfigSchema, obj);
+}
+
+async function loadSystem(): Promise<SystemConfig> {
+  const file = join(root(), "config", "system.toml");
+
+  if (!existsSync(file)) {
+    return vb.parse(SystemConfigSchema, {});
+  }
+
+  const data = await readFile(file, { encoding: "utf8" });
+  const obj = parse(data);
+
+  return vb.parse(SystemConfigSchema, obj);
+}
+
 export {
   loadAgents,
   loadChannel,
+  loadConditions,
   loadCron,
   loadEngine,
   loadHeartbeat,
   loadIntegrations,
+  loadSystem,
   loadTools,
   watcher,
 };
+
+export type { ConditionsConfig, SystemConfig };

@@ -6,6 +6,7 @@ import { basename, join } from "node:path";
 
 import * as clearCommand from "$/channels/discord/clear-command.js";
 import type { HandlerCtx } from "$/channels/discord/handler-ctx.js";
+import * as repairCommand from "$/channels/discord/repair-command.js";
 import { loadChannel } from "$/config/index.js";
 import { saveSession } from "$/db/sessions.js";
 import type { ImageContent, TextContent } from "$/engine/content.js";
@@ -15,6 +16,7 @@ import type { Harness } from "$/harness/index.js";
 import { DiscordSession } from "$/harness/session.js";
 import colors from "$/output/colors.js";
 import { debug, error as logError, info, warning } from "$/output/log.js";
+import { formatDate } from "$/util/date.js";
 import { toWebp } from "$/util/image.js";
 import { root, sandboxToReal } from "$/util/paths.js";
 import type {
@@ -25,7 +27,12 @@ import type {
   PossiblyUncachedMessage,
   TextableChannel,
 } from "oceanic.js";
-import { InteractionTypes, TextableChannelTypes } from "oceanic.js";
+import {
+  InteractionTypes,
+  MessageFlags,
+  StickerFormatTypes,
+  TextableChannelTypes,
+} from "oceanic.js";
 
 // oceanic.js's ESM shim breaks under tsx's module loader (.default.default chain
 // resolves to undefined). Force CJS to get the real constructors.
@@ -44,10 +51,13 @@ const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "
 
 // All registered slash commands. Add new command modules here — the hash
 // check on startup will detect changes and re-register with Discord's API.
-const SLASH_COMMANDS = [clearCommand.definition];
+const SLASH_COMMANDS = [clearCommand.definition, repairCommand.definition];
 
 type SlashHandler = (interaction: CommandInteraction, ctx: HandlerCtx) => Promise<void>;
-const SLASH_HANDLERS = new Map<string, SlashHandler>([["clear", clearCommand.handle]]);
+const SLASH_HANDLERS = new Map<string, SlashHandler>([
+  ["clear", clearCommand.handle],
+  ["repair", repairCommand.handle],
+]);
 
 // Persisted hash of SLASH_COMMANDS to avoid re-registering on every startup.
 const COMMANDS_HASH = createHash("sha256").update(JSON.stringify(SLASH_COMMANDS)).digest("hex");
@@ -69,11 +79,11 @@ function writeCommandsHash(hash: string): void {
 // agent has full context about who sent what and when, without needing to
 // parse it out of the message history separately. Includes attachment metadata
 // so the model knows what files/images are present.
-function formatUserMessage(msg: DiscordMessage): TextContent {
+async function formatUserMessage(msg: DiscordMessage): Promise<TextContent> {
   const { username } = msg.author;
   const authorId = msg.author.id;
   const displayName = msg.member?.nick ?? msg.author.globalName ?? username;
-  const timestamp = msg.createdAt.toISOString();
+  const timestamp = await formatDate(msg.createdAt);
 
   let innerContent = msg.content;
 
@@ -87,6 +97,18 @@ function formatUserMessage(msg: DiscordMessage): TextContent {
       )
       .join("\n");
     innerContent += `\n${attachmentInfo}`;
+  }
+
+  // Append sticker metadata so the model knows what stickers are present
+  if (msg.stickerItems && msg.stickerItems.length > 0) {
+    const stickerInfo = msg.stickerItems
+      .map((sticker) => {
+        const hint =
+          sticker.format_type === StickerFormatTypes.LOTTIE ? ' hint="cannot be displayed"' : "";
+        return `<sticker name="${sticker.name}"${hint}>`;
+      })
+      .join("\n");
+    innerContent += `\n${stickerInfo}`;
   }
 
   return {
@@ -98,11 +120,11 @@ function formatUserMessage(msg: DiscordMessage): TextContent {
 // Formats a message as a context item (different from user message - marks it as
 // reply context so the agent understands this is historical conversation).
 // Includes attachment metadata so the model knows what files/images are present.
-function formatReplyContext(msg: DiscordMessage): TextContent {
+async function formatReplyContext(msg: DiscordMessage): Promise<TextContent> {
   const { username } = msg.author;
   const authorId = msg.author.id;
   const displayName = msg.member?.nick ?? msg.author.globalName ?? username;
-  const timestamp = msg.createdAt.toISOString();
+  const timestamp = await formatDate(msg.createdAt);
 
   let innerContent = msg.content;
 
@@ -118,6 +140,18 @@ function formatReplyContext(msg: DiscordMessage): TextContent {
     innerContent += `\n${attachmentInfo}`;
   }
 
+  // Append sticker metadata so the model knows what stickers are present
+  if (msg.stickerItems && msg.stickerItems.length > 0) {
+    const stickerInfo = msg.stickerItems
+      .map((sticker) => {
+        const hint =
+          sticker.format_type === StickerFormatTypes.LOTTIE ? ' hint="cannot be displayed"' : "";
+        return `<sticker name="${sticker.name}"${hint}>`;
+      })
+      .join("\n");
+    innerContent += `\n${stickerInfo}`;
+  }
+
   return {
     content: `<reply-context msgId="${msg.id}" from="${username} <${authorId}>" displayName="${displayName}" timestamp="${timestamp}">${innerContent}</reply-context>`,
     type: "text",
@@ -125,8 +159,8 @@ function formatReplyContext(msg: DiscordMessage): TextContent {
 }
 
 // Formats a bot's own message as assistant context for history loading.
-function formatAssistantContext(msg: DiscordMessage): TextContent {
-  const timestamp = msg.createdAt.toISOString();
+async function formatAssistantContext(msg: DiscordMessage): Promise<TextContent> {
+  const timestamp = await formatDate(msg.createdAt);
 
   return {
     content: `<assistant-context msgId="${msg.id}" timestamp="${timestamp}">${msg.content}</assistant-context>`,
@@ -178,29 +212,100 @@ function isMessageInHistory(history: Message[], messageId: string): boolean {
   return false;
 }
 
-// Fetches image attachments from a Discord message, filtering to types
+// Fetches image attachments from a Discord message in parallel, filtering to types
 // supported by the vision API and silently dropping any that fail to fetch.
+// Results are sorted by attachment ID for consistent ordering.
 async function fetchAttachmentImages(msg: DiscordMessage): Promise<ImageContent[]> {
-  const images: ImageContent[] = [];
-  for (const attachment of msg.attachments.values()) {
-    const mediaType = attachment.contentType?.split(";")[0]?.trim();
-    if (mediaType === undefined || !SUPPORTED_IMAGE_TYPES.has(mediaType)) {
-      continue;
-    }
-    try {
-      const response = await fetch(attachment.url);
-      const raw = await response.arrayBuffer();
-      const data = await toWebp(raw);
-      images.push({ data, mediaType: "image/webp", type: "image" });
-    } catch (error) {
-      warning(
-        "Failed to fetch attachment:",
-        attachment.url,
-        error instanceof Error ? error.message : String(error),
-      );
-    }
+  const fetchPromises = [...msg.attachments.values()].map(
+    async (attachment): Promise<(ImageContent & { id: string }) | undefined> => {
+      const mediaType = attachment.contentType?.split(";")[0]?.trim();
+      if (mediaType === undefined || !SUPPORTED_IMAGE_TYPES.has(mediaType)) {
+        return undefined;
+      }
+      try {
+        const response = await fetch(attachment.url);
+        const raw = await response.arrayBuffer();
+        const data = await toWebp(raw);
+        return {
+          data,
+          id: attachment.id,
+          mediaType: "image/webp",
+          type: "image",
+        } as const;
+      } catch (error) {
+        warning(
+          "Failed to fetch attachment:",
+          attachment.url,
+          error instanceof Error ? error.message : String(error),
+        );
+        return undefined;
+      }
+    },
+  );
+
+  const results = await Promise.all(fetchPromises);
+  return results
+    .filter((img): img is NonNullable<typeof img> => img !== undefined)
+    .toSorted((first, second) => first.id.localeCompare(second.id))
+    .map(({ id: _id, ...imageContent }) => imageContent);
+}
+
+// Fetches sticker images from a Discord message in parallel, converting to WebP.
+// LOTTIE format stickers are skipped (cannot be displayed as raster images).
+// Results are sorted by sticker ID for consistent ordering.
+async function fetchStickerImages(msg: DiscordMessage): Promise<ImageContent[]> {
+  if (!msg.stickerItems || msg.stickerItems.length === 0) {
+    return [];
   }
-  return images;
+
+  const fetchPromises = msg.stickerItems.map(
+    async (sticker): Promise<(ImageContent & { id: string }) | undefined> => {
+      // Skip LOTTIE format - vector format that can't be converted to raster
+      if (sticker.format_type === StickerFormatTypes.LOTTIE) {
+        return undefined;
+      }
+
+      try {
+        const url =
+          sticker.format_type === StickerFormatTypes.GIF
+            ? `https://media.discordapp.net/stickers/${sticker.id}.gif`
+            : `https://cdn.discordapp.com/stickers/${sticker.id}.png`;
+
+        const response = await fetch(url);
+        const raw = await response.arrayBuffer();
+        const data = await toWebp(raw);
+        return {
+          data,
+          id: sticker.id,
+          mediaType: "image/webp",
+          type: "image",
+        } as const;
+      } catch (error) {
+        warning(
+          "Failed to fetch sticker:",
+          sticker.name,
+          error instanceof Error ? error.message : String(error),
+        );
+        return undefined;
+      }
+    },
+  );
+
+  const results = await Promise.all(fetchPromises);
+  return results
+    .filter((img): img is NonNullable<typeof img> => img !== undefined)
+    .toSorted((first, second) => first.id.localeCompare(second.id))
+    .map(({ id: _id, ...imageContent }) => imageContent);
+}
+
+// Fetches both attachments and sticker images in parallel, with attachments
+// ordered first (sorted by ID), then stickers (sorted by ID).
+async function fetchAllImages(msg: DiscordMessage): Promise<ImageContent[]> {
+  const [attachmentImages, stickerImages] = await Promise.all([
+    fetchAttachmentImages(msg),
+    fetchStickerImages(msg),
+  ]);
+  return [...attachmentImages, ...stickerImages];
 }
 
 // Fetches the last N messages from a Discord channel, including images.
@@ -212,7 +317,9 @@ async function fetchMessageHistory(
   limit = 30,
 ): Promise<DiscordMessage[]> {
   try {
-    const fetched = await client.rest.channels.getMessages(channelId, { limit });
+    const fetched = await client.rest.channels.getMessages(channelId, {
+      limit,
+    });
     // Discord returns messages newest-first, reverse for chronological order
     return fetched.toReversed();
   } catch {
@@ -275,8 +382,10 @@ async function populateHistoryFromDiscord(
     const isFromBot = msg.author.id === botId;
     const role = isFromBot ? ("assistant" as const) : ("user" as const);
 
-    const textContent = isFromBot ? formatAssistantContext(msg) : formatReplyContext(msg);
-    const images = await fetchAttachmentImages(msg);
+    const textContent = isFromBot
+      ? await formatAssistantContext(msg)
+      : await formatReplyContext(msg);
+    const images = await fetchAllImages(msg);
 
     session.history.push({
       content: images.length > 0 ? [textContent, ...images] : textContent,
@@ -347,7 +456,7 @@ function splitMessage(content: string): string[] {
 }
 
 async function handleMessageCreate(
-  { client, owner, ownerId, agentSlug }: HandlerCtx,
+  { agentSlug, client, directMessages, owner, ownerId }: HandlerCtx,
   msg: DiscordMessage,
 ): Promise<void> {
   // Ignore messages with no text and no image attachments.
@@ -360,7 +469,26 @@ async function handleMessageCreate(
     return;
   }
 
-  const isDirectMessage = (msg.guildID ?? undefined) === undefined && msg.author.id === ownerId;
+  // Check if this is a DM (no guild ID)
+  const isDm = (msg.guildID ?? undefined) === undefined;
+
+  // DMs bypass the mention/reply requirement but are still subject to mode restrictions
+  const shouldProcess = isDm;
+  if (isDm) {
+    const { mode, users } = directMessages ?? { mode: "owner", users: [] };
+    const userId = msg.author.id;
+
+    // Enforce DM mode
+    if (mode === "owner" && userId !== ownerId) {
+      return; // Only owner can DM
+    }
+    if (mode === "whitelist" && userId !== ownerId && !users.includes(userId)) {
+      return; // Only owner and whitelisted users can DM
+    }
+    // mode === "public" allows anyone to DM
+  }
+
+  const isDirectMessage = isDm && msg.author.id === ownerId;
 
   const { mentions } = msg;
   const memberIdMentioned = mentions.members.some((it) => it.id === client.application.id);
@@ -379,8 +507,16 @@ async function handleMessageCreate(
     }
   }
 
-  // Not mentioned anywhere
-  if (!(mentionedInReference || memberIdMentioned || userIdMentioned || isDirectMessage)) {
+  // Process if mentioned, replied to, or allowed via DM mode
+  if (
+    !(
+      shouldProcess ||
+      mentionedInReference ||
+      memberIdMentioned ||
+      userIdMentioned ||
+      isDirectMessage
+    )
+  ) {
     return;
   }
 
@@ -476,8 +612,8 @@ async function handleMessageCreate(
         continue;
       }
 
-      const ancestorContent = formatReplyContext(ancestor);
-      const ancestorImages = await fetchAttachmentImages(ancestor);
+      const ancestorContent = await formatReplyContext(ancestor);
+      const ancestorImages = await fetchAllImages(ancestor);
       ds.history.push({
         content: ancestorImages.length > 0 ? [ancestorContent, ...ancestorImages] : ancestorContent,
         id: ancestor.id,
@@ -488,8 +624,8 @@ async function handleMessageCreate(
 
     // Add direct reply only if not already in history
     if (!isMessageInHistory(ds.history, directReply.id)) {
-      const replyContent = formatReplyContext(directReply);
-      const replyImages = await fetchAttachmentImages(directReply);
+      const replyContent = await formatReplyContext(directReply);
+      const replyImages = await fetchAllImages(directReply);
       ds.history.push({
         content: replyImages.length > 0 ? [replyContent, ...replyImages] : replyContent,
         id: directReply.id,
@@ -500,8 +636,8 @@ async function handleMessageCreate(
   }
 
   // Push user message into history, including any image attachments.
-  const textContent = formatUserMessage(msg);
-  const imageContents = await fetchAttachmentImages(msg);
+  const textContent = await formatUserMessage(msg);
+  const imageContents = await fetchAllImages(msg);
   const historyLengthBeforeTurn = session.history.length;
   session.history.push({
     content: imageContents.length > 0 ? [textContent, ...imageContents] : textContent,
@@ -536,7 +672,10 @@ async function handleMessageCreate(
     }
     const reason = error instanceof Error ? error.message : String(error);
     try {
-      await msg.channel?.createMessage({ content: `⚠️ Engine error: ${reason}` });
+      await msg.channel?.createMessage({
+        content: `⚠️ Engine error: ${reason}`,
+        flags: MessageFlags.EPHEMERAL,
+      });
     } catch {
       // Best-effort.
     }
@@ -575,7 +714,7 @@ async function handleInteractionCreate(
 }
 
 async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicClient> {
-  const { token, ownerId } = await loadChannel("discord", agentSlug);
+  const { directMessages, token, ownerId } = await loadChannel("discord", agentSlug);
 
   const agent = owner.agents.get(agentSlug);
   if (agent === undefined) {
@@ -589,6 +728,10 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
     },
     rest: {},
   });
+
+  // Store client and ownerId on the agent for channel resolution
+  agent.setDiscordClient(client);
+  agent.setOwnerId(ownerId);
 
   const discordHandler: ChannelHandler = {
     capabilities: {
@@ -622,7 +765,32 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
 
       await client.rest.channels.createReaction(session.channelId, targetId, emoji);
     },
-    send: async (session, content, attachments) => {
+    resolveChannel: async (spec, sessions, ownerUserId) => {
+      // "owner" resolves to DM channel with the bot owner
+      if (spec === "owner") {
+        if (ownerUserId === undefined) {
+          return { error: "ownerId not configured" };
+        }
+
+        try {
+          const dmChannel = await client.rest.users.createDM(ownerUserId);
+          // Check for existing session with this DM channel
+          const existing = sessions.get(`discord:${dmChannel.id}`);
+          if (existing !== undefined) {
+            return existing;
+          }
+          // Return a new session for this DM channel
+          return new DiscordSession(dmChannel.id, undefined, false);
+        } catch {
+          return { error: "failed to create DM channel with owner" };
+        }
+      }
+
+      // Explicit session ID like "discord:123|456" or "discord:123"
+      const match = sessions.get(spec);
+      return match ?? { error: `session not found: ${spec}` };
+    },
+    send: async (session, content, attachments, flags) => {
       if (!(session instanceof DiscordSession)) {
         throw new Error("Somehow, `session` was not a DiscordSession");
       }
@@ -645,6 +813,7 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
         const isLast = idx === chunks.length - 1;
         await client.rest.channels.createMessage(ds.channelId, {
           content: chunk,
+          flags,
           ...(isLast && files !== undefined ? { files } : {}),
         });
       }
@@ -682,6 +851,7 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
   const ctx: HandlerCtx = {
     agentSlug,
     client,
+    directMessages,
     owner,
     ownerId,
   };

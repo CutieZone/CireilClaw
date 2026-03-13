@@ -6,13 +6,22 @@ import * as vb from "valibot";
 
 const SHELL_METACHAR_PATTERN = /[\s"'|&;$`\\]/;
 const Schema = vb.strictObject({
-  args: vb.exactOptional(vb.array(vb.pipe(vb.string(), vb.nonEmpty())), []),
+  args: vb.pipe(
+    vb.optional(vb.nullable(vb.array(vb.pipe(vb.string(), vb.nonEmpty())))),
+    vb.transform((val) => val ?? []),
+    vb.description(
+      "Arguments to pass to the command (each a separate string, no shell quoting needed).",
+    ),
+  ),
   command: vb.pipe(
     vb.string(),
     vb.nonEmpty(),
     vb.custom(
       (value) => typeof value === "string" && !SHELL_METACHAR_PATTERN.test(value),
       "Command must be a single binary name without spaces or shell metacharacters. Use 'args' for arguments.",
+    ),
+    vb.description(
+      "Binary name to run — must be listed in tools.toml [exec] binaries. No spaces or shell metacharacters.",
     ),
   ),
 });
@@ -23,11 +32,8 @@ function isExecConfig(value: unknown): value is vb.InferOutput<typeof ExecToolCo
 
 export const exec: ToolDef = {
   description:
-    "Run a shell command inside a bubblewrap sandbox. The working directory is /workspace.\n\n" +
+    "Run a binary inside a bubblewrap sandbox. The working directory is /workspace.\n\n" +
     "Only binaries explicitly listed in the agent's tools.toml [exec] config are available — all other commands will fail. Returns stdout, stderr, and exit code.\n\n" +
-    "Usage:\n" +
-    "- 'command' must be a single binary name (no spaces, no shell metacharacters like |, &, ;, $, etc.)\n" +
-    "- 'args' is an array of arguments to pass to the command\n\n" +
     "When to use:\n" +
     "- Running build tools, linters, formatters, scripts, or other CLI programs.\n" +
     "- Performing operations that cannot be expressed with the other file tools (e.g., grep, git, compilation).\n\n" +
@@ -65,9 +71,12 @@ export const exec: ToolDef = {
       }
 
       if (!execConfig.binaries.includes(data.command)) {
+        const bashAvailable = execConfig.binaries.includes("bash");
         return {
           error: `Command '${data.command}' is not in the allowed binaries list.`,
-          hint: "Use `bash -c 'command'` if you think the binary is in your $PATH (e.g., from .env).",
+          ...(bashAvailable && {
+            hint: "Use `bash -c 'command'` if you think the binary is in your $PATH (e.g., from .env).",
+          }),
           success: false,
         };
       }

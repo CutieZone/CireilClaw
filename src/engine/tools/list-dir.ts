@@ -1,11 +1,15 @@
 import { readdir } from "node:fs/promises";
 
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
-import { sandboxToReal, sanitizeError } from "$/util/paths.js";
+import { checkConditionalAccess, sandboxToReal, sanitizeError } from "$/util/paths.js";
 import * as vb from "valibot";
 
 const Schema = vb.strictObject({
-  path: vb.pipe(vb.string(), vb.nonEmpty()),
+  path: vb.pipe(
+    vb.string(),
+    vb.nonEmpty(),
+    vb.description("Sandbox directory path to list (e.g. /workspace/)."),
+  ),
 });
 
 export const listDir: ToolDef = {
@@ -17,6 +21,12 @@ export const listDir: ToolDef = {
     try {
       const data = vb.parse(Schema, input);
       const realPath = sandboxToReal(data.path, ctx.agentSlug);
+
+      // Check conditional access rules if conditions are available
+      if (ctx.conditions !== undefined) {
+        checkConditionalAccess(data.path, ctx.agentSlug, ctx.conditions, ctx.session);
+      }
+
       const entries = await readdir(realPath, { withFileTypes: true });
       const items = entries.map(
         (ent): { name: string; type: "directory" | "symlink" | "file" } => ({

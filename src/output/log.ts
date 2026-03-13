@@ -120,45 +120,45 @@ function setLogFile(filePath: string): void {
 }
 
 function debug(...data: unknown[]): void {
+  writeToFile("debug", data);
   if (isEnabled("debug")) {
     if (_tuiSink === undefined) {
       console.debug(color.debug("[DEBUG]"), ...data);
     } else {
       _tuiSink("debug", data);
     }
-    writeToFile("debug", data);
   }
 }
 
 function info(...data: unknown[]): void {
+  writeToFile("info", data);
   if (isEnabled("info")) {
     if (_tuiSink === undefined) {
       console.info(color.info("[ INFO]"), ...data);
     } else {
       _tuiSink("info", data);
     }
-    writeToFile("info", data);
   }
 }
 
 function warning(...data: unknown[]): void {
+  writeToFile("warning", data);
   if (isEnabled("warning")) {
     if (_tuiSink === undefined) {
       console.warn(color.warning("[ WARN]"), ...data);
     } else {
       _tuiSink("warning", data);
     }
-    writeToFile("warning", data);
   }
 }
 
 function error(...data: unknown[]): void {
+  writeToFile("error", data);
   if (_tuiSink === undefined) {
     console.error(color.error("[ERROR]"), ...data);
   } else {
     _tuiSink("error", data);
   }
-  writeToFile("error", data);
 }
 
 export { config, debug, error, info, setLogFile, setTuiSink, warning };

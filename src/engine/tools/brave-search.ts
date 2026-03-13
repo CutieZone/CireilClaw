@@ -2,12 +2,16 @@ import { loadIntegrations } from "$/config/index.js";
 import type { ApiKey } from "$/config/schemas.js";
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import { debug } from "$/output/log.js";
-import { KeyPool } from "$/util/key-pool.js";
+import { KeyPoolManager } from "$/util/key-pool.js";
 import * as vb from "valibot";
 
 const Schema = vb.strictObject({
-  count: vb.exactOptional(vb.pipe(vb.number(), vb.minValue(1), vb.maxValue(20)), 5),
-  query: vb.pipe(vb.string(), vb.nonEmpty()),
+  count: vb.pipe(
+    vb.optional(vb.nullable(vb.pipe(vb.number(), vb.minValue(1), vb.maxValue(20)))),
+    vb.transform((val) => val ?? 5),
+    vb.description("Number of results to return (1–20, default 5)."),
+  ),
+  query: vb.pipe(vb.string(), vb.nonEmpty(), vb.description("Search query string.")),
 });
 
 interface BraveSearchResult {
@@ -40,9 +44,6 @@ export const braveSearch: ToolDef = {
   description:
     "Search the web via Brave Search and return a list of results. Each result contains a title, short description snippet, and URL.\n\n" +
     "This returns search result metadata only — not full page content. You cannot follow or fetch URLs from within the sandbox.\n\n" +
-    "Parameters:\n" +
-    "- `query`: The search query string.\n" +
-    "- `count` (optional, 1–20, default 5): Number of results to return.\n\n" +
     "Use this when the user's request requires up-to-date information, facts, or references you don't have in context.",
   async execute(input: unknown, _ctx: ToolContext): Promise<Record<string, unknown>> {
     try {
@@ -56,7 +57,7 @@ export const braveSearch: ToolDef = {
         };
       }
 
-      const keyPool = new KeyPool(integrations.brave.apiKey);
+      const keyPool = KeyPoolManager.getPool(integrations.brave.apiKey);
       const params = new URLSearchParams();
       params.set("count", String(data.count));
       params.set("q", data.query);

@@ -1,6 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 
 import { loadTools } from "$/config/index.js";
+import type { ConditionsConfig } from "$/config/index.js";
 import type { ApiKey, EngineConfig, EngineOverride, EngineOverrides } from "$/config/schemas.js";
 import type { ToolCallContent } from "$/engine/content.js";
 import type { Context, UsageInfo } from "$/engine/context.js";
@@ -10,19 +11,23 @@ import type { ProviderKind } from "$/engine/provider/index.js";
 import { generate } from "$/engine/provider/oai.js";
 import type { Tool } from "$/engine/tool.js";
 import type { ToolContext } from "$/engine/tools/tool-def.js";
+import type { ChannelCapabilities, ChannelResolution } from "$/harness/channel-handler.js";
 import { DiscordSession, MatrixSession } from "$/harness/session.js";
 import type { Session } from "$/harness/session.js";
 import colors from "$/output/colors.js";
 import { debug } from "$/output/log.js";
+import { formatDate } from "$/util/date.js";
 import type { KeyPool } from "$/util/key-pool.js";
-import { KeyPool as KeyPoolClass } from "$/util/key-pool.js";
-import { loadBlocks, loadBaseInstructions, loadSkills } from "$/util/load.js";
+import { KeyPool as KeyPoolClass, KeyPoolManager } from "$/util/key-pool.js";
+import {
+  loadBlocks,
+  loadBaseInstructions,
+  loadConditionalBlocks,
+  loadSkills,
+} from "$/util/load.js";
 import { sandboxToReal } from "$/util/paths.js";
 
-import { compactDescriptions } from "./compact-prompts.js";
 import { toolRegistry } from "./tools/index.js";
-
-const MAX_TURNS = 30;
 
 function truncateToTurns(messages: Message[], maxTurns: number): Message[] {
   const turns: Message[][] = [];
@@ -67,21 +72,31 @@ function squashMessages(messages: Message[]): Message[] {
   return result;
 }
 
-async function buildSystemPrompt(agentSlug: string, session: Session, compact: boolean): Promise<string> {
+const NO_CAPABILITIES: ChannelCapabilities = {
+  supportsAttachments: false,
+  supportsDownloadAttachments: false,
+  supportsReactions: false,
+};
+
+async function buildSystemPrompt(
+  agentSlug: string,
+  session: Session,
+  capabilities: ChannelCapabilities,
+  conditions?: ConditionsConfig,
+): Promise<string> {
   const baseInstructions = await loadBaseInstructions(agentSlug);
   const blocks = await loadBlocks(agentSlug);
+  const conditionalBlocks = conditions
+    ? await loadConditionalBlocks(agentSlug, conditions, session)
+    : [];
 
   const lines: string[] = [
     "<base_instructions>",
     baseInstructions.trim(),
     "</base_instructions>",
     "<metadata>",
-    compact
-      ? `Date: ${new Date().toISOString()}`
-      : `The current system date is: ${new Date().toISOString()}`,
-    compact
-      ? `Platform: ${session.channel}`
-      : `The current session is on the platform: ${session.channel}`,
+    `The current system date is: ${await formatDate()}`,
+    `The current session is on the platform: ${session.channel}`,
   ];
 
   if (session.channel === "discord") {
@@ -91,59 +106,63 @@ async function buildSystemPrompt(agentSlug: string, session: Session, compact: b
     } else {
       lines.push(`This is considered a ${session.isNsfw ? "NSFW" : "SFW"} session`);
     }
-  } else if (session.channel === "tui") {
-    lines.push("This is a local terminal (TUI) session. The user is interacting directly via the terminal.");
   } else if (session.channel === "internal") {
     lines.push(`This is an internal cron session (job ID: ${session.jobId})`);
+  } else if (session.channel === "tui") {
+    lines.push("This is a TUI session with your person. SFW/NSFW depending on their preferences.");
   } else {
     throw new Error(`Unimplemented channel: ${session.channel}`);
   }
 
-  if (compact) {
+  lines.push(
+    `- reactions supported: ${capabilities.supportsReactions}`,
+    `- file attachments in respond supported: ${capabilities.supportsAttachments}`,
+    `- attachment downloads supported: ${capabilities.supportsDownloadAttachments}`,
+  );
+
+  lines.push(
+    "</metadata>",
+    "<memory_blocks>",
+    "The following blocks are engaged in your memory:",
+    "",
+  );
+
+  for (const [key, value] of Object.entries(blocks)) {
     lines.push(
-      "Sandbox path roots: /workspace/, /memories/, /blocks/, /skills/.",
+      `<${key}>`,
+      "<description>",
+      value.description.trim(),
+      "</description>",
+      "<metadata>",
+      `- chars_current: ${value.metadata.chars_current}`,
+      `- file_path: ${value.filePath}`,
       "</metadata>",
-      "<memory_blocks>",
-    );
-  } else {
-    lines.push(
-      "</metadata>",
-      "<memory_blocks>",
-      "The following blocks are engaged in your memory:",
+      "<content>",
+      value.content.trim(),
+      "</content>",
+      `</${key}>`,
       "",
     );
   }
 
-  for (const [key, value] of Object.entries(blocks)) {
-    if (compact) {
-      lines.push(
-        `<${key} path="${value.filePath}">`,
-        "<description>",
-        value.description.trim(),
-        "</description>",
-        "<content>",
-        value.content.trim(),
-        "</content>",
-        `</${key}>`,
-        "",
-      );
-    } else {
-      lines.push(
-        `<${key}>`,
-        "<description>",
-        value.description.trim(),
-        "</description>",
-        "<metadata>",
-        `- chars_current: ${value.metadata.chars_current}`,
-        `- file_path: ${value.filePath}`,
-        "</metadata>",
-        "<content>",
-        value.content.trim(),
-        "</content>",
-        `</${key}>`,
-        "",
-      );
-    }
+  // Add conditional blocks if any were loaded
+  for (const block of conditionalBlocks) {
+    lines.push(
+      `<${block.label}>`,
+      "<description>",
+      block.description.trim(),
+      "</description>",
+      "<metadata>",
+      `- chars_current: ${block.metadata.chars_current}`,
+      `- file_path: ${block.filePath}`,
+      "- conditional: true",
+      "</metadata>",
+      "<content>",
+      block.content.trim(),
+      "</content>",
+      `</${block.label}>`,
+      "",
+    );
   }
 
   lines.push("</memory_blocks>");
@@ -156,8 +175,7 @@ async function buildSystemPrompt(agentSlug: string, session: Session, compact: b
     for (const skill of skills) {
       lines.push(
         `<skill slug="${skill.slug}">`,
-        `<summary>${skill.summary}</summary>`,
-        `<when>${skill.whenToUse}</when>`,
+        `<description>${skill.description}</description>`,
         `</skill>`,
       );
     }
@@ -182,7 +200,7 @@ async function buildSystemPrompt(agentSlug: string, session: Session, compact: b
   return lines.join("\n");
 }
 
-async function buildTools(agentSlug: string, _session: Session, compact: boolean): Promise<Tool[]> {
+async function buildTools(agentSlug: string, _session: Session): Promise<Tool[]> {
   const cfg = Object.entries(await loadTools(agentSlug));
 
   const tools: Tool[] = [];
@@ -205,12 +223,7 @@ async function buildTools(agentSlug: string, _session: Session, compact: boolean
       continue;
     }
 
-    const compactDesc = compact ? compactDescriptions[tool] : undefined;
-    if (compactDesc !== undefined) {
-      tools.push({ ...def, description: compactDesc });
-    } else {
-      tools.push(def);
-    }
+    tools.push(def);
   }
 
   return tools;
@@ -248,10 +261,11 @@ export class Engine {
   private readonly _apiKey: ApiKey;
   private readonly _apiKeyPool: KeyPoolClass;
   private readonly _apiBase: string;
-  private readonly _compactPrompts: boolean;
   private readonly _model: string;
   private readonly _provider: string;
   private readonly _overrides: EngineOverrides;
+  private readonly _maxTurns: number;
+  private readonly _compactPrompts: boolean;
   private readonly _maxTokens: number | undefined;
   private readonly _temperature: number | undefined;
 
@@ -260,10 +274,11 @@ export class Engine {
     this._apiKeyPool = new KeyPoolClass(cfg.apiKey);
     this._apiBase = cfg.apiBase;
     this._compactPrompts = cfg.compactPrompts;
+    this._maxTokens = cfg.maxTokens;
+    this._maxTurns = cfg.maxTurns;
     this._model = cfg.model;
     this._provider = cfg.provider;
     this._overrides = cfg.channel;
-    this._maxTokens = cfg.maxTokens;
     this._temperature = cfg.temperature;
   }
 
@@ -287,12 +302,24 @@ export class Engine {
     return this._provider;
   }
 
+  get overrides(): EngineOverrides {
+    return this._overrides;
+  }
+
+  get maxTurns(): number {
+    return this._maxTurns;
+  }
+
   get compactPrompts(): boolean {
     return this._compactPrompts;
   }
 
-  get overrides(): EngineOverrides {
-    return this._overrides;
+  get maxTokens(): number | undefined {
+    return this._maxTokens;
+  }
+
+  get temperature(): number | undefined {
+    return this._temperature;
   }
 
   /**
@@ -300,7 +327,7 @@ export class Engine {
    */
   private _resolveKeyPool(override: EngineOverride | undefined): KeyPoolClass {
     if (override?.apiKey !== undefined) {
-      return new KeyPoolClass(override.apiKey);
+      return KeyPoolManager.getPool(override.apiKey);
     }
     return this._apiKeyPool;
   }
@@ -319,25 +346,28 @@ export class Engine {
     session: Session,
     agentSlug: string,
     send: (content: string, attachments?: string[]) => Promise<void>,
+    sendTo: (targetSession: Session, content: string, attachments?: string[]) => Promise<void>,
     react?: (emoji: string, messageId?: string) => Promise<void>,
     downloadAttachments?: (messageId: string) => Promise<{ filename: string; data: Buffer }[]>,
+    resolveChannel?: (spec: string) => Promise<ChannelResolution>,
+    capabilities: ChannelCapabilities = NO_CAPABILITIES,
+    conditions?: ConditionsConfig,
   ): Promise<void> {
-    const allTools = await buildTools(agentSlug, session, this._compactPrompts);
-    // Strip tools whose capabilities are absent on this channel to save tokens.
-    const tools = allTools.filter((tool) => {
-      if (tool.name === "download-attachments" && downloadAttachments === undefined) {
-        return false;
-      }
-      if (tool.name === "react" && react === undefined) {
-        return false;
-      }
-      return true;
-    });
+    const tools = await buildTools(agentSlug, session);
     const ctx: ToolContext = {
       agentSlug,
+      conditions,
       downloadAttachments,
       react,
+      resolveChannel:
+        resolveChannel ??
+        // oxlint-disable-next-line typescript/require-await
+        (async () => {
+          const error = { error: "channel resolution not supported" };
+          return error;
+        }),
       send,
+      sendTo,
       session,
     };
 
@@ -351,12 +381,12 @@ export class Engine {
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const effectiveProvider: ProviderKind = (override?.provider ?? this._provider) as ProviderKind;
 
-    if (session.history.length > MAX_TURNS * 3) {
+    if (session.history.length > this._maxTurns * 3) {
       debug(
         "Truncating history",
         colors.number(session.history.length),
         "messages to last",
-        colors.number(MAX_TURNS),
+        colors.number(this._maxTurns),
         "turns",
       );
     }
@@ -370,8 +400,8 @@ export class Engine {
         session.pendingToolMessages.push({ content: images, role: "user" });
       }
 
-      const prompt = await buildSystemPrompt(agentSlug, session, this._compactPrompts);
-      const history = truncateToTurns(session.history, MAX_TURNS);
+      const prompt = await buildSystemPrompt(agentSlug, session, capabilities, conditions);
+      const history = truncateToTurns(session.history, this._maxTurns);
       const messages = squashMessages([...history, ...session.pendingToolMessages]);
 
       const context: Context = {
@@ -391,8 +421,6 @@ export class Engine {
             effectiveApiBase,
             effectiveKeyPool,
             effectiveModel,
-            this._maxTokens,
-            this._temperature,
           ));
           break;
         }
@@ -402,8 +430,6 @@ export class Engine {
             context,
             effectiveKeyPool,
             effectiveModel,
-            this._maxTokens,
-            this._temperature,
           ));
           break;
         }

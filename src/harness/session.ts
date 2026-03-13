@@ -96,5 +96,11 @@ class TuiSession extends BaseSession {
 
 type Session = DiscordSession | MatrixSession | InternalSession | TuiSession;
 
-export { DiscordSession, MatrixSession, InternalSession, TuiSession, channelTypes as channelTypeList };
+export {
+  DiscordSession,
+  MatrixSession,
+  InternalSession,
+  TuiSession,
+  channelTypes as channelTypeList,
+};
 export type { Session, ChannelType };

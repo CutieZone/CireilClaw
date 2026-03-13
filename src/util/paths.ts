@@ -2,6 +2,10 @@ import { existsSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, normalize, relative } from "node:path";
 import { env } from "node:process";
 
+import type { ConditionsConfig, PathRule } from "$/config/conditions.js";
+import type { Session } from "$/harness/session.js";
+import { checkPathAccess } from "$/util/conditions.js";
+
 function root(): string {
   const home = env["HOME"];
 
@@ -20,7 +24,8 @@ function sandboxToReal(path: string, agentSlug: string): string {
   const origin = agentRoot(agentSlug);
 
   let sandboxPath = "";
-  let expectedSubdir: "blocks" | "memories" | "skills" | "workspace" | undefined = undefined;
+  let expectedSubdir: "blocks" | "memories" | "skills" | "tasks" | "workspace" | undefined =
+    undefined;
 
   if (path === "/blocks" || path.startsWith("/blocks/")) {
     expectedSubdir = "blocks";
@@ -31,6 +36,9 @@ function sandboxToReal(path: string, agentSlug: string): string {
   } else if (path === "/skills" || path.startsWith("/skills/")) {
     expectedSubdir = "skills";
     sandboxPath = join(origin, "skills", path.slice("/skills".length));
+  } else if (path === "/tasks" || path.startsWith("/tasks/")) {
+    expectedSubdir = "tasks";
+    sandboxPath = join(origin, "tasks", path.slice("/tasks".length));
   } else if (path === "/workspace" || path.startsWith("/workspace/")) {
     expectedSubdir = "workspace";
     sandboxPath = join(origin, "workspace", path.slice("/workspace".length));
@@ -86,4 +94,45 @@ function sanitizeError(err: unknown, agentSlug: string): string {
   return msg.replaceAll(agentRoot(agentSlug), "<sandbox>");
 }
 
-export { sandboxToReal, sanitizeError, agentRoot, root };
+/**
+ * Check conditional access for a path after baseline sandbox validation.
+ * Throws an error if access is denied by conditional rules.
+ *
+ * @param sandboxPath The sandbox path to check
+ * @param _agentSlug The agent slug (unused but kept for API consistency)
+ * @param conditions The conditions config
+ * @param session The current session
+ * @throws Error if access is denied
+ */
+function checkConditionalAccess(
+  sandboxPath: string,
+  _agentSlug: string,
+  conditions: ConditionsConfig,
+  session: Session,
+): void {
+  // Determine which ruleset to apply based on the path prefix
+  let rules: Record<string, PathRule> | undefined = undefined;
+
+  if (sandboxPath === "/memories" || sandboxPath.startsWith("/memories/")) {
+    rules = conditions.memories;
+  } else if (sandboxPath === "/workspace" || sandboxPath.startsWith("/workspace/")) {
+    rules = conditions.workspace;
+  }
+
+  if (rules === undefined) {
+    return; // No conditional rules for this path
+  }
+
+  if (!checkPathAccess(sandboxPath, rules, session)) {
+    const guildInfo =
+      session.channel === "discord" && session.guildId !== undefined
+        ? `, guild: ${session.guildId}`
+        : "";
+    const nsfwInfo = session.channel === "discord" ? `, nsfw: ${session.isNsfw}` : "";
+    throw new Error(
+      `Access denied: path '${sandboxPath}' is not accessible in the current context (channel: ${session.channel}${guildInfo}${nsfwInfo})`,
+    );
+  }
+}
+
+export { sandboxToReal, sanitizeError, agentRoot, root, checkConditionalAccess };

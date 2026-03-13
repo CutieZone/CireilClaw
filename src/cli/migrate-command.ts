@@ -8,16 +8,19 @@ interface Flags {
 }
 
 async function run(flags: Flags): Promise<void> {
-  if (flags.dryRun) {
-    info("Dry run mode - no migrations will be applied");
-    info("Use", colors.keyword("cireilclaw migrate"), "to apply pending migrations");
-    // In a real dry run, we'd show what would happen without applying
-    // For now, this is just informational
-    return;
-  }
+  const res = await runMigrations(flags.dryRun);
 
-  await runMigrations();
-  info("Migrations complete");
+  if (flags.dryRun) {
+    if (res > 0) {
+      info(`Run ${colors.keyword("cireilclaw migrate")} to apply these migrations.`);
+    } else {
+      info("No pending migrations.");
+    }
+  } else if (res > 0) {
+    info("Migrations complete");
+  } else {
+    info("There were no migrations to apply.");
+  }
 }
 
 export const migrateCommand = buildCommand({

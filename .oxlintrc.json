@@ -10,6 +10,15 @@
     "style": "warn",
     "suspicious": "warn"
   },
+  "overrides": [
+    {
+      "files": ["**/*.tsx"],
+      "rules": {
+        "unicorn/filename-case": ["error", { "case": "pascalCase" }]
+      },
+      "plugins": ["react", "eslint", "import", "promise", "typescript", "unicorn"]
+    }
+  ],
   "rules": {
     "import/no-named-export": "off",
     "import/no-relative-parent-imports": "off",
@@ -40,6 +49,7 @@
     "typescript/strict-void-return": "off",
     "unicorn/switch-case-braces": "off",
     "unicorn/prefer-ternary": "off",
+    "unicorn/prefer-event-target": "off",
     "eslint/no-console": [
       "error",
       {
