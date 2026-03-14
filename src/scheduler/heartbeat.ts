@@ -144,6 +144,7 @@ export async function runHeartbeat(agent: Agent, cfg: HeartbeatConfig): Promise<
       },
       undefined,
       undefined,
+      undefined,
       resolveChannel,
       undefined,
       agent.conditions,

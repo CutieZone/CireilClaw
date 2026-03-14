@@ -117,10 +117,10 @@ async function formatUserMessage(msg: DiscordMessage): Promise<TextContent> {
   };
 }
 
-// Formats a message as a context item (different from user message - marks it as
-// reply context so the agent understands this is historical conversation).
+// Formats a message as historical context (different from user message - marks it
+// as history so the agent understands this is past conversation).
 // Includes attachment metadata so the model knows what files/images are present.
-async function formatReplyContext(msg: DiscordMessage): Promise<TextContent> {
+async function formatHistoryContext(msg: DiscordMessage): Promise<TextContent> {
   const { username } = msg.author;
   const authorId = msg.author.id;
   const displayName = msg.member?.nick ?? msg.author.globalName ?? username;
@@ -153,7 +153,7 @@ async function formatReplyContext(msg: DiscordMessage): Promise<TextContent> {
   }
 
   return {
-    content: `<reply-context msgId="${msg.id}" from="${username} <${authorId}>" displayName="${displayName}" timestamp="${timestamp}">${innerContent}</reply-context>`,
+    content: `<history-context msgId="${msg.id}" from="${username} <${authorId}>" displayName="${displayName}" timestamp="${timestamp}">${innerContent}</history-context>`,
     type: "text",
   };
 }
@@ -384,7 +384,7 @@ async function populateHistoryFromDiscord(
 
     const textContent = isFromBot
       ? await formatAssistantContext(msg)
-      : await formatReplyContext(msg);
+      : await formatHistoryContext(msg);
     const images = await fetchAllImages(msg);
 
     session.history.push({
@@ -569,10 +569,6 @@ async function handleMessageCreate(
     }
 
     agent.sessions.set(sessionId, session);
-
-    // Fetch and populate message history for new sessions
-    const botId = client.application.id;
-    await populateHistoryFromDiscord(client, session, botId, msg.id, 30);
   } else {
     const { channelID } = msg;
     const channel = await client.rest.channels.get(channelID);
@@ -583,6 +579,11 @@ async function handleMessageCreate(
       session.isNsfw = textableChannel.nsfw;
     }
   }
+
+  // Populate message history for both new and existing sessions. The function
+  // skips messages already in history, so this is safe to call every turn.
+  const botId = client.application.id;
+  await populateHistoryFromDiscord(client, session, botId, msg.id, 50);
 
   if (!(session instanceof DiscordSession)) {
     throw new Error("Somehow, session was not a DiscordSession");
@@ -626,7 +627,7 @@ async function handleMessageCreate(
         continue;
       }
 
-      const ancestorContent = await formatReplyContext(ancestor);
+      const ancestorContent = await formatHistoryContext(ancestor);
       const ancestorImages = await fetchAllImages(ancestor);
       ds.history.push({
         content: ancestorImages.length > 0 ? [ancestorContent, ...ancestorImages] : ancestorContent,
@@ -638,7 +639,7 @@ async function handleMessageCreate(
 
     // Add direct reply only if not already in history
     if (!isMessageInHistory(ds.history, directReply.id)) {
-      const replyContent = await formatReplyContext(directReply);
+      const replyContent = await formatHistoryContext(directReply);
       const replyImages = await fetchAllImages(directReply);
       ds.history.push({
         content: replyImages.length > 0 ? [replyContent, ...replyImages] : replyContent,
@@ -766,6 +767,55 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
         results.push({ data, filename: attachment.filename });
       }
       return results;
+    },
+    fetchHistory: async (session, messageId, direction, limit = 50) => {
+      if (!(session instanceof DiscordSession)) {
+        throw new Error("fetchHistory only works on Discord sessions");
+      }
+
+      const params: { limit: number; before?: string; after?: string; around?: string } = {
+        limit,
+      };
+
+      switch (direction) {
+        case "after": {
+          params.after = messageId;
+          break;
+        }
+        case "around": {
+          params.around = messageId;
+          break;
+        }
+        case "before": {
+          params.before = messageId;
+          break;
+        }
+        default: {
+          const _exhaustive: never = direction;
+          throw new Error(`Unknown direction: ${String(_exhaustive)}`);
+        }
+      }
+
+      const messages = await client.rest.channels.getMessages(session.channelId, params);
+
+      // Map to HistoryMessage format with channel-specific formatting
+      const results = await Promise.all(
+        messages.map(async (msg) => {
+          const formatted = await formatHistoryContext(msg);
+          return {
+            authorId: msg.author.id,
+            authorName: msg.author.username,
+            content: msg.content,
+            formatted: formatted.content,
+            id: msg.id,
+            timestamp: msg.createdAt.toISOString(),
+          };
+        }),
+      );
+
+      // Discord returns newest-first for before/after, centered for around
+      // Always return chronological (oldest first)
+      return direction === "after" ? results : results.toReversed();
     },
     react: async (session, emoji, messageId) => {
       if (!(session instanceof DiscordSession)) {

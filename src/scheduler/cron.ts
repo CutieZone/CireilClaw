@@ -137,6 +137,7 @@ async function runMainSession(agent: Agent, job: CronJobConfig): Promise<void> {
       },
       undefined,
       undefined,
+      undefined,
       resolveChannel,
       undefined,
       agent.conditions,
@@ -195,6 +196,7 @@ async function runIsolatedSession(agent: Agent, job: CronJobConfig): Promise<voi
       async (targetSession: Session, content: string): Promise<void> => {
         await agent.send(targetSession, content);
       },
+      undefined,
       undefined,
       undefined,
       resolveChannel,

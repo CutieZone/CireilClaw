@@ -11,7 +11,12 @@ import type { ProviderKind } from "$/engine/provider/index.js";
 import { generate } from "$/engine/provider/oai.js";
 import type { Tool } from "$/engine/tool.js";
 import type { ToolContext } from "$/engine/tools/tool-def.js";
-import type { ChannelCapabilities, ChannelResolution } from "$/harness/channel-handler.js";
+import type {
+  ChannelCapabilities,
+  ChannelResolution,
+  HistoryDirection,
+  HistoryMessage,
+} from "$/harness/channel-handler.js";
 import { DiscordSession, MatrixSession } from "$/harness/session.js";
 import type { Session } from "$/harness/session.js";
 import colors from "$/output/colors.js";
@@ -331,6 +336,11 @@ export class Engine {
     sendTo: (targetSession: Session, content: string, attachments?: string[]) => Promise<void>,
     react?: (emoji: string, messageId?: string) => Promise<void>,
     downloadAttachments?: (messageId: string) => Promise<{ filename: string; data: Buffer }[]>,
+    fetchHistory?: (
+      messageId: string,
+      direction: HistoryDirection,
+      limit?: number,
+    ) => Promise<HistoryMessage[]>,
     resolveChannel?: (spec: string) => Promise<ChannelResolution>,
     capabilities: ChannelCapabilities = NO_CAPABILITIES,
     conditions?: ConditionsConfig,
@@ -340,6 +350,7 @@ export class Engine {
       agentSlug,
       conditions,
       downloadAttachments,
+      fetchHistory,
       react,
       resolveChannel:
         resolveChannel ??

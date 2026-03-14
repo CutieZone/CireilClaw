@@ -3,7 +3,12 @@ import { loadConditions } from "$/config/index.js";
 import type { EngineConfig } from "$/config/schemas.js";
 import { Engine } from "$/engine/index.js";
 import { MINIMAL_HANDLER } from "$/harness/channel-handler.js";
-import type { ChannelHandler, ChannelResolution } from "$/harness/channel-handler.js";
+import type {
+  ChannelHandler,
+  ChannelResolution,
+  HistoryDirection,
+  HistoryMessage,
+} from "$/harness/channel-handler.js";
 import type { Session } from "$/harness/session.js";
 import type { Client as OceanicClient } from "oceanic.js";
 
@@ -152,6 +157,18 @@ export class Agent {
             return result ?? [];
           };
 
+    const fetchHistory =
+      handler.fetchHistory === undefined
+        ? undefined
+        : async (
+            messageId: string,
+            direction: HistoryDirection,
+            limit?: number,
+          ): Promise<HistoryMessage[]> => {
+            const result = await handler.fetchHistory?.(session, messageId, direction, limit);
+            return result ?? [];
+          };
+
     // oxlint-disable-next-line require-await
     const resolveChannel = async (spec: string): Promise<ChannelResolution> =>
       this.resolveChannel(spec, session);
@@ -163,6 +180,7 @@ export class Agent {
       sendTo,
       react,
       downloadAttachments,
+      fetchHistory,
       resolveChannel,
       handler.capabilities,
       this._conditions,

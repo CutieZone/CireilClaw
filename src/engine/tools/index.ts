@@ -6,6 +6,7 @@ import { listDir } from "$/engine/tools/list-dir.js";
 import { noResponse } from "$/engine/tools/no-response.js";
 import { openFile } from "$/engine/tools/open-file.js";
 import { react } from "$/engine/tools/react.js";
+import { readHistory } from "$/engine/tools/read-history.js";
 import { skill as readSkill } from "$/engine/tools/read-skill.js";
 import { read } from "$/engine/tools/read.js";
 import { respond } from "$/engine/tools/respond.js";
@@ -25,6 +26,7 @@ export const toolRegistry: Record<string, ToolDef> = {
   "open-file": openFile,
   react,
   read,
+  "read-history": readHistory,
   "read-skill": readSkill,
   respond,
   schedule,
