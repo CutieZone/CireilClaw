@@ -43,7 +43,7 @@ function hasApiKey(
 export const braveSearch: ToolDef = {
   description:
     "Search the web via Brave Search and return a list of results. Each result contains a title, short description snippet, and URL.\n\n" +
-    "This returns search result metadata only — not full page content. You cannot follow or fetch URLs from within the sandbox.\n\n" +
+    "This returns search result metadata only — not full page content. If you need to fetch the content of a page, you must use available binaries in the sandbox (like `curl` or `wget`) via the `exec` tool.\n\n" +
     "Use this when the user's request requires up-to-date information, facts, or references you don't have in context.",
   async execute(input: unknown, _ctx: ToolContext): Promise<Record<string, unknown>> {
     try {

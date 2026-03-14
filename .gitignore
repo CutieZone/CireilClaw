@@ -37,3 +37,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .direnv
 result
 result/
+
+# AI Stuff
+.junie
+.claude
