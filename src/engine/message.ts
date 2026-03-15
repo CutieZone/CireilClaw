@@ -3,6 +3,8 @@ import type { Role } from "./role.js";
 
 interface BaseMessage {
   role: Role;
+  // Unix timestamp (ms)
+  timestamp?: number;
 }
 
 type UserContent = TextContent | ImageContent;

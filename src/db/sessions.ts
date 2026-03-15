@@ -4,7 +4,12 @@ import { join } from "node:path";
 import type { ImageContent } from "$/engine/content.js";
 import type { Message } from "$/engine/message.js";
 import type { Session } from "$/harness/session.js";
-import { DiscordSession, MatrixSession } from "$/harness/session.js";
+import {
+  DiscordSession,
+  MatrixSession,
+  NamedInternalSession,
+  TuiSession,
+} from "$/harness/session.js";
 import { agentRoot } from "$/util/paths.js";
 import { blake3 } from "@noble/hashes/blake3.js";
 import { and, eq, inArray, notInArray } from "drizzle-orm";
@@ -160,8 +165,8 @@ function flushAllSessions(): void {
 }
 
 function _flushSession(agentSlug: string, session: Session): void {
-  // Internal sessions are ephemeral — never persisted.
-  if (session.channel === "internal") {
+  // Ephemeral sessions are never persisted.
+  if (session.ephemeral) {
     return;
   }
 
@@ -181,18 +186,23 @@ function _flushSession(agentSlug: string, session: Session): void {
     meta = { roomId: session.roomId };
   }
 
+  const lastActivity =
+    session.lastActivity > 0 ? new Date(session.lastActivity).toISOString() : undefined;
+
   // Upsert the session row first so that the images FK constraint is satisfied.
   db.insert(sessions)
     .values({
       channel: session.channel,
       history: historyJson,
       id: sessionId,
+      lastActivity,
       meta: JSON.stringify(meta),
       openedFiles: JSON.stringify([...session.openedFiles]),
     })
     .onConflictDoUpdate({
       set: {
         history: historyJson,
+        lastActivity,
         meta: JSON.stringify(meta),
         openedFiles: JSON.stringify([...session.openedFiles]),
       },
@@ -235,6 +245,13 @@ function loadSessions(agentSlug: string): Map<string, Session> {
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       const meta = JSON.parse(row.meta) as { roomId: string };
       session = new MatrixSession(meta.roomId);
+    } else if (row.channel === "internal") {
+      const name = row.id.startsWith("internal:") ? row.id.slice("internal:".length) : row.id;
+      session = new NamedInternalSession(name);
+    } else if (row.channel === "tui") {
+      // TUI session in DB is primarily for history inspection.
+      // We don't have the bridge here, it will be injected by the TUI app if needed.
+      session = new TuiSession();
     } else {
       // Unknown or legacy channel type — skip.
       continue;
@@ -242,6 +259,7 @@ function loadSessions(agentSlug: string): Map<string, Session> {
 
     session.history = history;
     session.openedFiles = openedFiles;
+    session.lastActivity = row.lastActivity === null ? 0 : Date.parse(row.lastActivity);
     map.set(row.id, session);
   }
 

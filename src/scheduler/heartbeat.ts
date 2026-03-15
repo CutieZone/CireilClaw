@@ -8,6 +8,7 @@ import { saveSession } from "$/db/sessions.js";
 import { Engine } from "$/engine/index.js";
 import type { ChannelResolution } from "$/harness/channel-handler.js";
 import type { Session } from "$/harness/session.js";
+import { NamedInternalSession, TuiSession } from "$/harness/session.js";
 import colors from "$/output/colors.js";
 import { debug, warning } from "$/output/log.js";
 import { agentRoot } from "$/util/paths.js";
@@ -33,7 +34,25 @@ function resolveTarget(agent: Agent, target: string): Session | undefined {
     return best;
   }
 
-  return sessions.get(target);
+  const existing = sessions.get(target);
+  if (existing !== undefined) {
+    return existing;
+  }
+
+  // Auto-create named internal or TUI sessions if requested but missing.
+  if (target.startsWith("internal:")) {
+    const session = new NamedInternalSession(target.slice("internal:".length));
+    sessions.set(target, session);
+    return session;
+  }
+
+  if (target === "tui") {
+    const session = new TuiSession();
+    sessions.set(target, session);
+    return session;
+  }
+
+  return undefined;
 }
 
 // Check whether the current time falls within the configured active hours window.
@@ -112,6 +131,7 @@ export async function runHeartbeat(agent: Agent, cfg: HeartbeatConfig): Promise<
       type: "text",
     },
     role: "user",
+    timestamp: Date.now(),
   });
 
   async function resolveChannel(spec: string): Promise<ChannelResolution> {

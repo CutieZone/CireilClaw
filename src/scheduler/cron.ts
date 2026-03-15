@@ -105,6 +105,7 @@ async function runMainSession(agent: Agent, job: CronJobConfig): Promise<void> {
   session.history.push({
     content: { content: job.prompt, type: "text" },
     role: "user",
+    timestamp: Date.now(),
   });
 
   async function resolveChannel(spec: string): Promise<ChannelResolution> {
@@ -167,6 +168,7 @@ async function runIsolatedSession(agent: Agent, job: CronJobConfig): Promise<voi
   session.history.push({
     content: { content: job.prompt, type: "text" },
     role: "user",
+    timestamp: Date.now(),
   });
 
   async function resolveChannel(spec: string): Promise<ChannelResolution> {

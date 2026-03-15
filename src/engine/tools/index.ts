@@ -3,10 +3,13 @@ import { closeFile } from "$/engine/tools/close-file.js";
 import { downloadAttachments } from "$/engine/tools/download-attachments.js";
 import { exec } from "$/engine/tools/exec.js";
 import { listDir } from "$/engine/tools/list-dir.js";
+import { listSessions } from "$/engine/tools/list-sessions.js";
 import { noResponse } from "$/engine/tools/no-response.js";
 import { openFile } from "$/engine/tools/open-file.js";
+import { querySessions } from "$/engine/tools/query-sessions.js";
 import { react } from "$/engine/tools/react.js";
 import { readHistory } from "$/engine/tools/read-history.js";
+import { readSession } from "$/engine/tools/read-session.js";
 import { skill as readSkill } from "$/engine/tools/read-skill.js";
 import { read } from "$/engine/tools/read.js";
 import { respond } from "$/engine/tools/respond.js";
@@ -22,11 +25,14 @@ export const toolRegistry: Record<string, ToolDef> = {
   "download-attachments": downloadAttachments,
   exec,
   "list-dir": listDir,
+  "list-sessions": listSessions,
   "no-response": noResponse,
   "open-file": openFile,
+  "query-sessions": querySessions,
   react,
   read,
   "read-history": readHistory,
+  "read-session": readSession,
   "read-skill": readSkill,
   respond,
   schedule,

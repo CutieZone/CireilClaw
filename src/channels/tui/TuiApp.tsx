@@ -6,7 +6,7 @@ import { StatusBar } from "$/channels/tui/StatusBar.js";
 import { createTuiMessage } from "$/channels/tui/tui-message.js";
 import type { TuiMessage } from "$/channels/tui/tui-message.js";
 import type { UserMessage } from "$/engine/message.js";
-import { TuiSession } from "$/harness/session.js";
+import { NamedInternalSession, TuiSession } from "$/harness/session.js";
 import { Box, render, Static, Text, useApp } from "ink";
 import { MultilineInput } from "ink-multiline-input";
 import { useCallback, useEffect, useState } from "react";
@@ -15,9 +15,10 @@ import type { ReactElement } from "react";
 interface AppProps {
   bridge: TuiBridge;
   agent: Agent;
+  initialSessionId: string;
 }
 
-function TuiApp({ bridge, agent }: AppProps): ReactElement {
+function TuiApp({ bridge, agent, initialSessionId }: AppProps): ReactElement {
   const { exit } = useApp();
   const [messages, setMessages] = useState<TuiMessage[]>(bridge.snapshot());
   const [input, setInput] = useState("");
@@ -70,15 +71,23 @@ function TuiApp({ bridge, agent }: AppProps): ReactElement {
       bridge.push(createTuiMessage("user", trimmed));
       setBusy(true);
 
-      let session = agent.sessions.get("tui");
-      if (!(session instanceof TuiSession)) {
-        session = new TuiSession(bridge);
-        agent.sessions.set("tui", session);
+      let session = agent.sessions.get(initialSessionId);
+      if (session === undefined) {
+        if (initialSessionId.startsWith("internal:")) {
+          session = new NamedInternalSession(initialSessionId.slice("internal:".length));
+        } else {
+          session = new TuiSession(bridge);
+        }
+        agent.sessions.set(initialSessionId, session);
+      } else if (session instanceof TuiSession) {
+        // Update bridge if it's an existing TUI session
+        session.bridge = bridge;
       }
 
       session.history.push({
         content: { content: trimmed, type: "text" },
         role: "user",
+        timestamp: Date.now(),
       } as UserMessage);
 
       try {
@@ -94,7 +103,7 @@ function TuiApp({ bridge, agent }: AppProps): ReactElement {
         setBusy(false);
       }
     },
-    [agent, bridge, busy, exit],
+    [agent, bridge, busy, exit, initialSessionId],
   );
 
   return (
@@ -124,12 +133,12 @@ function TuiApp({ bridge, agent }: AppProps): ReactElement {
   );
 }
 
-export async function startTui(agent: Agent): Promise<void> {
+export async function startTui(agent: Agent, initialSessionId = "tui"): Promise<void> {
   const bridge = new TuiBridge();
   const handler = createHandler(bridge);
 
   agent.registerChannel("tui", handler);
 
-  const inst = render(<TuiApp bridge={bridge} agent={agent} />);
+  const inst = render(<TuiApp agent={agent} bridge={bridge} initialSessionId={initialSessionId} />);
   await inst.waitUntilExit();
 }

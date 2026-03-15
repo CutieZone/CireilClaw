@@ -7,6 +7,7 @@ type ChannelType = (typeof channelTypes)[number];
 
 abstract class BaseSession {
   abstract readonly channel: ChannelType;
+  readonly ephemeral: boolean = false;
 
   history: Message[] = new Array<Message>();
   openedFiles: Set<string> = new Set<string>();
@@ -67,6 +68,7 @@ class MatrixSession extends BaseSession {
 // Ephemeral session for isolated cron job execution — never persisted to DB.
 class InternalSession extends BaseSession {
   override readonly channel = "internal";
+  override readonly ephemeral = true;
 
   readonly jobId: string;
 
@@ -80,11 +82,28 @@ class InternalSession extends BaseSession {
   }
 }
 
+// Persistent session for heartbeats and named internal automation.
+class NamedInternalSession extends BaseSession {
+  override readonly channel = "internal";
+  override readonly ephemeral = false;
+
+  readonly name: string;
+
+  constructor(name: string) {
+    super();
+    this.name = name;
+  }
+
+  override id(): string {
+    return `internal:${this.name}`;
+  }
+}
+
 class TuiSession extends BaseSession {
   override readonly channel = "tui";
-  readonly bridge: TuiBridge;
+  bridge?: TuiBridge;
 
-  constructor(bridge: TuiBridge) {
+  constructor(bridge?: TuiBridge) {
     super();
     this.bridge = bridge;
   }
@@ -95,12 +114,13 @@ class TuiSession extends BaseSession {
   }
 }
 
-type Session = DiscordSession | MatrixSession | InternalSession | TuiSession;
+type Session = DiscordSession | MatrixSession | InternalSession | NamedInternalSession | TuiSession;
 
 export {
   DiscordSession,
   MatrixSession,
   InternalSession,
+  NamedInternalSession,
   TuiSession,
   channelTypes as channelTypeList,
 };

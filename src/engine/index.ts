@@ -3,6 +3,7 @@ import { readFile, stat } from "node:fs/promises";
 import { loadTools } from "$/config/index.js";
 import type { ConditionsConfig } from "$/config/index.js";
 import type { ApiKey, EngineConfig, EngineOverride, EngineOverrides } from "$/config/schemas.js";
+import { getDb } from "$/db/index.js";
 import type { ToolCallContent } from "$/engine/content.js";
 import type { Context, UsageInfo } from "$/engine/context.js";
 import type { AssistantMessage, Message, ToolMessage } from "$/engine/message.js";
@@ -17,7 +18,7 @@ import type {
   HistoryDirection,
   HistoryMessage,
 } from "$/harness/channel-handler.js";
-import { DiscordSession, MatrixSession } from "$/harness/session.js";
+import { DiscordSession, InternalSession, MatrixSession } from "$/harness/session.js";
 import type { Session } from "$/harness/session.js";
 import colors from "$/output/colors.js";
 import { debug } from "$/output/log.js";
@@ -111,8 +112,10 @@ async function buildSystemPrompt(
     } else {
       lines.push(`This is considered a ${session.isNsfw ? "NSFW" : "SFW"} session`);
     }
-  } else if (session.channel === "internal") {
+  } else if (session instanceof InternalSession) {
     lines.push(`This is an internal cron session (job ID: ${session.jobId})`);
+  } else if (session.channel === "internal") {
+    lines.push("This is a persistent internal session");
   } else if (session.channel === "tui") {
     lines.push("This is a TUI session with your person. SFW/NSFW depending on their preferences.");
   } else {
@@ -349,6 +352,7 @@ export class Engine {
     const ctx: ToolContext = {
       agentSlug,
       conditions,
+      db: getDb(agentSlug),
       downloadAttachments,
       fetchHistory,
       react,
@@ -436,9 +440,13 @@ export class Engine {
       logUsage(agentSlug, session.id(), context.systemPrompt.length, usage);
 
       // Pending messages have been sent to the API in this call — commit them to history.
+      for (const msg of session.pendingToolMessages) {
+        msg.timestamp ??= Date.now();
+      }
       session.history.push(...session.pendingToolMessages);
       session.pendingToolMessages.length = 0;
 
+      assistantMsg.timestamp = Date.now();
       session.history.push(assistantMsg);
 
       const toolCalls = (
@@ -475,6 +483,9 @@ export class Engine {
 
       if (done) {
         // Prune: the respond tool's own response is the last thing in pending — flush it.
+        for (const msg of session.pendingToolMessages) {
+          msg.timestamp ??= Date.now();
+        }
         session.history.push(...session.pendingToolMessages);
         session.pendingToolMessages.length = 0;
         debug("Turn end", colors.keyword(agentSlug), colors.keyword(session.id()));

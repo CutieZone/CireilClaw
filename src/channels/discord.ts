@@ -392,6 +392,7 @@ async function populateHistoryFromDiscord(
       id: msg.id,
       persist: false, // Historical context, don't persist to DB
       role,
+      timestamp: Date.now(),
     });
   }
 }
@@ -634,6 +635,7 @@ async function handleMessageCreate(
         id: ancestor.id,
         persist: false,
         role: "user",
+        timestamp: Date.now(),
       });
     }
 
@@ -646,6 +648,7 @@ async function handleMessageCreate(
         id: directReply.id,
         persist: true,
         role: "user",
+        timestamp: Date.now(),
       });
     }
   }
@@ -659,6 +662,7 @@ async function handleMessageCreate(
     id: msg.id,
     persist: true,
     role: "user",
+    timestamp: Date.now(),
   });
 
   // Start typing indicator — Discord shows "Bot is typing…" for ~5 s, so we
@@ -908,8 +912,10 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
   });
 
   client.on("error", (err) => {
-    warning("An error occurred on Discord:", err instanceof Error ? err.message : String(err));
-    warning(err);
+    warning("An error occurred on Discord:", err instanceof Error ? err.message : err);
+    if (err instanceof Error) {
+      warning(err);
+    }
   });
 
   const ctx: HandlerCtx = {

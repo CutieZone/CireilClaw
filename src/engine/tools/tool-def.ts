@@ -1,4 +1,5 @@
 import type { ConditionsConfig } from "$/config/index.js";
+import type { Database } from "$/db/index.js";
 import type { Tool } from "$/engine/tool.js";
 import type {
   ChannelResolution,
@@ -8,6 +9,7 @@ import type {
 import type { Session } from "$/harness/session.js";
 
 interface ToolContext {
+  db: Database;
   session: Session;
   agentSlug: string;
   conditions?: ConditionsConfig;

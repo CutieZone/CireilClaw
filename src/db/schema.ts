@@ -15,6 +15,8 @@ const sessions = sqliteTable("sessions", {
   history: text("history").notNull(),
   // JSON: string[]
   openedFiles: text("opened_files").notNull(),
+  // ISO-8601 timestamp
+  lastActivity: text("last_activity"),
 });
 
 // Image files live on disk under agents/{slug}/images/{sha256}.{ext}.
