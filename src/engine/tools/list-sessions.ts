@@ -90,16 +90,38 @@ export const listSessions: ToolDef = {
           // Priority 1: First text content
           const textContent = contents.find((item) => item.type === "text");
           if (textContent === undefined) {
-            // Priority 2: First tool call
-            const toolCall = contents.find((item) => item.type === "toolCall");
-            if (toolCall === undefined) {
-              // Priority 3: First image
-              const image = contents.find((item) => item.type === "image");
-              if (image !== undefined) {
-                preview = "[Image]";
+            // Priority 2: Last 'respond' tool call's content
+            const lastRespond = contents.findLast(
+              (item) => item.type === "toolCall" && item.name === "respond",
+            );
+
+            const respondContent =
+              lastRespond?.type === "toolCall" &&
+              typeof lastRespond.input === "object" &&
+              lastRespond.input !== null &&
+              "content" in lastRespond.input &&
+              typeof lastRespond.input.content === "string"
+                ? lastRespond.input.content
+                : undefined;
+
+            if (respondContent === undefined) {
+              // Priority 3: First other tool call
+              const toolCall = contents.find((item) => item.type === "toolCall");
+              if (toolCall === undefined) {
+                // Priority 4: First image
+                const image = contents.find((item) => item.type === "image");
+                if (image !== undefined) {
+                  preview = "[Image]";
+                }
+              } else {
+                preview = `Tool: ${toolCall.name}`;
               }
             } else {
-              preview = `Tool: ${toolCall.name}`;
+              const text = respondContent.trim();
+              preview = text.slice(0, 100);
+              if (text.length > 100) {
+                preview += "...";
+              }
             }
           } else {
             // Strip Discord-style tags like <msg ...> or <history-context ...>
