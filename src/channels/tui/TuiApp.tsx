@@ -90,9 +90,12 @@ function TuiApp({ bridge, agent, initialSessionId }: AppProps): ReactElement {
         timestamp: Date.now(),
       } as UserMessage);
 
+      const historyLengthBeforeTurn = session.history.length - 1; // exclude the user message just pushed
       try {
         await agent.runTurn(session);
       } catch (error: unknown) {
+        session.history.length = historyLengthBeforeTurn;
+        session.pendingToolMessages.length = 0;
         bridge.push(
           createTuiMessage(
             "system",

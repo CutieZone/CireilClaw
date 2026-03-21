@@ -684,7 +684,10 @@ async function handleMessageCreate(
   } catch (error) {
     // Roll back any history entries added during this failed turn so that the
     // next message doesn't see a stranded user message with no response.
+    // Also clear pending tool messages — they reference tool calls from the
+    // rolled-back assistant message and must not leak into the next turn.
     session.history.length = historyLengthBeforeTurn;
+    session.pendingToolMessages.length = 0;
     warning("Error during agent turn:", error instanceof Error ? error.message : String(error));
     if (error instanceof Error && error.stack !== undefined) {
       warning("Stack trace:", error.stack);

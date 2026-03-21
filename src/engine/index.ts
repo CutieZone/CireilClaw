@@ -514,6 +514,12 @@ export class Engine {
       ).filter((it): it is ToolCallContent => it.type === "toolCall");
 
       let done = false;
+      // Disable notifications are collected separately and pushed AFTER all
+      // tool responses. Inserting a user message mid-sequence would split the
+      // tool_result blocks across multiple user messages, violating the Anthropic
+      // API requirement that every tool_use must have its tool_result in the
+      // single immediately-following user message.
+      const disableNotifications: string[] = [];
 
       for (const call of toolCalls) {
         const def = toolRegistry[call.name];
@@ -537,13 +543,9 @@ export class Engine {
               colors.keyword(agentSlug),
               colors.keyword(session.id()),
             );
-            session.pendingToolMessages.push({
-              content: {
-                content: `The tool '${call.name}' has failed ${fails} times in a row and has been disabled for this turn. Please either stop trying, ask the user for more information, or do something else.`,
-                type: "text",
-              },
-              role: "user",
-            });
+            disableNotifications.push(
+              `The tool '${call.name}' has failed ${fails} times in a row and has been disabled for this turn. Please either stop trying, ask the user for more information, or do something else.`,
+            );
           }
         } else {
           toolConsecutiveFailures.delete(call.name);
@@ -563,6 +565,13 @@ export class Engine {
         if ((call.name === "respond" && result["final"] !== false) || call.name === "no-response") {
           done = true;
         }
+      }
+
+      if (disableNotifications.length > 0) {
+        session.pendingToolMessages.push({
+          content: { content: disableNotifications.join("\n\n"), type: "text" },
+          role: "user",
+        });
       }
 
       if (done) {
