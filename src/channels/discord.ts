@@ -26,10 +26,14 @@ import type {
   Message as DiscordMessage,
   PossiblyUncachedMessage,
   TextableChannel,
+  Uncached,
+  User,
+  Member,
+  EventReaction,
 } from "oceanic.js";
 import {
+  ChannelTypes,
   InteractionTypes,
-  MessageFlags,
   StickerFormatTypes,
   TextableChannelTypes,
 } from "oceanic.js";
@@ -535,6 +539,25 @@ async function handleMessageCreate(
     return;
   }
 
+  const msgChannel = await client.rest.channels.get(msg.channelID);
+
+  if (
+    msgChannel.type === ChannelTypes.GROUP_DM ||
+    msgChannel.type === ChannelTypes.GUILD_CATEGORY ||
+    msgChannel.type === ChannelTypes.GUILD_FORUM ||
+    msgChannel.type === ChannelTypes.GUILD_MEDIA ||
+    !TextableChannelTypes.includes(msgChannel.type)
+  ) {
+    logError(
+      "An unexpected failure case occurred, msgChannel type is not textable. Was:",
+      msgChannel.type,
+    );
+    return;
+  }
+
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  const textableMsgChannel = msgChannel as TextableChannel;
+
   const agent = owner.agents.get(agentSlug);
 
   if (agent === undefined) {
@@ -668,8 +691,13 @@ async function handleMessageCreate(
   // Start typing indicator — Discord shows "Bot is typing…" for ~5 s, so we
   // refresh it on an interval for the duration of the turn.
   try {
-    await msg.channel?.sendTyping();
-  } catch {
+    await textableMsgChannel.sendTyping();
+  } catch (error) {
+    warning(
+      "Got error while trying to send typing",
+      error instanceof Error ? error.message : String(error),
+    );
+    warning(error);
     // Non-fatal — typing indicators are best-effort.
   }
   ds.typingInterval = setInterval(() => {
@@ -694,11 +722,24 @@ async function handleMessageCreate(
     }
     const reason = error instanceof Error ? error.message : String(error);
     try {
-      await msg.channel?.createMessage({
-        content: `⚠️ Engine error: ${reason}`,
-        flags: MessageFlags.EPHEMERAL,
+      await textableMsgChannel.createMessage({
+        allowedMentions: {
+          repliedUser: true,
+        },
+        content: `⚠️ Engine error: ${reason}\n\n-# agent owner can react with ✨ to delete`,
+        messageReference: {
+          channelID: msg.channelID,
+          guildID: msg.guildID ?? undefined,
+          messageID: msg.id,
+        },
       });
-    } catch {
+
+      // oxlint-disable-next-line no-shadow
+    } catch (error) {
+      warning(
+        "Failed to send engine error Discord message",
+        error instanceof Error ? error.message : String(error),
+      );
       // Best-effort.
     }
   } finally {
@@ -706,6 +747,34 @@ async function handleMessageCreate(
     clearInterval(ds.typingInterval);
     ds.typingInterval = undefined;
     session.busy = false;
+  }
+}
+
+async function handleMessageReactionAdd(
+  ctx: HandlerCtx,
+  msg: PossiblyUncachedMessage,
+  reactor: Uncached | User | Member,
+  reaction: EventReaction,
+): Promise<void> {
+  const realMsg = await ctx.client.rest.channels.getMessage(msg.channelID, msg.id);
+
+  if (realMsg.author.id !== ctx.client.application.id) {
+    return; // not us
+  }
+
+  if (reactor.id !== ctx.ownerId) {
+    return; // not owner
+  }
+
+  if (reaction.emoji.name !== "✨") {
+    return; // not ✨
+  }
+
+  if (
+    realMsg.content.startsWith("⚠️ Engine error") ||
+    realMsg.content.startsWith(":warning: Engine error")
+  ) {
+    await realMsg.delete("No longer necessary");
   }
 }
 
@@ -746,7 +815,12 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
   const client = new Client({
     auth: `Bot ${token}`,
     gateway: {
-      intents: Intents.GUILD_MESSAGES | Intents.DIRECT_MESSAGES | Intents.MESSAGE_CONTENT,
+      intents:
+        Intents.GUILD_MESSAGES |
+        Intents.DIRECT_MESSAGES |
+        Intents.MESSAGE_CONTENT |
+        Intents.GUILD_MESSAGE_REACTIONS |
+        Intents.DIRECT_MESSAGE_REACTIONS,
     },
     rest: {},
   });
@@ -780,7 +854,12 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
         throw new Error("fetchHistory only works on Discord sessions");
       }
 
-      const params: { limit: number; before?: string; after?: string; around?: string } = {
+      const params: {
+        limit: number;
+        before?: string;
+        after?: string;
+        around?: string;
+      } = {
         limit,
       };
 
@@ -929,6 +1008,11 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
     owner,
     ownerId,
   };
+
+  // oxlint-disable-next-line typescript/no-misused-promises
+  client.on("messageReactionAdd", async (msg, reactor, reaction) => {
+    await handleMessageReactionAdd(ctx, msg, reactor, reaction);
+  });
 
   // oxlint-disable-next-line typescript/no-misused-promises
   client.on("messageCreate", async (msg) => {
