@@ -25,6 +25,7 @@ export const sessionInfo: ToolDef = {
         guild_id: session.guildId,
         is_nsfw: session.isNsfw,
         platform: "discord",
+        session_id: session.id(),
         success: true,
       };
     }
@@ -33,20 +34,30 @@ export const sessionInfo: ToolDef = {
       return {
         platform: "matrix",
         room_id: session.roomId,
+        session_id: session.id(),
         success: true,
       };
     }
 
     if (session instanceof TuiSession) {
-      return { platform: "tui", success: true };
+      return {
+        platform: "tui",
+        session_id: session.id(),
+        success: true,
+      };
     }
 
     if (session instanceof InternalSession) {
-      return { platform: "internal", success: true };
+      return {
+        platform: "internal",
+        session_id: session.id(),
+        success: true,
+      };
     }
 
     return {
       error: "Unknown session type",
+      session_id: session.id(),
       success: false,
     };
   },

@@ -35,7 +35,7 @@ const Schema = vb.strictObject({
     vb.optional(vb.nullable(vb.pipe(vb.string(), vb.nonEmpty()))),
     vb.transform((val): string => val ?? "last"),
     vb.description(
-      'Which session to announce results to. Defaults to "last" (most recently active session).',
+      'Which session to announce results to. Defaults to "last" (most recently active session). You can get the current session id in the correct format by using the session-info tool.',
     ),
   ),
 });
