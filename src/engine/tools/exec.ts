@@ -1,7 +1,7 @@
 import { loadTools } from "$/config/index.js";
 import type { ExecToolConfigSchema } from "$/config/schemas.js";
+import { ToolError } from "$/engine/errors.js";
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
-import { sanitizeError } from "$/util/paths.js";
 import { exec as sandboxExec } from "$/util/sandbox.js";
 import * as vb from "valibot";
 
@@ -44,69 +44,53 @@ export const exec: ToolDef = {
     "Tip: Run `ls /bin` to see which binaries are available in the sandbox.\n" +
     "Tip: The `/workspace/.env` file *is* sourced and can affect your $PATH and other environment variables.",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
-    try {
-      const data = vb.parse(Schema, input);
-      const toolsConfig = await loadTools(ctx.agentSlug);
-      const execConfig = toolsConfig["exec"];
+    const data = vb.parse(Schema, input);
+    const toolsConfig = await loadTools(ctx.agentSlug);
+    const execConfig = toolsConfig["exec"];
 
-      if (execConfig === false) {
-        return {
-          error: "Exec tool is disabled in configuration.",
-          success: false,
-        };
-      }
-
-      if (!isExecConfig(execConfig)) {
-        return {
-          error:
-            "Exec tool configuration is invalid or missing. Configure [exec] with binaries list in tools.toml.",
-          success: false,
-        };
-      }
-
-      if (!execConfig.enabled) {
-        return {
-          error: "Exec tool is disabled in configuration.",
-          success: false,
-        };
-      }
-
-      if (!execConfig.binaries.includes(data.command)) {
-        const bashAvailable = execConfig.binaries.includes("bash");
-        return {
-          error: `Command '${data.command}' is not in the allowed binaries list.`,
-          ...(bashAvailable && {
-            hint: "Use `bash -c 'command'` if you think the binary is in your $PATH (e.g., from .env).",
-          }),
-          success: false,
-        };
-      }
-
-      const result = await sandboxExec({
-        agentSlug: ctx.agentSlug,
-        args: data.args,
-        binaries: execConfig.binaries,
-        command: data.command,
-        hostEnvPassthrough: execConfig.hostEnvPassthrough,
-        timeout: execConfig.timeout,
-      });
-
-      if (result.type === "error") {
-        return { error: sanitizeError(result.error, ctx.agentSlug), success: false };
-      }
-
-      return {
-        exitCode: result.exitCode,
-        stderr: result.stderr,
-        stdout: result.stdout,
-        success: result.exitCode === 0,
-      };
-    } catch (error: unknown) {
-      if (error instanceof vb.ValiError) {
-        return { error: error.message, issues: error.issues, success: false };
-      }
-      return { error: sanitizeError(error, ctx.agentSlug), success: false };
+    if (execConfig === false) {
+      throw new ToolError("Exec tool is disabled in configuration.");
     }
+
+    if (!isExecConfig(execConfig)) {
+      throw new ToolError(
+        "Exec tool configuration is invalid or missing. Configure [exec] with binaries list in tools.toml.",
+      );
+    }
+
+    if (!execConfig.enabled) {
+      throw new ToolError("Exec tool is disabled in configuration.");
+    }
+
+    if (!execConfig.binaries.includes(data.command)) {
+      const bashAvailable = execConfig.binaries.includes("bash");
+      throw new ToolError(
+        `Command '${data.command}' is not in the allowed binaries list.`,
+        bashAvailable
+          ? "Use `bash -c 'command'` if you think the binary is in your $PATH (e.g., from .env)."
+          : undefined,
+      );
+    }
+
+    const result = await sandboxExec({
+      agentSlug: ctx.agentSlug,
+      args: data.args,
+      binaries: execConfig.binaries,
+      command: data.command,
+      hostEnvPassthrough: execConfig.hostEnvPassthrough,
+      timeout: execConfig.timeout,
+    });
+
+    if (result.type === "error") {
+      throw new ToolError(result.error);
+    }
+
+    return {
+      exitCode: result.exitCode,
+      stderr: result.stderr,
+      stdout: result.stdout,
+      success: result.exitCode === 0,
+    };
   },
   name: "exec",
   parameters: Schema,

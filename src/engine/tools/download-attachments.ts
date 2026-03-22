@@ -1,8 +1,10 @@
+import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
+import { ToolError } from "$/engine/errors.js";
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
-import { sanitizeError, sandboxToReal } from "$/util/paths.js";
+import { checkConditionalAccess, sandboxToReal } from "$/util/paths.js";
 import * as vb from "valibot";
 
 const Schema = vb.strictObject({
@@ -23,31 +25,37 @@ const downloadAttachments: ToolDef = {
     "Download all file attachments from a message into the sandbox. Returns the list of saved sandbox paths.\n\n" +
     "Only works on platforms that support attachment downloads (check capabilities in system prompt).",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
-    try {
-      if (ctx.downloadAttachments === undefined) {
-        return { error: "This channel does not support downloading attachments", success: false };
-      }
-
-      const { message_id, to } = vb.parse(Schema, input);
-
-      const files = await ctx.downloadAttachments(message_id);
-
-      const saved: string[] = [];
-      for (const { filename, data } of files) {
-        const sandboxPath = join(to, filename).replaceAll("\\", "/");
-        const realPath = sandboxToReal(sandboxPath, ctx.agentSlug);
-        await mkdir(dirname(realPath), { recursive: true });
-        await writeFile(realPath, data);
-        saved.push(sandboxPath);
-      }
-
-      return { count: saved.length, saved, success: true };
-    } catch (error: unknown) {
-      if (error instanceof vb.ValiError) {
-        return { error: error.message, issues: error.issues, success: false };
-      }
-      return { error: sanitizeError(error, ctx.agentSlug), success: false };
+    if (ctx.downloadAttachments === undefined) {
+      throw new ToolError("This channel does not support downloading attachments");
     }
+
+    const { message_id, to } = vb.parse(Schema, input);
+
+    const files = await ctx.downloadAttachments(message_id);
+
+    const saved: string[] = [];
+    for (const { filename, data } of files) {
+      const sandboxPath = join(to, filename).replaceAll("\\", "/");
+
+      if (ctx.conditions !== undefined) {
+        checkConditionalAccess(sandboxPath, ctx.agentSlug, ctx.conditions, ctx.session);
+      }
+
+      const realPath = sandboxToReal(sandboxPath, ctx.agentSlug);
+
+      if (existsSync(realPath)) {
+        throw new ToolError(
+          `File already exists at ${sandboxPath}`,
+          "Choose a different path or use write tool to overwrite if you really intend to.",
+        );
+      }
+
+      await mkdir(dirname(realPath), { recursive: true });
+      await writeFile(realPath, data);
+      saved.push(sandboxPath);
+    }
+
+    return { count: saved.length, saved, success: true };
   },
   name: "download-attachments",
   parameters: Schema,

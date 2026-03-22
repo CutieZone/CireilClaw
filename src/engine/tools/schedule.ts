@@ -1,4 +1,5 @@
 import { upsertCronJob } from "$/db/cron.js";
+import { ToolError } from "$/engine/errors.js";
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import { Harness } from "$/harness/index.js";
 import * as vb from "valibot";
@@ -44,54 +45,44 @@ const schedule: ToolDef = {
   description: "Schedule a one-shot task to run at a specific time in the future.",
   // oxlint-disable-next-line typescript/require-await
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
-    try {
-      const data = vb.parse(Schema, input);
+    const data = vb.parse(Schema, input);
 
-      const at = new Date(data.at);
-      if (Number.isNaN(at.getTime())) {
-        return { error: "Invalid ISO 8601 timestamp in `at`", success: false };
-      }
-      if (at.getTime() <= Date.now()) {
-        return { error: "`at` must be in the future", success: false };
-      }
-
-      const job = {
-        // The schema transforms guarantee these defaults, but valibot's type
-        // inference doesn't narrow through vb.optional in a pipe, so we reassert.
-        delivery: data.delivery ?? "announce",
-        enabled: true as const,
-        execution: "isolated" as const,
-        id: data.id,
-        prompt: data.prompt,
-        schedule: { at: data.at },
-        target: data.target ?? "last",
-      };
-
-      // Persist the job so it survives a restart.
-      upsertCronJob(ctx.agentSlug, data.id, {
-        config: JSON.stringify(job),
-        createdAt: new Date().toISOString(),
-        nextRun: data.at,
-        status: "pending",
-        type: "one-shot",
-      });
-
-      // Register with the live scheduler.
-      const scheduler = Harness.get().getScheduler(ctx.agentSlug);
-      if (scheduler !== undefined) {
-        scheduler.scheduleDynamic(job);
-      }
-
-      return { at: data.at, id: data.id, scheduled: true };
-    } catch (error: unknown) {
-      if (error instanceof vb.ValiError) {
-        return { error: error.message, issues: error.issues, success: false };
-      }
-      return {
-        error: error instanceof Error ? error.message : String(error),
-        success: false,
-      };
+    const at = new Date(data.at);
+    if (Number.isNaN(at.getTime())) {
+      throw new ToolError("Invalid ISO 8601 timestamp in `at`");
     }
+    if (at.getTime() <= Date.now()) {
+      throw new ToolError("`at` must be in the future");
+    }
+
+    const job = {
+      // The schema transforms guarantee these defaults, but valibot's type
+      // inference doesn't narrow through vb.optional in a pipe, so we reassert.
+      delivery: data.delivery ?? "announce",
+      enabled: true as const,
+      execution: "isolated" as const,
+      id: data.id,
+      prompt: data.prompt,
+      schedule: { at: data.at },
+      target: data.target ?? "last",
+    };
+
+    // Persist the job so it survives a restart.
+    upsertCronJob(ctx.agentSlug, data.id, {
+      config: JSON.stringify(job),
+      createdAt: new Date().toISOString(),
+      nextRun: data.at,
+      status: "pending",
+      type: "one-shot",
+    });
+
+    // Register with the live scheduler.
+    const scheduler = Harness.get().getScheduler(ctx.agentSlug);
+    if (scheduler !== undefined) {
+      scheduler.scheduleDynamic(job);
+    }
+
+    return { at: data.at, id: data.id, scheduled: true };
   },
   name: "schedule",
   parameters: Schema,

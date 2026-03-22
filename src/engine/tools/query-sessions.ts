@@ -71,87 +71,82 @@ export const querySessions: ToolDef = {
     "Returns matched messages with their session ID and timestamp.",
   // oxlint-disable-next-line require-await
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
-    try {
-      const data = vb.parse(Schema, input);
+    const data = vb.parse(Schema, input);
 
-      const filters = [notLike(sessions.id, "cron:%")];
+    const filters = [notLike(sessions.id, "cron:%")];
 
-      if (data.since !== undefined) {
-        filters.push(gte(sessions.lastActivity, data.since));
-      }
-
-      if (data.origin !== undefined) {
-        const origins = Array.isArray(data.origin) ? data.origin : [data.origin];
-        const originFilters = origins.map((org) => like(sessions.id, `${org}%`));
-        const combined = or(...originFilters);
-        if (combined !== undefined) {
-          filters.push(combined);
-        }
-      }
-
-      const rows = ctx.db
-        .select()
-        .from(sessions)
-        .where(and(...filters))
-        .all();
-
-      const matchFn = getMatchFn(data.query, data.mode);
-      const results: {
-        channel: string;
-        content: string;
-        role: string;
-        sessionId: string;
-        timestamp?: number;
-      }[] = [];
-
-      for (const row of rows) {
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-        const history = JSON.parse(row.history) as Message[];
-        const chatMessages = history.filter(
-          (msg) => msg.role === "user" || msg.role === "assistant",
-        );
-
-        for (const msg of chatMessages) {
-          const contents = Array.isArray(msg.content) ? msg.content : [msg.content];
-          const fullText = contents
-            .filter((part) => "content" in part)
-            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-            .map((part) => (part as { content: string }).content)
-            .join("\n");
-
-          if (matchFn(fullText)) {
-            results.push({
-              channel: row.channel,
-              content: fullText,
-              role: msg.role,
-              sessionId: row.id,
-              timestamp: msg.timestamp,
-            });
-          }
-        }
-      }
-
-      // Sort globally
-      results.sort((first, second) => {
-        const tsA = first.timestamp ?? 0;
-        const tsB = second.timestamp ?? 0;
-        return data.order === "asc" ? tsA - tsB : tsB - tsA;
-      });
-
-      const { offset, limit } = data;
-      const paginated = results.slice(offset, offset + limit);
-
-      return {
-        matches: paginated,
-        success: true,
-        totalMatches: results.length,
-      };
-    } catch (error: unknown) {
-      if (error instanceof vb.ValiError) {
-        return { error: error.message, issues: error.issues, success: false };
-      }
-      return { error: String(error), success: false };
+    if (data.since !== undefined) {
+      filters.push(gte(sessions.lastActivity, data.since));
     }
+
+    if (data.origin !== undefined) {
+      const origins = Array.isArray(data.origin) ? data.origin : [data.origin];
+      const originFilters = origins.map((org) => like(sessions.id, `${org}%`));
+      const combined = or(...originFilters);
+      if (combined !== undefined) {
+        filters.push(combined);
+      }
+    }
+
+    if (data.mode === "raw") {
+      filters.push(like(sessions.history, `%${data.query}%`));
+    }
+
+    const rows = ctx.db
+      .select()
+      .from(sessions)
+      .where(and(...filters))
+      .all();
+
+    const matchFn = getMatchFn(data.query, data.mode);
+    const results: {
+      channel: string;
+      content: string;
+      role: string;
+      sessionId: string;
+      timestamp?: number;
+    }[] = [];
+
+    for (const row of rows) {
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      const history = JSON.parse(row.history) as Message[];
+      const chatMessages = history.filter((msg) => msg.role === "user" || msg.role === "assistant");
+
+      for (const msg of chatMessages) {
+        const contents = Array.isArray(msg.content) ? msg.content : [msg.content];
+        const fullText = contents
+          .filter((part) => "content" in part)
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+          .map((part) => (part as { content: string }).content)
+          .join("\n");
+
+        if (matchFn(fullText)) {
+          results.push({
+            channel: row.channel,
+            content: fullText,
+            role: msg.role,
+            sessionId: row.id,
+            timestamp: msg.timestamp,
+          });
+        }
+      }
+    }
+
+    // Sort globally
+    results.sort((first, second) => {
+      const tsA = first.timestamp ?? 0;
+      const tsB = second.timestamp ?? 0;
+      return data.order === "asc" ? tsA - tsB : tsB - tsA;
+    });
+
+    const { offset, limit } = data;
+    const paginated = results.slice(offset, offset + limit);
+
+    return {
+      matches: paginated,
+      success: true,
+      totalMatches: results.length,
+    };
   },
   name: "query-sessions",
   parameters: Schema,

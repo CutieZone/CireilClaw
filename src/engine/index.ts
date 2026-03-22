@@ -6,7 +6,7 @@ import type { ApiKey, EngineConfig, EngineOverride, EngineOverrides } from "$/co
 import { getDb } from "$/db/index.js";
 import type { ToolCallContent } from "$/engine/content.js";
 import type { Context, UsageInfo } from "$/engine/context.js";
-import { GenerationNoToolCallsError } from "$/engine/errors.js";
+import { GenerationNoToolCallsError, ToolError, ParseError } from "$/engine/errors.js";
 import type { AssistantMessage, Message, ToolMessage } from "$/engine/message.js";
 import { generate as generateAnthropicOauth } from "$/engine/provider/anthropic-oauth/index.js";
 import type { ProviderKind } from "$/engine/provider/index.js";
@@ -32,7 +32,8 @@ import {
   loadConditionalBlocks,
   loadSkills,
 } from "$/util/load.js";
-import { sandboxToReal } from "$/util/paths.js";
+import { sandboxToReal, sanitizeError } from "$/util/paths.js";
+import * as vb from "valibot";
 
 import { toolRegistry } from "./tools/index.js";
 
@@ -528,7 +529,20 @@ export class Engine {
         }
 
         debug("Tool call", colors.keyword(call.name), call);
-        const result = await def.execute(call.input, ctx);
+        let result: Record<string, unknown> = {};
+        try {
+          result = await def.execute(call.input, ctx);
+        } catch (error: unknown) {
+          if (error instanceof vb.ValiError) {
+            result = { error: error.message, issues: error.issues, success: false };
+          } else if (error instanceof ParseError) {
+            result = { error: error.message, issues: error.issues, success: false };
+          } else if (error instanceof ToolError) {
+            result = { error: error.message, hint: error.hint, success: false };
+          } else {
+            result = { error: sanitizeError(error, agentSlug), success: false };
+          }
+        }
         debug("Tool result", colors.keyword(call.name), result);
 
         // Track consecutive failures to catch looping behaviour.

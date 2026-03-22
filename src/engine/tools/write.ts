@@ -2,7 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
-import { checkConditionalAccess, sandboxToReal, sanitizeError } from "$/util/paths.js";
+import { checkConditionalAccess, sandboxToReal } from "$/util/paths.js";
 import * as vb from "valibot";
 
 // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment -- valibot custom validation
@@ -39,27 +39,17 @@ export const write: ToolDef = {
     "When NOT to use:\n" +
     "- Making small, targeted changes to an existing file — use `str-replace` instead, which is safer and preserves surrounding content.",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
-    try {
-      const data = vb.parse(Schema, input);
-      const realPath = sandboxToReal(data.path, ctx.agentSlug);
+    const data = vb.parse(Schema, input);
+    const realPath = sandboxToReal(data.path, ctx.agentSlug);
 
-      // Check conditional access rules if conditions are available
-      if (ctx.conditions !== undefined) {
-        checkConditionalAccess(data.path, ctx.agentSlug, ctx.conditions, ctx.session);
-      }
-
-      await mkdir(dirname(realPath), { recursive: true });
-      await writeFile(realPath, data.content, "utf8");
-      return { path: data.path, success: true };
-    } catch (error: unknown) {
-      if (error instanceof vb.ValiError) {
-        return { error: error.message, issues: error.issues, success: false };
-      }
-      return {
-        error: sanitizeError(error, ctx.agentSlug),
-        success: false,
-      };
+    // Check conditional access rules if conditions are available
+    if (ctx.conditions !== undefined) {
+      checkConditionalAccess(data.path, ctx.agentSlug, ctx.conditions, ctx.session);
     }
+
+    await mkdir(dirname(realPath), { recursive: true });
+    await writeFile(realPath, data.content, "utf8");
+    return { path: data.path, success: true };
   },
   name: "write",
   parameters: Schema,

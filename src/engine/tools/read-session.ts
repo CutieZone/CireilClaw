@@ -1,4 +1,5 @@
 import { sessions } from "$/db/schema.js";
+import { ToolError } from "$/engine/errors.js";
 import type { Message } from "$/engine/message.js";
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import { eq } from "drizzle-orm";
@@ -41,60 +42,53 @@ export const readSession: ToolDef = {
     "Returns only user and assistant messages.",
   // oxlint-disable-next-line require-await
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
-    try {
-      const data = vb.parse(Schema, input);
+    const data = vb.parse(Schema, input);
 
-      const row = ctx.db.select().from(sessions).where(eq(sessions.id, data.id)).get();
+    const row = ctx.db.select().from(sessions).where(eq(sessions.id, data.id)).get();
 
-      if (row === undefined) {
-        return { error: `Session not found: ${data.id}`, success: false };
-      }
-
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      const history = JSON.parse(row.history) as Message[];
-      let chatMessages = history.filter((msg) => msg.role === "user" || msg.role === "assistant");
-
-      if (data.since !== undefined) {
-        const sinceTs = Date.parse(data.since);
-        if (!Number.isNaN(sinceTs)) {
-          chatMessages = chatMessages.filter(
-            (msg) => msg.timestamp === undefined || msg.timestamp >= sinceTs,
-          );
-        }
-      }
-
-      if (data.order === "desc") {
-        chatMessages.reverse();
-      }
-
-      const { offset, limit } = data;
-      const paginated = chatMessages.slice(offset, offset + limit);
-
-      const results = paginated.map((msg) => {
-        const content = Array.isArray(msg.content) ? msg.content : [msg.content];
-        return {
-          content: content
-            .filter((part) => "content" in part)
-            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-            .map((part) => (part as { content: string }).content)
-            .join("\n"),
-          role: msg.role,
-          timestamp: msg.timestamp,
-        };
-      });
-
-      return {
-        id: row.id,
-        messages: results,
-        success: true,
-        totalMessages: chatMessages.length,
-      };
-    } catch (error: unknown) {
-      if (error instanceof vb.ValiError) {
-        return { error: error.message, issues: error.issues, success: false };
-      }
-      return { error: String(error), success: false };
+    if (row === undefined) {
+      throw new ToolError(`Session not found: ${data.id}`);
     }
+
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const history = JSON.parse(row.history) as Message[];
+    let chatMessages = history.filter((msg) => msg.role === "user" || msg.role === "assistant");
+
+    if (data.since !== undefined) {
+      const sinceTs = Date.parse(data.since);
+      if (!Number.isNaN(sinceTs)) {
+        chatMessages = chatMessages.filter(
+          (msg) => msg.timestamp === undefined || msg.timestamp >= sinceTs,
+        );
+      }
+    }
+
+    if (data.order === "desc") {
+      chatMessages.reverse();
+    }
+
+    const { offset, limit } = data;
+    const paginated = chatMessages.slice(offset, offset + limit);
+
+    const results = paginated.map((msg) => {
+      const content = Array.isArray(msg.content) ? msg.content : [msg.content];
+      return {
+        content: content
+          .filter((part) => "content" in part)
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+          .map((part) => (part as { content: string }).content)
+          .join("\n"),
+        role: msg.role,
+        timestamp: msg.timestamp,
+      };
+    });
+
+    return {
+      id: row.id,
+      messages: results,
+      success: true,
+      totalMessages: chatMessages.length,
+    };
   },
   name: "read-session",
   parameters: Schema,

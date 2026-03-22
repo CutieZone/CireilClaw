@@ -1,3 +1,4 @@
+import { ToolError } from "$/engine/errors.js";
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import { DiscordSession, InternalSession, MatrixSession, TuiSession } from "$/harness/session.js";
 import * as vb from "valibot";
@@ -55,11 +56,7 @@ export const sessionInfo: ToolDef = {
       };
     }
 
-    return {
-      error: "Unknown session type",
-      session_id: session.id(),
-      success: false,
-    };
+    throw new ToolError("Unknown session type");
   },
   name: "session-info",
   parameters: Schema,

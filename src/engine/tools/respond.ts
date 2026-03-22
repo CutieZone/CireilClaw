@@ -1,5 +1,7 @@
+import { ToolError } from "$/engine/errors.js";
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import type { ChannelResolution } from "$/harness/channel-handler.js";
+import { checkConditionalAccess } from "$/util/paths.js";
 import * as vb from "valibot";
 
 const RespondSchema = vb.strictObject({
@@ -45,14 +47,20 @@ const respond: ToolDef = {
     // Channel is always a string after the transform (defaults to "current")
     const channel = parsed.channel ?? "current";
 
+    if (attachments !== undefined && ctx.conditions !== undefined) {
+      for (const attachment of attachments) {
+        checkConditionalAccess(attachment, ctx.agentSlug, ctx.conditions, ctx.session);
+      }
+    }
+
     const resolution = await ctx.resolveChannel(channel);
 
     if (!isChannelResolution(resolution)) {
-      return { error: "invalid channel resolution from handler", final: false, sent: false };
+      throw new ToolError("invalid channel resolution from handler");
     }
 
     if ("error" in resolution) {
-      return { error: resolution.error, final: false, sent: false };
+      throw new ToolError(resolution.error);
     }
 
     // Send to the resolved session using sendTo for cross-channel messaging

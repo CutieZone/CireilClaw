@@ -1,7 +1,8 @@
-import { access } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 
+import { ToolError } from "$/engine/errors.js";
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
-import { checkConditionalAccess, sandboxToReal, sanitizeError } from "$/util/paths.js";
+import { checkConditionalAccess, sandboxToReal } from "$/util/paths.js";
 import * as vb from "valibot";
 
 const Schema = vb.strictObject({
@@ -21,25 +22,25 @@ export const openFile: ToolDef = {
     "- You only need to see a file once — use `read` instead to avoid wasting context space.\n\n" +
     "The file must exist at the given path. Allowed path roots: /workspace/, /memories/, /blocks/, /skills/.",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
-    try {
-      const data = vb.parse(Schema, input);
-      const realPath = sandboxToReal(data.path, ctx.agentSlug);
+    const data = vb.parse(Schema, input);
+    const realPath = sandboxToReal(data.path, ctx.agentSlug);
 
-      // Check conditional access rules if conditions are available
-      if (ctx.conditions !== undefined) {
-        checkConditionalAccess(data.path, ctx.agentSlug, ctx.conditions, ctx.session);
-      }
-
-      // Verify the file actually exists before pinning it.
-      await access(realPath);
-      ctx.session.openedFiles.add(data.path);
-      return { open: [...ctx.session.openedFiles], path: data.path, success: true };
-    } catch (error: unknown) {
-      if (error instanceof vb.ValiError) {
-        return { error: error.message, issues: error.issues, success: false };
-      }
-      return { error: sanitizeError(error, ctx.agentSlug), success: false };
+    // Check conditional access rules if conditions are available
+    if (ctx.conditions !== undefined) {
+      checkConditionalAccess(data.path, ctx.agentSlug, ctx.conditions, ctx.session);
     }
+
+    // Verify the file actually exists before pinning it.
+    const stats = await stat(realPath);
+    if (!stats.isFile()) {
+      throw new ToolError(
+        "Path is a directory or not a standard file.",
+        "Only files can be pinned.",
+      );
+    }
+
+    ctx.session.openedFiles.add(data.path);
+    return { open: [...ctx.session.openedFiles], path: data.path, success: true };
   },
   name: "open-file",
   parameters: Schema,

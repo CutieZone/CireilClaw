@@ -1,3 +1,4 @@
+import { ToolError } from "$/engine/errors.js";
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import * as vb from "valibot";
 
@@ -33,7 +34,7 @@ const readHistory: ToolDef = {
     "Only works on platforms that support history fetching (check capabilities in system prompt).",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     if (ctx.fetchHistory === undefined) {
-      return { error: "This channel does not support history fetching", success: false };
+      throw new ToolError("This channel does not support history fetching");
     }
 
     const { direction, limit, message_id } = vb.parse(Schema, input);
