@@ -9,14 +9,17 @@ import { info } from "$/output/log.js";
 import { root } from "$/util/paths.js";
 import { confirm, select } from "@inquirer/prompts";
 import { stringify } from "smol-toml";
+import * as vb from "valibot";
 
 const MIGRATIONS_DIR = fileURLToPath(new URL("./", import.meta.url));
 const STATE_FILE = join(root(), "config", "migrations.json");
 const BACKUPS_DIR = join(root(), "config", "backups");
 
-interface MigrationState {
-  applied: string[];
-}
+const MigrationStateSchema = vb.object({
+  applied: vb.array(vb.string()),
+});
+
+type MigrationState = vb.InferOutput<typeof MigrationStateSchema>;
 
 type MigrationMode = "cancel" | "run-all" | "step-through";
 
@@ -27,8 +30,7 @@ async function getMigrationState(): Promise<MigrationState> {
 
   const data = await readFile(STATE_FILE, { encoding: "utf8" });
   try {
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const parsed = JSON.parse(data) as { applied?: string[] };
+    const parsed = vb.parse(vb.partial(MigrationStateSchema), JSON.parse(data));
     return { applied: parsed.applied ?? [] };
   } catch {
     return { applied: [] };
@@ -102,30 +104,28 @@ async function promptForMode(pendingMigrations: ConfigMigration[]): Promise<Migr
     info("");
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const choices = [
     {
       description: "Apply all pending migrations automatically",
       name: "Run all migrations",
-      value: "run-all",
+      value: "run-all" as MigrationMode,
     },
     {
       description: "Confirm each migration individually",
       name: "Step through migrations",
-      value: "step-through",
+      value: "step-through" as MigrationMode,
     },
     {
       description: "Exit without applying migrations",
       name: "Cancel",
-      value: "cancel",
+      value: "cancel" as MigrationMode,
     },
   ];
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-type-assertion
-  const mode = (await select({
+  const mode = await select({
     choices,
     message: "How would you like to proceed?",
-  })) as MigrationMode;
+  });
 
   return mode;
 }

@@ -108,7 +108,7 @@ async function runMainSession(agent: Agent, job: CronJobConfig): Promise<void> {
   });
 
   async function resolveChannel(spec: string): Promise<ChannelResolution> {
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion, typescript/no-non-null-assertion
+    // oxlint-disable-next-line typescript/no-non-null-assertion
     const result = await agent.resolveChannel(spec, session!);
     return result;
   }

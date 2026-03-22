@@ -25,7 +25,6 @@ import type {
   CommandInteraction,
   Message as DiscordMessage,
   PossiblyUncachedMessage,
-  TextableChannel,
   Uncached,
   User,
   Member,
@@ -209,7 +208,7 @@ async function crawlReplyTree(
 // Checks if a Discord message ID already exists in session history.
 function isMessageInHistory(history: Message[], messageId: string): boolean {
   for (const entry of history) {
-    if (entry.role === "user" && entry.id === messageId) {
+    if (entry.id === messageId) {
       return true;
     }
   }
@@ -555,9 +554,6 @@ async function handleMessageCreate(
     return;
   }
 
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  const textableMsgChannel = msgChannel as TextableChannel;
-
   const agent = owner.agents.get(agentSlug);
 
   if (agent === undefined) {
@@ -580,28 +576,20 @@ async function handleMessageCreate(
     throw new TypeError(`invalid session type: expected discord, got ${session.channel}`);
   }
 
-  if (session === undefined) {
-    const { channelID } = msg;
-    const channel = await client.rest.channels.get(channelID);
+  const isNsfw =
+    msgChannel.type === ChannelTypes.DM ||
+    msgChannel.type === ChannelTypes.ANNOUNCEMENT_THREAD ||
+    msgChannel.type === ChannelTypes.PUBLIC_THREAD ||
+    msgChannel.type === ChannelTypes.PRIVATE_THREAD
+      ? false
+      : msgChannel.nsfw;
 
-    if (channel.type in TextableChannelTypes) {
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      const textableChannel = channel as TextableChannel;
-      session = new DiscordSession(msg.channelID, msg.guildID ?? undefined, textableChannel.nsfw);
-    } else {
-      session = new DiscordSession(msg.channelID, msg.guildID ?? undefined);
-    }
+  if (session === undefined) {
+    session = new DiscordSession(msg.channelID, msg.guildID ?? undefined, isNsfw);
 
     agent.sessions.set(sessionId, session);
   } else {
-    const { channelID } = msg;
-    const channel = await client.rest.channels.get(channelID);
-
-    if (channel.type in TextableChannelTypes) {
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      const textableChannel = channel as TextableChannel;
-      session.isNsfw = textableChannel.nsfw;
-    }
+    session.isNsfw = isNsfw;
   }
 
   // Populate message history for both new and existing sessions. The function
@@ -691,7 +679,7 @@ async function handleMessageCreate(
   // Start typing indicator — Discord shows "Bot is typing…" for ~5 s, so we
   // refresh it on an interval for the duration of the turn.
   try {
-    await textableMsgChannel.sendTyping();
+    await msgChannel.sendTyping();
   } catch (error) {
     warning(
       "Got error while trying to send typing",
@@ -702,7 +690,7 @@ async function handleMessageCreate(
   }
   ds.typingInterval = setInterval(() => {
     // oxlint-disable-next-line promise/prefer-await-to-then
-    textableMsgChannel.sendTyping().catch(() => {
+    msgChannel.sendTyping().catch(() => {
       // Intentionally ignored
     });
   }, TYPING_INTERVAL_MS);
@@ -722,7 +710,7 @@ async function handleMessageCreate(
     }
     const reason = error instanceof Error ? error.message : String(error);
     try {
-      const newMsg = await textableMsgChannel.createMessage({
+      const newMsg = await msgChannel.createMessage({
         allowedMentions: {
           repliedUser: true,
         },
@@ -780,12 +768,102 @@ async function handleMessageReactionAdd(
   }
 }
 
-async function handleMessageUpdate(_ctx: HandlerCtx, _msg: DiscordMessage): Promise<void> {
-  // TODO: unimplemented
+async function handleMessageUpdate(
+  ctx: HandlerCtx,
+  msg: DiscordMessage | PossiblyUncachedMessage,
+): Promise<void> {
+  const { agentSlug, owner, client } = ctx;
+  const agent = owner.agents.get(agentSlug);
+  if (agent === undefined) {
+    return;
+  }
+
+  const sessionId =
+    msg.guildID === undefined
+      ? `discord:${msg.channelID}`
+      : `discord:${msg.channelID}|${msg.guildID}`;
+
+  const session = agent.sessions.get(sessionId);
+  if (session === undefined || !(session instanceof DiscordSession)) {
+    return;
+  }
+
+  const entryIndex = session.history.findIndex((historyMsg) => historyMsg.id === msg.id);
+  if (entryIndex === -1) {
+    return;
+  }
+
+  // oxlint-disable-next-line typescript/no-non-null-assertion
+  const entry = session.history[entryIndex]!;
+
+  // Fetch full message to ensure we have content/author/attachments
+  let realMsg: DiscordMessage | undefined = undefined;
+  if ("author" in msg) {
+    realMsg = msg as DiscordMessage;
+  } else {
+    try {
+      realMsg = await client.rest.channels.getMessage(msg.channelID, msg.id);
+    } catch {
+      return; // Failed to fetch, can't update
+    }
+  }
+
+  const botId = client.application.id;
+  const isFromBot = realMsg.author.id === botId;
+
+  // Bot's own messages are assistant role, others are user role
+  const role = isFromBot ? ("assistant" as const) : ("user" as const);
+
+  // We should NOT update the role, but just the content.
+  // Actually, if a message was updated, it's likely still the same role.
+  if (entry.role !== role) {
+    // This shouldn't really happen in Discord unless someone's doing something very weird.
+    return;
+  }
+
+  const textContent = isFromBot
+    ? await formatAssistantContext(realMsg)
+    : await formatHistoryContext(realMsg);
+  const images = await fetchAllImages(realMsg);
+
+  entry.content = images.length > 0 ? [textContent, ...images] : textContent;
+
+  saveSession(agentSlug, session);
 }
 
-async function handleMessageDelete(_ctx: HandlerCtx, _msg: PossiblyUncachedMessage): Promise<void> {
-  // TODO: unimplemented
+async function handleMessageDelete(ctx: HandlerCtx, msg: PossiblyUncachedMessage): Promise<void> {
+  const { agentSlug, owner } = ctx;
+  const agent = owner.agents.get(agentSlug);
+  if (agent === undefined) {
+    return;
+  }
+
+  const sessionId =
+    msg.guildID === undefined
+      ? `discord:${msg.channelID}`
+      : `discord:${msg.channelID}|${msg.guildID}`;
+
+  const session = agent.sessions.get(sessionId);
+  if (session === undefined || !(session instanceof DiscordSession)) {
+    return;
+  }
+
+  const entryIndex = session.history.findIndex((historyMsg) => historyMsg.id === msg.id);
+  if (entryIndex === -1) {
+    return;
+  }
+
+  session.history.splice(entryIndex, 1);
+
+  // If we deleted the last message, update the lastMessageId pointer
+  if (session.lastMessageId === msg.id) {
+    const lastUserMsg = session.history.findLast((historyMsg) => historyMsg.id !== undefined);
+    session.lastMessageId = lastUserMsg?.id;
+  }
+
+  // Dummy await to satisfy require-await lint rule
+  await Promise.resolve();
+  saveSession(agentSlug, session);
 }
 
 async function handleInteractionCreate(

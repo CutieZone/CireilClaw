@@ -1,5 +1,5 @@
 import { sessions } from "$/db/schema.js";
-import type { Message } from "$/engine/message.js";
+import { isMessage } from "$/engine/message.js";
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import { and, asc, desc, gte, like, notLike, or } from "drizzle-orm";
 import * as vb from "valibot";
@@ -74,8 +74,9 @@ export const listSessions: ToolDef = {
       .all();
 
     const results = rows.map((row) => {
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      const history = JSON.parse(row.history) as Message[];
+      const rawHistory = vb.parse(vb.array(vb.unknown()), JSON.parse(row.history));
+      const history = rawHistory.filter((it) => isMessage(it));
+
       const chatMessages = history.filter((msg) => msg.role === "user" || msg.role === "assistant");
       const lastMsg = chatMessages.at(-1);
 

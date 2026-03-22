@@ -146,44 +146,51 @@ function resolveEnvValue(
   resolutionStack: Set<string>,
 ): string | EnvParseError {
   try {
-    return rawValue.replace(ENV_VAR_PATTERN, (match, braced, defaultVal, bare) => {
-      // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
-      const key: string | undefined = braced ?? bare;
+    return rawValue.replace(
+      ENV_VAR_PATTERN,
+      (
+        match,
+        braced: string | undefined,
+        defaultVal: string | undefined,
+        bare: string | undefined,
+      ) => {
+        const key: string | undefined = braced ?? bare;
 
-      if (key === undefined) {
-        return match;
-      }
-
-      if (resolutionStack.has(key)) {
-        throw new EnvResolutionError(`Circular reference to '${key}'`);
-      }
-
-      // Look up in order: file vars (already resolved) → host env
-      const fromFile = fileVars.get(key);
-      const fromHost = process.env[key];
-
-      if (fromFile !== undefined) {
-        resolutionStack.add(key);
-        const resolved = resolveEnvValue(fromFile, fileVars, resolutionStack);
-        resolutionStack.delete(key);
-
-        if (isEnvParseError(resolved)) {
-          throw new EnvResolutionError(resolved.message);
+        if (key === undefined) {
+          return match;
         }
-        return resolved;
-      }
 
-      if (fromHost !== undefined) {
-        return fromHost;
-      }
+        if (resolutionStack.has(key)) {
+          throw new EnvResolutionError(`Circular reference to '${key}'`);
+        }
 
-      // Not found — use default if provided
-      if (defaultVal !== undefined) {
-        return String(defaultVal);
-      }
+        // Look up in order: file vars (already resolved) → host env
+        const fromFile = fileVars.get(key);
+        const fromHost = process.env[key];
 
-      throw new EnvResolutionError(`Undefined variable '${key}'`);
-    });
+        if (fromFile !== undefined) {
+          resolutionStack.add(key);
+          const resolved = resolveEnvValue(fromFile, fileVars, resolutionStack);
+          resolutionStack.delete(key);
+
+          if (isEnvParseError(resolved)) {
+            throw new EnvResolutionError(resolved.message);
+          }
+          return resolved;
+        }
+
+        if (fromHost !== undefined) {
+          return fromHost;
+        }
+
+        // Not found — use default if provided
+        if (defaultVal !== undefined) {
+          return defaultVal;
+        }
+
+        throw new EnvResolutionError(`Undefined variable '${key}'`);
+      },
+    );
   } catch (error) {
     const message = error instanceof EnvResolutionError ? error.message : String(error);
     return { message, type: "error" };

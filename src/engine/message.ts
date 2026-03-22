@@ -1,13 +1,21 @@
-import type { ImageContent, TextContent, ToolCallContent, ToolResponseContent } from "./content.js";
-import type { Role } from "./role.js";
+import type {
+  ImageContent,
+  ImageRef,
+  TextContent,
+  ToolCallContent,
+  ToolResponseContent,
+} from "$/engine/content.js";
+import type { Role } from "$/engine/role.js";
 
 interface BaseMessage {
   role: Role;
   // Unix timestamp (ms)
   timestamp?: number;
+  // Optional unique ID for message deduplication across turns.
+  id?: string;
 }
 
-type UserContent = TextContent | ImageContent;
+type UserContent = TextContent | ImageContent | ImageRef;
 
 interface UserMessage extends BaseMessage {
   role: "user";
@@ -15,8 +23,6 @@ interface UserMessage extends BaseMessage {
   // If false, this message is included in context but not persisted to DB.
   // Used for reply chain context that shouldn't pollute long-term history.
   persist?: boolean;
-  // Optional Discord message ID for deduplication of reply chain messages.
-  id?: string;
 }
 
 interface SystemMessage extends BaseMessage {
@@ -34,8 +40,23 @@ type AssistantContent = TextContent | ImageContent | ToolCallContent;
 interface AssistantMessage extends BaseMessage {
   role: "assistant";
   content: AssistantContent | AssistantContent[];
+  // If false, this message is included in context but not persisted to DB.
+  persist?: boolean;
 }
 
 type Message = UserMessage | ToolMessage | AssistantMessage | SystemMessage;
 
-export type { UserMessage, ToolMessage, AssistantMessage, Message, SystemMessage };
+function isMessage(msg: unknown): msg is Message {
+  return typeof msg === "object" && msg !== null && "role" in msg && "content" in msg;
+}
+
+export { isMessage };
+export type {
+  UserMessage,
+  ToolMessage,
+  AssistantMessage,
+  Message,
+  SystemMessage,
+  UserContent,
+  AssistantContent,
+};

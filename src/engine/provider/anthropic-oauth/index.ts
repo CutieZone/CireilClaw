@@ -13,6 +13,7 @@ import { encode } from "$/util/base64.js";
 import { scaleForAnthropic } from "$/util/image.js";
 import type { KeyPool } from "$/util/key-pool.js";
 import { toJsonSchema } from "@valibot/to-json-schema";
+import * as vb from "valibot";
 
 const API_URL = "https://api.anthropic.com/v1/messages";
 
@@ -81,8 +82,10 @@ async function translateImage(content: ImageContent): Promise<AnthropicImageBloc
 function translateToolResponse(content: ToolResponseContent): AnthropicToolResultBlock {
   const outputStr =
     typeof content.output === "object" && content.output !== null
-      ? // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-        JSON.stringify({ name: content.name, ...(content.output as Record<string, unknown>) })
+      ? JSON.stringify({
+          name: content.name,
+          ...vb.parse(vb.record(vb.string(), vb.unknown()), content.output),
+        })
       : JSON.stringify({ name: content.name, output: content.output });
   return {
     content: outputStr,
@@ -123,6 +126,10 @@ async function translateMessages(messages: Message[]): Promise<AnthropicMessage[
       if (next?.role === "user") {
         const userContent = Array.isArray(next.content) ? next.content : [next.content];
         for (const block of userContent) {
+          if (block.type === "image_ref") {
+            throw new Error("A block of type image_ref should not exist here.");
+          }
+
           if (block.type === "text") {
             blocks.push(translateText(block));
           } else {
@@ -139,6 +146,10 @@ async function translateMessages(messages: Message[]): Promise<AnthropicMessage[
       const userContent = Array.isArray(msg.content) ? msg.content : [msg.content];
       const blocks: AnthropicUserContentBlock[] = [];
       for (const block of userContent) {
+        if (block.type === "image_ref") {
+          throw new Error("A block of type image_ref should not exist here.");
+        }
+
         if (block.type === "text") {
           blocks.push(translateText(block));
         } else {
@@ -261,21 +272,24 @@ export async function generate(
       );
     }
 
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const data = (await resp.json()) as {
-      content: {
-        id?: string;
-        input?: unknown;
-        name?: string;
-        text?: string;
-        type: string;
-      }[];
-      stop_reason: string;
-      usage: {
-        input_tokens: number;
-        output_tokens: number;
-      };
-    };
+    const AnthropicResponseSchema = vb.object({
+      content: vb.array(
+        vb.object({
+          id: vb.exactOptional(vb.string()),
+          input: vb.exactOptional(vb.unknown()),
+          name: vb.exactOptional(vb.string()),
+          text: vb.exactOptional(vb.string()),
+          type: vb.string(),
+        }),
+      ),
+      stop_reason: vb.string(),
+      usage: vb.object({
+        input_tokens: vb.number(),
+        output_tokens: vb.number(),
+      }),
+    });
+
+    const data = vb.parse(AnthropicResponseSchema, await resp.json());
 
     if (data.stop_reason !== "tool_use") {
       const textBlock = data.content.find((block) => block.type === "text");

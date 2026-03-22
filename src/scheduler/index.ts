@@ -1,5 +1,5 @@
-// oxlint-disable sort-keys
 import type { Agent } from "$/agent/index.js";
+import { CronJobConfigSchema } from "$/config/cron.js";
 import type { CronJobConfig } from "$/config/cron.js";
 import type { HeartbeatConfig } from "$/config/heartbeat.js";
 import { loadCron, loadHeartbeat } from "$/config/index.js";
@@ -8,6 +8,7 @@ import colors from "$/output/colors.js";
 import { debug, warning } from "$/output/log.js";
 import { runHeartbeat } from "$/scheduler/heartbeat.js";
 import { Cron } from "croner";
+import * as vb from "valibot";
 
 // Uniform handle interface covering both setTimeout and croner jobs.
 interface StopHandle {
@@ -61,8 +62,7 @@ export class Scheduler {
         continue;
       }
       try {
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-        const cfg = JSON.parse(row.config) as CronJobConfig;
+        const cfg = vb.parse(CronJobConfigSchema, JSON.parse(row.config));
         this._scheduleCronJob(cfg);
       } catch (error) {
         warning(

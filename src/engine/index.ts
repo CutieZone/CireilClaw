@@ -9,7 +9,7 @@ import type { Context, UsageInfo } from "$/engine/context.js";
 import { GenerationNoToolCallsError, ToolError, ParseError } from "$/engine/errors.js";
 import type { AssistantMessage, Message, ToolMessage } from "$/engine/message.js";
 import { generate as generateAnthropicOauth } from "$/engine/provider/anthropic-oauth/index.js";
-import type { ProviderKind } from "$/engine/provider/index.js";
+import { ProviderKindSchema } from "$/engine/provider/index.js";
 import { generate } from "$/engine/provider/oai.js";
 import type { Tool } from "$/engine/tool.js";
 import type { ToolContext } from "$/engine/tools/tool-def.js";
@@ -408,8 +408,7 @@ export class Engine {
     const effectiveKeyPool: KeyPool = this._resolveKeyPool(override);
     const effectiveApiBase: string = override?.apiBase ?? this._apiBase;
     const effectiveModel: string = override?.model ?? this._model;
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const effectiveProvider: ProviderKind = (override?.provider ?? this._provider) as ProviderKind;
+    const effectiveProvider = vb.parse(ProviderKindSchema, override?.provider ?? this._provider);
 
     if (session.history.length > this._maxTurns * 3) {
       debug(

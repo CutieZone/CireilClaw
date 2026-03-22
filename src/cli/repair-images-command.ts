@@ -8,6 +8,7 @@ import { error as logError, info, warning } from "$/output/log.js";
 import { fetchSessionDisplayName, repairSessionImages } from "$/util/repair-session.js";
 import { select } from "@inquirer/prompts";
 import { buildCommand } from "@stricli/core";
+import * as vb from "valibot";
 
 // oceanic.js's ESM shim breaks under tsx's module loader (.default.default chain
 // resolves to undefined). Force CJS to get the real constructors.
@@ -70,6 +71,10 @@ async function run(): Promise<void> {
   // Get Discord sessions from DB
   const db = getDb(agentSlug);
   const rows = db.select().from(sessions).all();
+  const MetaSchema = vb.object({
+    channelId: vb.string(),
+    guildId: vb.exactOptional(vb.string(), undefined),
+  });
 
   const discordSessions: DiscordSessionRow[] = [];
   for (const row of rows) {
@@ -77,8 +82,7 @@ async function run(): Promise<void> {
       continue;
     }
 
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const meta = JSON.parse(row.meta) as { channelId: string; guildId?: string };
+    const meta = vb.parse(MetaSchema, JSON.parse(row.meta));
     discordSessions.push({
       channelId: meta.channelId,
       guildId: meta.guildId,

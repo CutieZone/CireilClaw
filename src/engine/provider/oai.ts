@@ -17,6 +17,7 @@ import type {
   ChatCompletionMessageToolCall,
   ChatCompletionTool,
 } from "openai/resources";
+import * as vb from "valibot";
 
 function translateContent(
   content: Content,
@@ -39,6 +40,8 @@ function translateContent(
       throw new Error(
         `Content type '${content.type}' should not be translated via translateContent - handled separately in translateMsg`,
       );
+    case "image_ref":
+      throw new Error("Content type 'image_ref' should never end up here. How did it?");
     default:
       throw new Error("Unreachable");
   }
@@ -129,11 +132,13 @@ function translateMsg(message: Message): ChatCompletionMessageParam {
 }
 
 function translateTool(tool: Tool): ChatCompletionTool {
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  const parameters = toJsonSchema(tool.parameters, {
-    target: "openapi-3.0",
-    typeMode: "input",
-  }) as OpenAI.FunctionParameters;
+  const parameters = vb.parse(
+    vb.record(vb.string(), vb.unknown()),
+    toJsonSchema(tool.parameters, {
+      target: "openapi-3.0",
+      typeMode: "input",
+    }),
+  );
 
   return {
     function: {

@@ -1,6 +1,6 @@
 import { sessions } from "$/db/schema.js";
 import { ToolError } from "$/engine/errors.js";
-import type { Message } from "$/engine/message.js";
+import { isMessage } from "$/engine/message.js";
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import { eq } from "drizzle-orm";
 import * as vb from "valibot";
@@ -50,8 +50,8 @@ export const readSession: ToolDef = {
       throw new ToolError(`Session not found: ${data.id}`);
     }
 
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const history = JSON.parse(row.history) as Message[];
+    const rawHistory = vb.parse(vb.array(vb.unknown()), JSON.parse(row.history));
+    const history = rawHistory.filter((it) => isMessage(it));
     let chatMessages = history.filter((msg) => msg.role === "user" || msg.role === "assistant");
 
     if (data.since !== undefined) {
@@ -75,8 +75,7 @@ export const readSession: ToolDef = {
       return {
         content: content
           .filter((part) => "content" in part)
-          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-          .map((part) => (part as { content: string }).content)
+          .map((part) => part.content)
           .join("\n"),
         role: msg.role,
         timestamp: msg.timestamp,

@@ -1,7 +1,8 @@
 import { getDb } from "$/db/index.js";
 import { sessions } from "$/db/schema.js";
 import { updateSessionImages } from "$/db/sessions.js";
-import { DiscordMetaSchema, isImageRef, SerializedHistorySchema } from "$/db/validation.js";
+import { DiscordMetaSchema, SerializedHistorySchema } from "$/db/validation.js";
+import { isImageRef } from "$/engine/content.js";
 import { toWebp } from "$/util/image.js";
 import { eq } from "drizzle-orm";
 import type { Client as OceanicClient } from "oceanic.js";
@@ -83,6 +84,8 @@ async function repairSessionImages(
 
     const msgId = msg.id;
     const { content } = msg;
+
+    // TODO: check single imageRef (aka, msg with no other content than an image)
 
     if (!Array.isArray(content)) {
       continue;

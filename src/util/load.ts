@@ -12,7 +12,11 @@ import { parse } from "smol-toml";
 import * as vb from "valibot";
 import { parse as parseYaml } from "yaml";
 
-type Frontmatter = Omit<MemoryBlock, "content" | "label" | "metadata">;
+const BlockFrontmatterSchema = vb.object({
+  description: vb.string(),
+});
+
+type Frontmatter = Omit<MemoryBlock, "content" | "label" | "metadata" | "filePath">;
 
 const labels = ["person", "identity", "long-term", "soul", "style-notes"] as const;
 type BlockLabel = (typeof labels)[number];
@@ -47,8 +51,7 @@ async function loadBlocks(slug: string): Promise<Record<BlockLabel, MemoryBlock>
 
       const tomlData = content.slice(3, ending);
 
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      const frontmatter = parse(tomlData) as Frontmatter;
+      const frontmatter = vb.parse(BlockFrontmatterSchema, parse(tomlData));
 
       files.set(label, {
         content,
@@ -190,8 +193,7 @@ async function loadConditionalBlocks(
 
     const tomlData = content.slice(3, ending);
 
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const frontmatter = parse(tomlData) as Frontmatter;
+    const frontmatter = vb.parse(BlockFrontmatterSchema, parse(tomlData));
 
     blocks.push({
       content,

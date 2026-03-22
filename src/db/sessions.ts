@@ -1,8 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import type { ImageContent } from "$/engine/content.js";
-import type { Message } from "$/engine/message.js";
+import { getDb } from "$/db/index.js";
+import { images, sessions } from "$/db/schema.js";
+import type { Content, ImageContent, ImageRef } from "$/engine/content.js";
+import { isMessage } from "$/engine/message.js";
+import type { AssistantContent, Message, UserContent } from "$/engine/message.js";
 import type { Session } from "$/harness/session.js";
 import {
   DiscordSession,
@@ -13,9 +16,7 @@ import {
 import { agentRoot } from "$/util/paths.js";
 import { blake3 } from "@noble/hashes/blake3.js";
 import { and, eq, inArray, notInArray } from "drizzle-orm";
-
-import { getDb } from "./index.js";
-import { images, sessions } from "./schema.js";
+import * as vb from "valibot";
 
 // ---------------------------------------------------------------------------
 // Image file helpers
@@ -47,17 +48,15 @@ function hashImage(data: Uint8Array): string {
 
 // On-disk, ImageContent is replaced with a lean reference — the ArrayBuffer
 // stays in a file, not in the JSON blob.
-interface ImageRef {
-  type: "image_ref";
-  id: string;
-  mediaType: string;
-}
-
 interface PendingImage {
   id: string;
   mediaType: string;
   path: string;
   data: Uint8Array;
+}
+
+function isImageContent(ct: unknown): ct is ImageContent {
+  return typeof ct === "object" && ct !== null && "type" in ct && ct.type === "image";
 }
 
 function serializeHistory(
@@ -67,15 +66,8 @@ function serializeHistory(
   const pendingImages: PendingImage[] = [];
 
   function serializeContent(ct: unknown): unknown {
-    if (
-      typeof ct === "object" &&
-      ct !== null &&
-      "type" in ct &&
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      (ct as { type: string }).type === "image"
-    ) {
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      const img = ct as ImageContent;
+    if (isImageContent(ct)) {
+      const img = ct;
       const id = hashImage(img.data);
       const path = imagePath(agentSlug, id, img.mediaType);
       pendingImages.push({ data: img.data, id, mediaType: img.mediaType, path });
@@ -103,43 +95,77 @@ function serializeHistory(
 }
 
 function deserializeHistory(json: string, agentSlug: string): Message[] {
-  function deserializeContent(ct: unknown): unknown {
-    if (
-      typeof ct === "object" &&
-      ct !== null &&
-      "type" in ct &&
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      (ct as { type: string }).type === "image_ref"
-    ) {
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      const ref = ct as ImageRef;
+  function deserializeUserContent(ct: Content | ImageRef): UserContent {
+    if (ct.type === "image_ref") {
+      const ref = ct;
       const path = imagePath(agentSlug, ref.id, ref.mediaType);
       const data = readFileSync(path);
       return { data, mediaType: ref.mediaType, type: "image" } satisfies ImageContent;
     }
-    return ct;
+
+    if (ct.type === "text" || ct.type === "image") {
+      return ct;
+    }
+
+    throw new Error(`Invalid content type for user (found ${ct.type})`);
   }
 
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  const raw = JSON.parse(json) as Record<string, unknown>[];
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  return raw.map((msg) => ({
-    ...msg,
-    content: Array.isArray(msg["content"])
-      ? msg["content"].map(deserializeContent)
-      : deserializeContent(msg["content"]),
-  })) as Message[];
+  function deserializeAssistantContent(ct: Content | ImageRef): AssistantContent {
+    if (ct.type === "image_ref") {
+      const ref = ct;
+      const path = imagePath(agentSlug, ref.id, ref.mediaType);
+      const data = readFileSync(path);
+      return { data, mediaType: ref.mediaType, type: "image" } satisfies ImageContent;
+    }
+
+    if (ct.type === "text" || ct.type === "image" || ct.type === "toolCall") {
+      return ct;
+    }
+
+    throw new Error(`Invalid content type for assistant (found ${ct.type})`);
+  }
+
+  const raw = vb.parse(vb.record(vb.string(), vb.unknown()), JSON.parse(json));
+  const entries = Object.values(raw).filter((it) => isMessage(it));
+
+  return entries.map((msg) => {
+    if (msg.role === "user") {
+      return {
+        ...msg,
+        content: Array.isArray(msg.content)
+          ? msg.content.map((it) => deserializeUserContent(it))
+          : deserializeUserContent(msg.content),
+      };
+    } else if (msg.role === "assistant") {
+      return {
+        ...msg,
+        content: Array.isArray(msg.content)
+          ? msg.content.map((it) => deserializeAssistantContent(it))
+          : deserializeAssistantContent(msg.content),
+      };
+    }
+
+    return msg;
+  });
 }
 
 // ---------------------------------------------------------------------------
 // Channel meta
 // ---------------------------------------------------------------------------
 
-interface DiscordMeta {
-  channelId: string;
-  guildId?: string;
-  isNsfw?: boolean;
-}
+const DiscordMetaSchema = vb.object({
+  channelId: vb.string(),
+  guildId: vb.exactOptional(vb.string()),
+  isNsfw: vb.exactOptional(vb.boolean()),
+});
+
+type DiscordMeta = vb.InferOutput<typeof DiscordMetaSchema>;
+
+const MatrixMetaSchema = vb.object({
+  roomId: vb.string(),
+});
+
+// type MatrixMeta = vb.InferOutput<typeof MatrixMetaSchema>;
 
 // ---------------------------------------------------------------------------
 // Debounce
@@ -233,17 +259,14 @@ function loadSessions(agentSlug: string): Map<string, Session> {
 
   for (const row of rows) {
     const history = deserializeHistory(row.history, agentSlug);
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const openedFiles = new Set(JSON.parse(row.openedFiles) as string[]);
+    const openedFiles = new Set(vb.parse(vb.array(vb.string()), JSON.parse(row.openedFiles)));
 
     let session: Session | undefined = undefined;
     if (row.channel === "discord") {
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      const meta = JSON.parse(row.meta) as DiscordMeta;
+      const meta = vb.parse(DiscordMetaSchema, JSON.parse(row.meta));
       session = new DiscordSession(meta.channelId, meta.guildId, meta.isNsfw);
     } else if (row.channel === "matrix") {
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      const meta = JSON.parse(row.meta) as { roomId: string };
+      const meta = vb.parse(MatrixMetaSchema, JSON.parse(row.meta));
       session = new MatrixSession(meta.roomId);
     } else if (row.channel === "internal") {
       const name = row.id.startsWith("internal:") ? row.id.slice("internal:".length) : row.id;
@@ -340,16 +363,15 @@ function updateSessionImages(
   }
 
   // Parse history, find messages with matching IDs, and update their images
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  const raw = JSON.parse(row.history) as Record<string, unknown>[];
+  const raw = vb.parse(vb.record(vb.string(), vb.unknown()), JSON.parse(row.history));
+  const entries = Object.values(raw).filter((it) => isMessage(it));
 
   // First pass: update image_ref IDs in messages
-  for (const msg of raw) {
-    if (msg["role"] !== "user" || msg["id"] === undefined) {
+  for (const msg of entries) {
+    if (msg.role !== "user" || msg.id === undefined) {
       continue;
     }
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const msgId = msg["id"] as string;
+    const msgId = msg.id;
     const newData = newImages.get(msgId);
     if (newData === undefined) {
       continue;
@@ -359,21 +381,19 @@ function updateSessionImages(
     const { content } = msg;
     if (Array.isArray(content)) {
       for (const block of content) {
-        if (
-          typeof block === "object" &&
-          block !== null &&
-          "type" in block &&
-          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-          (block as { type: string }).type === "image_ref"
-        ) {
+        if (block.type === "image_ref") {
           // Replace this image_ref with new data
-          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-          const ref = block as ImageRef;
+          const ref: ImageRef = block;
           const newId = hashImage(newData);
           ref.id = newId;
           ref.mediaType = "image/webp";
         }
       }
+    } else if (content.type === "image_ref") {
+      const ref: ImageRef = content;
+      const newId = hashImage(newData);
+      ref.id = newId;
+      ref.mediaType = "image/webp";
     }
   }
 
@@ -382,12 +402,12 @@ function updateSessionImages(
 
   // Collect pending images to write
   const pendingImages: PendingImage[] = [];
-  for (const msg of raw) {
-    if (msg["role"] !== "user" || msg["id"] === undefined) {
+  for (const msg of entries) {
+    if (msg.role !== "user" || msg.id === undefined) {
       continue;
     }
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const msgId = msg["id"] as string;
+
+    const msgId = msg.id;
     const data = newImages.get(msgId);
     if (data === undefined) {
       continue;
@@ -396,20 +416,16 @@ function updateSessionImages(
     const { content } = msg;
     if (Array.isArray(content)) {
       for (const block of content) {
-        if (
-          typeof block === "object" &&
-          block !== null &&
-          "type" in block &&
-          "id" in block &&
-          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-          (block as { type: string }).type === "image_ref"
-        ) {
-          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-          const ref = block as ImageRef;
+        if (block.type === "image_ref") {
+          const ref: ImageRef = block;
           const path = imagePath(agentSlug, ref.id, ref.mediaType);
           pendingImages.push({ data, id: ref.id, mediaType: ref.mediaType, path });
         }
       }
+    } else if (content.type === "image_ref") {
+      const ref: ImageRef = content;
+      const path = imagePath(agentSlug, ref.id, ref.mediaType);
+      pendingImages.push({ data, id: ref.id, mediaType: ref.mediaType, path });
     }
   }
 

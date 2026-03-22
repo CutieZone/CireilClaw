@@ -1,6 +1,10 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["eslint", "import", "promise", "typescript", "unicorn"],
+  "options": {
+    "typeAware": true,
+    "typeCheck": true
+  },
   "categories": {
     "correctness": "warn",
     "nursery": "warn",
@@ -50,6 +54,7 @@
     "unicorn/switch-case-braces": "off",
     "unicorn/prefer-ternary": "off",
     "unicorn/prefer-event-target": "off",
+    "unicorn/no-useless-undefined": "off",
     "eslint/no-console": [
       "error",
       {
