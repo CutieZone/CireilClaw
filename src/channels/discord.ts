@@ -469,7 +469,8 @@ async function handleMessageCreate(
       attachment.contentType !== undefined &&
       SUPPORTED_IMAGE_TYPES.has(attachment.contentType.split(";")[0]?.trim() ?? ""),
   );
-  if (msg.content.trim().length === 0 && !hasImages) {
+  const hasStickers = msg.stickerItems !== undefined && msg.stickerItems.length > 0;
+  if (msg.content.trim().length === 0 && !hasImages && !hasStickers) {
     return;
   }
 
