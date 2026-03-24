@@ -114,12 +114,9 @@ export class Agent {
       return best ?? { error: "no active sessions found" };
     }
 
-    // Strip channel prefix (e.g., "discord:") before delegating to handler
     const handler = this._getHandler(currentSession);
     if (handler.resolveChannel !== undefined) {
-      const prefix = `${currentSession.channel}:`;
-      const bareSpec = spec.startsWith(prefix) ? spec.slice(prefix.length) : spec;
-      const result = handler.resolveChannel(bareSpec, this._sessions, this._ownerId);
+      const result = handler.resolveChannel(spec, this._sessions, this._ownerId);
       return result;
     }
 

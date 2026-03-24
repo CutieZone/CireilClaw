@@ -16,7 +16,7 @@ const RespondSchema = vb.strictObject({
     vb.optional(vb.nullable(vb.string())),
     vb.transform((val) => val ?? "current"),
     vb.description(
-      'Target channel for the message. "current" (default) = send to this conversation; "last" = most recently active session; "owner" = DM the bot owner; or explicit like "discord:123|456" for a specific Discord channel.',
+      'Target channel for the message. "current" (default) = send to this conversation; "last" = most recently active session; "owner" = DM the bot owner; or explicit like "discord:{channelId}|{guildId}" for a specific Discord channel (channel ID first, then guild ID — use session-info or list-sessions to get the correct session ID).',
     ),
   ),
   content: vb.pipe(vb.string(), vb.nonEmpty(), vb.description("Your message in plain Markdown.")),
@@ -65,7 +65,9 @@ const respond: ToolDef = {
 
     // Send to the resolved session using sendTo for cross-channel messaging
     await ctx.sendTo(resolution, content, attachments);
-    return { final, sent: true };
+    // Cross-channel sends never end the turn — the agent still needs to respond to the current channel.
+    const isCrossChannel = channel !== "current" && resolution !== ctx.session;
+    return { final: isCrossChannel ? false : final, sent: true };
   },
   name: "respond",
   parameters: RespondSchema,

@@ -549,7 +549,12 @@ export class Engine {
         if (toolFailed) {
           const fails = (toolConsecutiveFailures.get(call.name) ?? 0) + 1;
           toolConsecutiveFailures.set(call.name, fails);
-          if (fails >= this._toolFailThreshold && !disabledTools.has(call.name)) {
+          if (
+            fails >= this._toolFailThreshold &&
+            !disabledTools.has(call.name) &&
+            call.name !== "respond" &&
+            call.name !== "no-response"
+          ) {
             disabledTools.add(call.name);
             warning(
               `Disabling tool '${call.name}' after ${fails} consecutive failures (threshold: ${this._toolFailThreshold})`,
@@ -575,7 +580,10 @@ export class Engine {
         };
         session.pendingToolMessages.push(response);
 
-        if ((call.name === "respond" && result["final"] !== false) || call.name === "no-response") {
+        if (
+          (call.name === "respond" && result["success"] !== false && result["final"] !== false) ||
+          call.name === "no-response"
+        ) {
           done = true;
         }
       }
