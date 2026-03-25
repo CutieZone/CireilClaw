@@ -1,0 +1,7 @@
+# System configuration
+# Copy this file to system.toml to use
+
+# Timezone to use for displaying dates to the LLM
+# Uses IANA timezone database names (e.g. "America/New_York", "Europe/London", "Asia/Tokyo")
+# If not specified, the system's local timezone will be used
+# timezone = "America/New_York"

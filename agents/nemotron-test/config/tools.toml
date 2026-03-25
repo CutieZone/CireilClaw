@@ -1,0 +1,4 @@
+[exec]
+enabled = true
+binaries = ["bash", "python3", "ls", "cat", "grep", "find", "wc"]
+timeout = 30000
