@@ -25,11 +25,14 @@ import type {
   CommandInteraction,
   Message as DiscordMessage,
   PossiblyUncachedMessage,
-  TextableChannel,
+  Uncached,
+  User,
+  Member,
+  EventReaction,
 } from "oceanic.js";
 import {
+  ChannelTypes,
   InteractionTypes,
-  MessageFlags,
   StickerFormatTypes,
   TextableChannelTypes,
 } from "oceanic.js";
@@ -117,10 +120,10 @@ async function formatUserMessage(msg: DiscordMessage): Promise<TextContent> {
   };
 }
 
-// Formats a message as a context item (different from user message - marks it as
-// reply context so the agent understands this is historical conversation).
+// Formats a message as historical context (different from user message - marks it
+// as history so the agent understands this is past conversation).
 // Includes attachment metadata so the model knows what files/images are present.
-async function formatReplyContext(msg: DiscordMessage): Promise<TextContent> {
+async function formatHistoryContext(msg: DiscordMessage): Promise<TextContent> {
   const { username } = msg.author;
   const authorId = msg.author.id;
   const displayName = msg.member?.nick ?? msg.author.globalName ?? username;
@@ -153,7 +156,7 @@ async function formatReplyContext(msg: DiscordMessage): Promise<TextContent> {
   }
 
   return {
-    content: `<reply-context msgId="${msg.id}" from="${username} <${authorId}>" displayName="${displayName}" timestamp="${timestamp}">${innerContent}</reply-context>`,
+    content: `<history-context msgId="${msg.id}" from="${username} <${authorId}>" displayName="${displayName}" timestamp="${timestamp}">${innerContent}</history-context>`,
     type: "text",
   };
 }
@@ -205,7 +208,7 @@ async function crawlReplyTree(
 // Checks if a Discord message ID already exists in session history.
 function isMessageInHistory(history: Message[], messageId: string): boolean {
   for (const entry of history) {
-    if (entry.role === "user" && entry.id === messageId) {
+    if (entry.id === messageId) {
       return true;
     }
   }
@@ -384,7 +387,7 @@ async function populateHistoryFromDiscord(
 
     const textContent = isFromBot
       ? await formatAssistantContext(msg)
-      : await formatReplyContext(msg);
+      : await formatHistoryContext(msg);
     const images = await fetchAllImages(msg);
 
     session.history.push({
@@ -392,6 +395,7 @@ async function populateHistoryFromDiscord(
       id: msg.id,
       persist: false, // Historical context, don't persist to DB
       role,
+      timestamp: Date.now(),
     });
   }
 }
@@ -456,7 +460,7 @@ function splitMessage(content: string): string[] {
 }
 
 async function handleMessageCreate(
-  { agentSlug, client, directMessages, owner, ownerId }: HandlerCtx,
+  { access, agentSlug, client, directMessages, owner, ownerId }: HandlerCtx,
   msg: DiscordMessage,
 ): Promise<void> {
   // Ignore messages with no text and no image attachments.
@@ -465,8 +469,24 @@ async function handleMessageCreate(
       attachment.contentType !== undefined &&
       SUPPORTED_IMAGE_TYPES.has(attachment.contentType.split(";")[0]?.trim() ?? ""),
   );
-  if (msg.content.trim().length === 0 && !hasImages) {
+  const hasStickers = msg.stickerItems !== undefined && msg.stickerItems.length > 0;
+  if (msg.content.trim().length === 0 && !hasImages && !hasStickers) {
     return;
+  }
+
+  const userId = msg.author.id;
+
+  // Check access control (whitelist/blacklist). Owner always bypasses.
+  if (userId !== ownerId) {
+    const { mode, users } = access ?? { mode: "disabled", users: [] };
+    if (mode === "whitelist" && !users.includes(userId)) {
+      debug("Ignoring message from", colors.keyword(userId), "- not in whitelist");
+      return; // User not in whitelist
+    }
+    if (mode === "blacklist" && users.includes(userId)) {
+      debug("Ignoring message from", colors.keyword(userId), "- blacklisted");
+      return; // User is blacklisted
+    }
   }
 
   // Check if this is a DM (no guild ID)
@@ -476,7 +496,6 @@ async function handleMessageCreate(
   const shouldProcess = isDm;
   if (isDm) {
     const { mode, users } = directMessages ?? { mode: "owner", users: [] };
-    const userId = msg.author.id;
 
     // Enforce DM mode
     if (mode === "owner" && userId !== ownerId) {
@@ -520,6 +539,22 @@ async function handleMessageCreate(
     return;
   }
 
+  const msgChannel = await client.rest.channels.get(msg.channelID);
+
+  if (
+    msgChannel.type === ChannelTypes.GROUP_DM ||
+    msgChannel.type === ChannelTypes.GUILD_CATEGORY ||
+    msgChannel.type === ChannelTypes.GUILD_FORUM ||
+    msgChannel.type === ChannelTypes.GUILD_MEDIA ||
+    !TextableChannelTypes.includes(msgChannel.type)
+  ) {
+    logError(
+      "An unexpected failure case occurred, msgChannel type is not textable. Was:",
+      msgChannel.type,
+    );
+    return;
+  }
+
   const agent = owner.agents.get(agentSlug);
 
   if (agent === undefined) {
@@ -542,33 +577,26 @@ async function handleMessageCreate(
     throw new TypeError(`invalid session type: expected discord, got ${session.channel}`);
   }
 
-  if (session === undefined) {
-    const { channelID } = msg;
-    const channel = await client.rest.channels.get(channelID);
+  const isNsfw =
+    msgChannel.type === ChannelTypes.DM ||
+    msgChannel.type === ChannelTypes.ANNOUNCEMENT_THREAD ||
+    msgChannel.type === ChannelTypes.PUBLIC_THREAD ||
+    msgChannel.type === ChannelTypes.PRIVATE_THREAD
+      ? false
+      : msgChannel.nsfw;
 
-    if (channel.type in TextableChannelTypes) {
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      const textableChannel = channel as TextableChannel;
-      session = new DiscordSession(msg.channelID, msg.guildID ?? undefined, textableChannel.nsfw);
-    } else {
-      session = new DiscordSession(msg.channelID, msg.guildID ?? undefined);
-    }
+  if (session === undefined) {
+    session = new DiscordSession(msg.channelID, msg.guildID ?? undefined, isNsfw);
 
     agent.sessions.set(sessionId, session);
-
-    // Fetch and populate message history for new sessions
-    const botId = client.application.id;
-    await populateHistoryFromDiscord(client, session, botId, msg.id, 30);
   } else {
-    const { channelID } = msg;
-    const channel = await client.rest.channels.get(channelID);
-
-    if (channel.type in TextableChannelTypes) {
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      const textableChannel = channel as TextableChannel;
-      session.isNsfw = textableChannel.nsfw;
-    }
+    session.isNsfw = isNsfw;
   }
+
+  // Populate message history for both new and existing sessions. The function
+  // skips messages already in history, so this is safe to call every turn.
+  const botId = client.application.id;
+  await populateHistoryFromDiscord(client, session, botId, msg.id, 50);
 
   if (!(session instanceof DiscordSession)) {
     throw new Error("Somehow, session was not a DiscordSession");
@@ -612,25 +640,27 @@ async function handleMessageCreate(
         continue;
       }
 
-      const ancestorContent = await formatReplyContext(ancestor);
+      const ancestorContent = await formatHistoryContext(ancestor);
       const ancestorImages = await fetchAllImages(ancestor);
       ds.history.push({
         content: ancestorImages.length > 0 ? [ancestorContent, ...ancestorImages] : ancestorContent,
         id: ancestor.id,
         persist: false,
         role: "user",
+        timestamp: Date.now(),
       });
     }
 
     // Add direct reply only if not already in history
     if (!isMessageInHistory(ds.history, directReply.id)) {
-      const replyContent = await formatReplyContext(directReply);
+      const replyContent = await formatHistoryContext(directReply);
       const replyImages = await fetchAllImages(directReply);
       ds.history.push({
         content: replyImages.length > 0 ? [replyContent, ...replyImages] : replyContent,
         id: directReply.id,
         persist: true,
         role: "user",
+        timestamp: Date.now(),
       });
     }
   }
@@ -644,18 +674,24 @@ async function handleMessageCreate(
     id: msg.id,
     persist: true,
     role: "user",
+    timestamp: Date.now(),
   });
 
   // Start typing indicator — Discord shows "Bot is typing…" for ~5 s, so we
   // refresh it on an interval for the duration of the turn.
   try {
-    await msg.channel?.sendTyping();
-  } catch {
+    await msgChannel.sendTyping();
+  } catch (error) {
+    warning(
+      "Got error while trying to send typing",
+      error instanceof Error ? error.message : String(error),
+    );
+    warning(error);
     // Non-fatal — typing indicators are best-effort.
   }
   ds.typingInterval = setInterval(() => {
     // oxlint-disable-next-line promise/prefer-await-to-then
-    msg.channel?.sendTyping().catch(() => {
+    msgChannel.sendTyping().catch(() => {
       // Intentionally ignored
     });
   }, TYPING_INTERVAL_MS);
@@ -665,18 +701,36 @@ async function handleMessageCreate(
   } catch (error) {
     // Roll back any history entries added during this failed turn so that the
     // next message doesn't see a stranded user message with no response.
+    // Also clear pending tool messages — they reference tool calls from the
+    // rolled-back assistant message and must not leak into the next turn.
     session.history.length = historyLengthBeforeTurn;
+    session.pendingToolMessages.length = 0;
     warning("Error during agent turn:", error instanceof Error ? error.message : String(error));
     if (error instanceof Error && error.stack !== undefined) {
       warning("Stack trace:", error.stack);
     }
     const reason = error instanceof Error ? error.message : String(error);
     try {
-      await msg.channel?.createMessage({
-        content: `⚠️ Engine error: ${reason}`,
-        flags: MessageFlags.EPHEMERAL,
+      const newMsg = await msgChannel.createMessage({
+        allowedMentions: {
+          repliedUser: true,
+        },
+        content: `⚠️ Engine error: ${reason}\n\n-# agent owner can react with ✨ to delete`,
+        messageReference: {
+          channelID: msg.channelID,
+          guildID: msg.guildID ?? undefined,
+          messageID: msg.id,
+        },
       });
-    } catch {
+
+      await newMsg.createReaction("✨");
+
+      // oxlint-disable-next-line no-shadow
+    } catch (error) {
+      warning(
+        "Failed to send engine error Discord message",
+        error instanceof Error ? error.message : String(error),
+      );
       // Best-effort.
     }
   } finally {
@@ -687,12 +741,130 @@ async function handleMessageCreate(
   }
 }
 
-async function handleMessageUpdate(_ctx: HandlerCtx, _msg: DiscordMessage): Promise<void> {
-  // TODO: unimplemented
+async function handleMessageReactionAdd(
+  ctx: HandlerCtx,
+  msg: PossiblyUncachedMessage,
+  reactor: Uncached | User | Member,
+  reaction: EventReaction,
+): Promise<void> {
+  const realMsg = await ctx.client.rest.channels.getMessage(msg.channelID, msg.id);
+
+  if (realMsg.author.id !== ctx.client.application.id) {
+    return; // not us
+  }
+
+  if (reactor.id !== ctx.ownerId) {
+    return; // not owner
+  }
+
+  if (reaction.emoji.name !== "✨") {
+    return; // not ✨
+  }
+
+  if (
+    realMsg.content.startsWith("⚠️ Engine error") ||
+    realMsg.content.startsWith(":warning: Engine error")
+  ) {
+    await realMsg.delete("No longer necessary");
+  }
 }
 
-async function handleMessageDelete(_ctx: HandlerCtx, _msg: PossiblyUncachedMessage): Promise<void> {
-  // TODO: unimplemented
+async function handleMessageUpdate(
+  ctx: HandlerCtx,
+  msg: DiscordMessage | PossiblyUncachedMessage,
+): Promise<void> {
+  const { agentSlug, owner, client } = ctx;
+  const agent = owner.agents.get(agentSlug);
+  if (agent === undefined) {
+    return;
+  }
+
+  const sessionId =
+    msg.guildID === undefined
+      ? `discord:${msg.channelID}`
+      : `discord:${msg.channelID}|${msg.guildID}`;
+
+  const session = agent.sessions.get(sessionId);
+  if (session === undefined || !(session instanceof DiscordSession)) {
+    return;
+  }
+
+  const entryIndex = session.history.findIndex((historyMsg) => historyMsg.id === msg.id);
+  if (entryIndex === -1) {
+    return;
+  }
+
+  // oxlint-disable-next-line typescript/no-non-null-assertion
+  const entry = session.history[entryIndex]!;
+
+  // Fetch full message to ensure we have content/author/attachments
+  let realMsg: DiscordMessage | undefined = undefined;
+  if ("author" in msg) {
+    realMsg = msg as DiscordMessage;
+  } else {
+    try {
+      realMsg = await client.rest.channels.getMessage(msg.channelID, msg.id);
+    } catch {
+      return; // Failed to fetch, can't update
+    }
+  }
+
+  const botId = client.application.id;
+  const isFromBot = realMsg.author.id === botId;
+
+  // Bot's own messages are assistant role, others are user role
+  const role = isFromBot ? ("assistant" as const) : ("user" as const);
+
+  // We should NOT update the role, but just the content.
+  // Actually, if a message was updated, it's likely still the same role.
+  if (entry.role !== role) {
+    // This shouldn't really happen in Discord unless someone's doing something very weird.
+    return;
+  }
+
+  const textContent = isFromBot
+    ? await formatAssistantContext(realMsg)
+    : await formatHistoryContext(realMsg);
+  const images = await fetchAllImages(realMsg);
+
+  entry.content = images.length > 0 ? [textContent, ...images] : textContent;
+
+  saveSession(agentSlug, session);
+}
+
+async function handleMessageDelete(ctx: HandlerCtx, msg: PossiblyUncachedMessage): Promise<void> {
+  const { agentSlug, owner } = ctx;
+  const agent = owner.agents.get(agentSlug);
+  if (agent === undefined) {
+    return;
+  }
+
+  const sessionId =
+    msg.guildID === undefined
+      ? `discord:${msg.channelID}`
+      : `discord:${msg.channelID}|${msg.guildID}`;
+
+  const session = agent.sessions.get(sessionId);
+  if (session === undefined || !(session instanceof DiscordSession)) {
+    return;
+  }
+
+  const entryIndex = session.history.findIndex((historyMsg) => historyMsg.id === msg.id);
+  if (entryIndex === -1) {
+    return;
+  }
+
+  session.history.splice(entryIndex, 1);
+
+  // If we deleted the last message, update the lastMessageId pointer
+  if (session.lastMessageId === msg.id) {
+    const lastUserMsg = session.history.findLast((historyMsg) => historyMsg.id !== undefined);
+    session.lastMessageId = lastUserMsg?.id;
+  }
+
+  // Dummy await to satisfy require-await lint rule
+  await Promise.resolve();
+  saveSession(agentSlug, session);
 }
 
 async function handleInteractionCreate(
@@ -714,7 +886,7 @@ async function handleInteractionCreate(
 }
 
 async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicClient> {
-  const { directMessages, token, ownerId } = await loadChannel("discord", agentSlug);
+  const { access, directMessages, token, ownerId } = await loadChannel("discord", agentSlug);
 
   const agent = owner.agents.get(agentSlug);
   if (agent === undefined) {
@@ -724,7 +896,12 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
   const client = new Client({
     auth: `Bot ${token}`,
     gateway: {
-      intents: Intents.GUILD_MESSAGES | Intents.DIRECT_MESSAGES | Intents.MESSAGE_CONTENT,
+      intents:
+        Intents.GUILD_MESSAGES |
+        Intents.DIRECT_MESSAGES |
+        Intents.MESSAGE_CONTENT |
+        Intents.GUILD_MESSAGE_REACTIONS |
+        Intents.DIRECT_MESSAGE_REACTIONS,
     },
     rest: {},
   });
@@ -752,6 +929,60 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
         results.push({ data, filename: attachment.filename });
       }
       return results;
+    },
+    fetchHistory: async (session, messageId, direction, limit = 50) => {
+      if (!(session instanceof DiscordSession)) {
+        throw new Error("fetchHistory only works on Discord sessions");
+      }
+
+      const params: {
+        limit: number;
+        before?: string;
+        after?: string;
+        around?: string;
+      } = {
+        limit,
+      };
+
+      switch (direction) {
+        case "after": {
+          params.after = messageId;
+          break;
+        }
+        case "around": {
+          params.around = messageId;
+          break;
+        }
+        case "before": {
+          params.before = messageId;
+          break;
+        }
+        default: {
+          const _exhaustive: never = direction;
+          throw new Error(`Unknown direction: ${String(_exhaustive)}`);
+        }
+      }
+
+      const messages = await client.rest.channels.getMessages(session.channelId, params);
+
+      // Map to HistoryMessage format with channel-specific formatting
+      const results = await Promise.all(
+        messages.map(async (msg) => {
+          const formatted = await formatHistoryContext(msg);
+          return {
+            authorId: msg.author.id,
+            authorName: msg.author.username,
+            content: msg.content,
+            formatted: formatted.content,
+            id: msg.id,
+            timestamp: msg.createdAt.toISOString(),
+          };
+        }),
+      );
+
+      // Discord returns newest-first for before/after, centered for around
+      // Always return chronological (oldest first)
+      return direction === "after" ? results : results.toReversed();
     },
     react: async (session, emoji, messageId) => {
       if (!(session instanceof DiscordSession)) {
@@ -844,17 +1075,25 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
   });
 
   client.on("error", (err) => {
-    warning("An error occurred on Discord:", err instanceof Error ? err.message : String(err));
-    warning(err);
+    warning("An error occurred on Discord:", err instanceof Error ? err.message : err);
+    if (err instanceof Error) {
+      warning(err);
+    }
   });
 
   const ctx: HandlerCtx = {
+    access,
     agentSlug,
     client,
     directMessages,
     owner,
     ownerId,
   };
+
+  // oxlint-disable-next-line typescript/no-misused-promises
+  client.on("messageReactionAdd", async (msg, reactor, reaction) => {
+    await handleMessageReactionAdd(ctx, msg, reactor, reaction);
+  });
 
   // oxlint-disable-next-line typescript/no-misused-promises
   client.on("messageCreate", async (msg) => {

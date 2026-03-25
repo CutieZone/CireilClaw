@@ -3,7 +3,7 @@ import { extname } from "node:path";
 
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import { toWebp } from "$/util/image.js";
-import { checkConditionalAccess, sandboxToReal, sanitizeError } from "$/util/paths.js";
+import { checkConditionalAccess, sandboxToReal } from "$/util/paths.js";
 import * as vb from "valibot";
 
 const Schema = vb.strictObject({
@@ -35,45 +35,36 @@ export const read: ToolDef = {
     "- To load a skill by its slug — use `read-skill` instead.\n" +
     "- For files you plan to edit repeatedly — use `open-file` to pin them to context.",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
-    try {
-      const data = vb.parse(Schema, input);
-      const realPath = sandboxToReal(data.path, ctx.agentSlug);
+    const data = vb.parse(Schema, input);
+    const realPath = sandboxToReal(data.path, ctx.agentSlug);
 
-      // Check conditional access rules if conditions are available
-      if (ctx.conditions !== undefined) {
-        checkConditionalAccess(data.path, ctx.agentSlug, ctx.conditions, ctx.session);
-      }
-
-      const { size } = await stat(realPath);
-
-      const mediaType = IMAGE_EXT_TO_MEDIA_TYPE[extname(data.path).toLowerCase()];
-      if (mediaType !== undefined) {
-        const buf = await readFile(realPath);
-        const webp = await toWebp(
-          buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
-        );
-        ctx.session.pendingImages.push({
-          data: webp,
-          mediaType: "image/webp",
-          type: "image",
-        });
-        return {
-          mediaType,
-          path: data.path,
-          size,
-          success: true,
-          type: "image",
-        };
-      }
-
-      const content = await readFile(realPath, "utf8");
-      return { content, path: data.path, size, success: true };
-    } catch (error: unknown) {
-      if (error instanceof vb.ValiError) {
-        return { error: error.message, issues: error.issues, success: false };
-      }
-      return { error: sanitizeError(error, ctx.agentSlug), success: false };
+    // Check conditional access rules if conditions are available
+    if (ctx.conditions !== undefined) {
+      checkConditionalAccess(data.path, ctx.agentSlug, ctx.conditions, ctx.session);
     }
+
+    const { size } = await stat(realPath);
+
+    const mediaType = IMAGE_EXT_TO_MEDIA_TYPE[extname(data.path).toLowerCase()];
+    if (mediaType !== undefined) {
+      const buf = await readFile(realPath);
+      const webp = await toWebp(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+      ctx.session.pendingImages.push({
+        data: webp,
+        mediaType: "image/webp",
+        type: "image",
+      });
+      return {
+        mediaType,
+        path: data.path,
+        size,
+        success: true,
+        type: "image",
+      };
+    }
+
+    const content = await readFile(realPath, "utf8");
+    return { content, path: data.path, size, success: true };
   },
   name: "read",
   parameters: Schema,

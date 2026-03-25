@@ -1,8 +1,10 @@
+import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
+import { ToolError } from "$/engine/errors.js";
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
-import { sandboxToReal } from "$/util/paths.js";
+import { checkConditionalAccess, sandboxToReal } from "$/util/paths.js";
 import * as vb from "valibot";
 
 const Schema = vb.strictObject({
@@ -24,7 +26,7 @@ const downloadAttachments: ToolDef = {
     "Only works on platforms that support attachment downloads (check capabilities in system prompt).",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     if (ctx.downloadAttachments === undefined) {
-      return { error: "This channel does not support downloading attachments", success: false };
+      throw new ToolError("This channel does not support downloading attachments");
     }
 
     const { message_id, to } = vb.parse(Schema, input);
@@ -34,7 +36,20 @@ const downloadAttachments: ToolDef = {
     const saved: string[] = [];
     for (const { filename, data } of files) {
       const sandboxPath = join(to, filename).replaceAll("\\", "/");
+
+      if (ctx.conditions !== undefined) {
+        checkConditionalAccess(sandboxPath, ctx.agentSlug, ctx.conditions, ctx.session);
+      }
+
       const realPath = sandboxToReal(sandboxPath, ctx.agentSlug);
+
+      if (existsSync(realPath)) {
+        throw new ToolError(
+          `File already exists at ${sandboxPath}`,
+          "Choose a different path or use write tool to overwrite if you really intend to.",
+        );
+      }
+
       await mkdir(dirname(realPath), { recursive: true });
       await writeFile(realPath, data);
       saved.push(sandboxPath);

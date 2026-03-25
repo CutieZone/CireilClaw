@@ -1,3 +1,4 @@
+import { ToolError } from "$/engine/errors.js";
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import * as vb from "valibot";
 
@@ -27,7 +28,7 @@ const react: ToolDef = {
     const { emoji, message_id } = vb.parse(ReactSchema, input);
 
     if (ctx.react === undefined) {
-      return { error: "Reactions are not supported on this channel", success: false };
+      throw new ToolError("Reactions are not supported on this channel");
     }
 
     await ctx.react(emoji, message_id);

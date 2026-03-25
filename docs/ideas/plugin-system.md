@@ -48,7 +48,7 @@ Everything that's application-specific: harness, channel handlers, engine loop, 
 ## Plugin contract
 
 ```typescript
-// packages/types/src/plugin.ts
+// packages/sdk/src/plugin.ts
 import type { ToolDef } from "./tool.ts";
 
 interface Plugin {
@@ -85,10 +85,10 @@ export default definePlugin(() => ({
 }));
 ```
 
-Plugin authors reference `-types` as a path dependency:
+Plugin authors reference `-sdk` as a path dependency:
 
 ```json
-{ "dependencies": { "cireilclaw-sdk": "file:../cireilclaw/packages/types" } }
+{ "dependencies": { "cireilclaw-sdk": "file:../cireilclaw/packages/sdk" } }
 ```
 
 Or a git URL for remote plugin authors. No npm publish needed.
@@ -97,11 +97,15 @@ Or a git URL for remote plugin authors. No npm publish needed.
 
 ```toml
 # ~/.cireilclaw/config/plugins.toml
-plugins = [
-  "/home/user/.cireilclaw/plugins/my-tool.js",
-  # or npm packages: "cireilclaw-plugin-weather"
-]
+[[plugins]]
+path = "/home/user/.cireilclaw/plugins/my-tool.js"
+
+[[plugins]]
+path = "cireilclaw-plugin-custom-exec"
+allowOverride = true  # this plugin may replace builtin tools
 ```
+
+`allowOverride` is an operator-level flag — the person deploying the instance decides which plugins are trusted to shadow builtins. If a plugin's tool names collide with builtins and `allowOverride` is not set, loading fails with an error.
 
 A `loadPlugins()` function dynamically `import()`s each path, validates the export is a `PluginFactory`, calls it, and returns the merged tool map. This runs once at startup before the harness boots.
 
@@ -111,10 +115,10 @@ A `loadPlugins()` function dynamically `import()`s each path, validates the expo
 
 ```typescript
 const pluginTools = await loadPlugins();
-const registry = { ...builtinToolRegistry, ...pluginTools };
+const registry = mergeToolRegistries(builtinToolRegistry, pluginTools);
 ```
 
-Plugin tools then appear in the registry like any built-in. Per-agent `tools.toml` handles enable/disable the same way — no plugin-specific config layer needed.
+`mergeToolRegistries` checks for key collisions — plugins without `allowOverride` cannot shadow builtins. Plugin tools then appear in the registry like any built-in. Per-agent `tools.toml` handles enable/disable the same way — no plugin-specific config layer needed.
 
 ## Hot-reload
 

@@ -41,6 +41,7 @@ interface ExecConfig {
   command: string;
   args?: string[];
   binaries: string[];
+  hostEnvPassthrough: string[];
   timeout: number;
   agentSlug: string;
 }
@@ -122,15 +123,103 @@ interface EnvVar {
   value: string;
 }
 
-function parseEnvFile(envPath: string): EnvVar[] {
+interface EnvParseError {
+  type: "error";
+  message: string;
+  hint?: string;
+}
+
+// Matches $VAR, ${VAR}, or ${VAR:-default}
+const ENV_VAR_PATTERN = /\$\{(\w+)(?::-([^}]*))?\}|\$(\w+)/g;
+
+class EnvResolutionError extends Error {
+  override name = "EnvResolutionError";
+}
+
+function isEnvParseError(value: string | EnvParseError): value is EnvParseError {
+  return typeof value !== "string";
+}
+
+function resolveEnvValue(
+  rawValue: string,
+  fileVars: Map<string, string>,
+  resolutionStack: Set<string>,
+): string | EnvParseError {
+  try {
+    return rawValue.replace(
+      ENV_VAR_PATTERN,
+      (
+        match,
+        braced: string | undefined,
+        defaultVal: string | undefined,
+        bare: string | undefined,
+      ) => {
+        const key: string | undefined = braced ?? bare;
+
+        if (key === undefined) {
+          return match;
+        }
+
+        if (resolutionStack.has(key)) {
+          throw new EnvResolutionError(`Circular reference to '${key}'`);
+        }
+
+        // Look up in order: file vars (already resolved) → host env
+        const fromFile = fileVars.get(key);
+        const fromHost = process.env[key];
+
+        if (fromFile !== undefined) {
+          resolutionStack.add(key);
+          const resolved = resolveEnvValue(fromFile, fileVars, resolutionStack);
+          resolutionStack.delete(key);
+
+          if (isEnvParseError(resolved)) {
+            throw new EnvResolutionError(resolved.message);
+          }
+          return resolved;
+        }
+
+        if (fromHost !== undefined) {
+          return fromHost;
+        }
+
+        // Not found — use default if provided
+        if (defaultVal !== undefined) {
+          return defaultVal;
+        }
+
+        throw new EnvResolutionError(`Undefined variable '${key}'`);
+      },
+    );
+  } catch (error) {
+    const message = error instanceof EnvResolutionError ? error.message : String(error);
+    return { message, type: "error" };
+  }
+}
+
+interface RawEnvLine {
+  key: string;
+  lineNumber: number;
+  value: string;
+}
+
+function parseEnvFile(envPath: string): EnvVar[] | EnvParseError {
   if (!existsSync(envPath)) {
     return [];
   }
 
   const content = readFileSync(envPath, "utf8");
-  const vars: EnvVar[] = [];
+  const rawVars: RawEnvLine[] = [];
+  const resolvedVars = new Map<string, string>();
 
-  for (const line of content.split("\n")) {
+  const lines = content.split("\n");
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const line = lines[lineIndex];
+    if (line === undefined) {
+      continue;
+    }
+
     const trimmed = line.trim();
 
     if (trimmed.length === 0 || trimmed.startsWith("#")) {
@@ -149,13 +238,37 @@ function parseEnvFile(envPath: string): EnvVar[] {
       continue;
     }
 
-    vars.push({ key, value });
+    rawVars.push({ key, lineNumber: lineIndex + 1, value });
   }
 
-  return vars;
+  // Second pass: resolve values
+  for (const { key, lineNumber, value: rawValue } of rawVars) {
+    const resolved = resolveEnvValue(rawValue, resolvedVars, new Set());
+
+    if (typeof resolved !== "string") {
+      return {
+        hint: `Edit the .env file at ${envPath} to fix the variable reference.`,
+        message: `Line ${lineNumber}: ${resolved.message}`,
+        type: "error",
+      };
+    }
+
+    resolvedVars.set(key, resolved);
+  }
+
+  // Return resolved vars
+  return rawVars.map(({ key }) => ({
+    key,
+    value: resolvedVars.get(key) ?? "",
+  }));
 }
 
-function addEnvironmentVars(args: string[], pathValue: string, extraVars?: EnvVar[]): void {
+function addEnvironmentVars(
+  args: string[],
+  pathValue: string,
+  extraVars?: EnvVar[],
+  passthroughVars?: string[],
+): void {
   args.push("--clearenv");
 
   const defaultVars: EnvVar[] = [
@@ -165,7 +278,18 @@ function addEnvironmentVars(args: string[], pathValue: string, extraVars?: EnvVa
     { key: "LC_ALL", value: "C.UTF-8" },
   ];
 
-  const allVars = extraVars ? [...defaultVars, ...extraVars] : defaultVars;
+  // Read passthrough vars from host environment
+  const hostVars: EnvVar[] = [];
+  for (const key of passthroughVars ?? []) {
+    const value = process.env[key];
+    if (value !== undefined) {
+      hostVars.push({ key, value });
+    }
+  }
+
+  const allVars = extraVars
+    ? [...defaultVars, ...extraVars, ...hostVars]
+    : [...defaultVars, ...hostVars];
 
   for (const { key, value } of allVars) {
     args.push("--setenv", key, value);
@@ -302,6 +426,18 @@ function buildGenericLinuxBindings(args: string[], binaries: string[]): boolean 
     args.push("--ro-bind", "/lib64", "/lib64");
   }
 
+  // Dynamic linker configuration for finding shared libraries
+  const ldConfigFiles = ["/etc/ld.so.cache", "/etc/ld.so.conf"];
+  for (const file of ldConfigFiles) {
+    if (existsSync(file)) {
+      args.push("--ro-bind", file, file);
+    }
+  }
+
+  if (existsSync("/etc/ld.so.conf.d")) {
+    args.push("--ro-bind", "/etc/ld.so.conf.d", "/etc/ld.so.conf.d");
+  }
+
   for (const tool of binaries) {
     const toolPath = locate(tool);
 
@@ -316,12 +452,29 @@ function buildGenericLinuxBindings(args: string[], binaries: string[]): boolean 
   return true;
 }
 
-async function buildBwrap(binaries: string[], agentSlug: string): Promise<string[] | undefined> {
+interface BwrapSuccess {
+  type: "success";
+  args: string[];
+}
+
+interface BwrapError {
+  type: "error";
+  message: string;
+  hint?: string;
+}
+
+type BwrapResult = BwrapSuccess | BwrapError;
+
+async function buildBwrap(
+  binaries: string[],
+  hostEnvPassthrough: string[],
+  agentSlug: string,
+): Promise<BwrapResult> {
   const home = process.env["HOME"];
 
   if (home === undefined) {
     warning("Could not locate $HOME");
-    return undefined;
+    return { message: "Could not locate $HOME environment variable", type: "error" };
   }
 
   debug({ binaries }, "Building bwrap sandbox");
@@ -332,10 +485,14 @@ async function buildBwrap(binaries: string[], agentSlug: string): Promise<string
   addSslCertificates(args);
 
   const envPath = join(root(), "agents", agentSlug, "workspace", ".env");
-  const extraVars = parseEnvFile(envPath);
+  const envResult = parseEnvFile(envPath);
 
-  if (extraVars.length > 0) {
-    debug({ count: extraVars.length, envPath }, "Loaded environment variables from .env file");
+  if (!Array.isArray(envResult)) {
+    return envResult;
+  }
+
+  if (envResult.length > 0) {
+    debug({ count: envResult.length, envPath }, "Loaded environment variables from .env file");
   }
 
   const isNixOS = detectNixOS();
@@ -343,20 +500,20 @@ async function buildBwrap(binaries: string[], agentSlug: string): Promise<string
 
   if (isNixOS) {
     success = await buildNixBindings(args, binaries);
-    addEnvironmentVars(args, "/bin", extraVars);
+    addEnvironmentVars(args, "/bin", envResult, hostEnvPassthrough);
   } else {
     success = buildGenericLinuxBindings(args, binaries);
-    addEnvironmentVars(args, "/usr/bin:/bin:/usr/local/bin", extraVars);
+    addEnvironmentVars(args, "/usr/bin:/bin:/usr/local/bin", envResult, hostEnvPassthrough);
   }
 
   if (!success) {
     warning("Failed to build sandbox bindings");
-    return undefined;
+    return { message: "Failed to build sandbox bindings", type: "error" };
   }
 
   args.push("--chdir", "/workspace");
 
-  return args;
+  return { args, type: "success" };
 }
 
 async function runInSandbox(
@@ -435,7 +592,7 @@ async function runInSandbox(
 const SHELL_METACHAR_PATTERN = /[\s"'|&;$`\\]/;
 
 async function exec(cfg: ExecConfig): Promise<ExecResult> {
-  const { binaries, command, args, timeout, agentSlug } = cfg;
+  const { binaries, command, args, hostEnvPassthrough, timeout, agentSlug } = cfg;
 
   // Reject any command with shell metacharacters or spaces
   if (SHELL_METACHAR_PATTERN.test(command)) {
@@ -452,19 +609,20 @@ async function exec(cfg: ExecConfig): Promise<ExecResult> {
     };
   }
 
-  const bwrap = await buildBwrap(binaries, agentSlug);
+  const bwrap = await buildBwrap(binaries, hostEnvPassthrough, agentSlug);
 
-  if (bwrap === undefined) {
-    return {
-      error: "Failed to build bubblewrap sandbox, cannot execute.",
-      type: "error",
-    };
+  if (bwrap.type === "error") {
+    const error =
+      bwrap.hint !== undefined && bwrap.hint.length > 0
+        ? `${bwrap.message}\n\nHint: ${bwrap.hint}`
+        : bwrap.message;
+    return { error, type: "error" };
   }
 
   const isNixOS = detectNixOS();
   const commandPath = isNixOS ? `/bin/${command}` : (locate(command) ?? `/usr/bin/${command}`);
 
-  return runInSandbox(bwrap, commandPath, args ?? [], timeout);
+  return runInSandbox(bwrap.args, commandPath, args ?? [], timeout);
 }
 
 export { buildBwrap, exec, locate };

@@ -1,3 +1,4 @@
+import type { TuiBridge } from "$/channels/tui/bridge.js";
 import type { ImageContent } from "$/engine/content.js";
 import type { Message } from "$/engine/message.js";
 
@@ -6,6 +7,7 @@ type ChannelType = (typeof channelTypes)[number];
 
 abstract class BaseSession {
   abstract readonly channel: ChannelType;
+  readonly ephemeral: boolean = false;
 
   history: Message[] = new Array<Message>();
   openedFiles: Set<string> = new Set<string>();
@@ -66,6 +68,7 @@ class MatrixSession extends BaseSession {
 // Ephemeral session for isolated cron job execution — never persisted to DB.
 class InternalSession extends BaseSession {
   override readonly channel = "internal";
+  override readonly ephemeral = true;
 
   readonly jobId: string;
 
@@ -79,27 +82,45 @@ class InternalSession extends BaseSession {
   }
 }
 
-class TuiSession extends BaseSession {
-  override readonly channel = "tui";
+// Persistent session for heartbeats and named internal automation.
+class NamedInternalSession extends BaseSession {
+  override readonly channel = "internal";
+  override readonly ephemeral = false;
 
-  readonly label: string;
+  readonly name: string;
 
-  constructor(label = "local") {
+  constructor(name: string) {
     super();
-    this.label = label;
+    this.name = name;
   }
 
   override id(): string {
-    return `tui:${this.label}`;
+    return `internal:${this.name}`;
   }
 }
 
-type Session = DiscordSession | MatrixSession | InternalSession | TuiSession;
+class TuiSession extends BaseSession {
+  override readonly channel = "tui";
+  bridge?: TuiBridge;
+
+  constructor(bridge?: TuiBridge) {
+    super();
+    this.bridge = bridge;
+  }
+
+  // oxlint-disable-next-line class-methods-use-this
+  override id(): string {
+    return "tui";
+  }
+}
+
+type Session = DiscordSession | MatrixSession | InternalSession | NamedInternalSession | TuiSession;
 
 export {
   DiscordSession,
   MatrixSession,
   InternalSession,
+  NamedInternalSession,
   TuiSession,
   channelTypes as channelTypeList,
 };

@@ -1,5 +1,7 @@
+import { ToolError } from "$/engine/errors.js";
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import type { ChannelResolution } from "$/harness/channel-handler.js";
+import { checkConditionalAccess } from "$/util/paths.js";
 import * as vb from "valibot";
 
 const RespondSchema = vb.strictObject({
@@ -14,7 +16,7 @@ const RespondSchema = vb.strictObject({
     vb.optional(vb.nullable(vb.string())),
     vb.transform((val) => val ?? "current"),
     vb.description(
-      'Target channel for the message. "current" (default) = send to this conversation; "last" = most recently active session; "owner" = DM the bot owner; or explicit like "discord:123|456" for a specific Discord channel.',
+      'Target channel for the message. "current" (default) = send to this conversation; "last" = most recently active session; "owner" = DM the bot owner; or explicit like "discord:{channelId}|{guildId}" for a specific Discord channel (channel ID first, then guild ID — use session-info or list-sessions to get the correct session ID).',
     ),
   ),
   content: vb.pipe(vb.string(), vb.nonEmpty(), vb.description("Your message in plain Markdown.")),
@@ -45,19 +47,27 @@ const respond: ToolDef = {
     // Channel is always a string after the transform (defaults to "current")
     const channel = parsed.channel ?? "current";
 
+    if (attachments !== undefined && ctx.conditions !== undefined) {
+      for (const attachment of attachments) {
+        checkConditionalAccess(attachment, ctx.agentSlug, ctx.conditions, ctx.session);
+      }
+    }
+
     const resolution = await ctx.resolveChannel(channel);
 
     if (!isChannelResolution(resolution)) {
-      return { error: "invalid channel resolution from handler", final: false, sent: false };
+      throw new ToolError("invalid channel resolution from handler");
     }
 
     if ("error" in resolution) {
-      return { error: resolution.error, final: false, sent: false };
+      throw new ToolError(resolution.error);
     }
 
     // Send to the resolved session using sendTo for cross-channel messaging
     await ctx.sendTo(resolution, content, attachments);
-    return { final, sent: true };
+    // Cross-channel sends never end the turn — the agent still needs to respond to the current channel.
+    const isCrossChannel = channel !== "current" && resolution !== ctx.session;
+    return { final: isCrossChannel ? false : final, sent: true };
   },
   name: "respond",
   parameters: RespondSchema,

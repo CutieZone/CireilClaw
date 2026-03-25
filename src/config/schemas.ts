@@ -37,14 +37,14 @@ const EngineConfigSchema = vb.strictObject({
   apiBase: vb.pipe(nonEmptyString, vb.url()),
   apiKey: vb.exactOptional(ApiKeySchema, "not-needed"),
   channel: vb.exactOptional(EngineOverridesSchema, {}),
-  compactPrompts: vb.exactOptional(vb.boolean(), false),
-  maxTokens: vb.exactOptional(vb.pipe(vb.number(), vb.integer(), vb.minValue(1))),
+  maxGenerationRetries: vb.exactOptional(vb.pipe(vb.number(), vb.integer(), vb.minValue(0)), 2),
   maxTurns: vb.exactOptional(vb.pipe(vb.number(), vb.integer(), vb.minValue(1)), 30),
   minP: vb.exactOptional(vb.pipe(vb.number(), vb.minValue(0), vb.maxValue(1))),
   model: nonEmptyString,
   presencePenalty: vb.exactOptional(vb.pipe(vb.number(), vb.minValue(-2), vb.maxValue(2))),
   provider: vb.exactOptional(nonEmptyString, "openai"),
   temperature: vb.exactOptional(vb.pipe(vb.number(), vb.minValue(0), vb.maxValue(2))),
+  toolFailThreshold: vb.exactOptional(vb.pipe(vb.number(), vb.integer(), vb.minValue(1)), 3),
   topP: vb.exactOptional(vb.pipe(vb.number(), vb.minValue(0), vb.maxValue(1))),
 });
 
@@ -53,6 +53,7 @@ type EngineConfig = vb.InferOutput<typeof EngineConfigSchema>;
 const ExecToolConfigSchema = vb.strictObject({
   binaries: vb.array(vb.pipe(vb.string(), vb.nonEmpty())),
   enabled: vb.exactOptional(vb.boolean(), true),
+  hostEnvPassthrough: vb.exactOptional(vb.array(vb.pipe(vb.string(), vb.nonEmpty())), []),
   timeout: vb.exactOptional(vb.pipe(vb.number(), vb.integer(), vb.minValue(1000)), 60_000),
 });
 
@@ -90,6 +91,22 @@ const DirectMessagesModeSchema = vb.exactOptional(
 
 type DirectMessagesMode = vb.InferOutput<typeof DirectMessagesModeSchema>;
 
+const AccessModeSchema = vb.exactOptional(
+  vb.union([vb.literal("disabled"), vb.literal("whitelist"), vb.literal("blacklist")]),
+  "disabled",
+);
+
+type AccessMode = vb.InferOutput<typeof AccessModeSchema>;
+
+const AccessSchema = vb.optional(
+  vb.strictObject({
+    mode: AccessModeSchema,
+    users: vb.exactOptional(vb.array(vb.pipe(vb.string(), vb.regex(/[0-9]+/))), []),
+  }),
+);
+
+type AccessConfig = vb.InferOutput<typeof AccessSchema>;
+
 const DirectMessagesSchema = vb.optional(
   vb.strictObject({
     mode: DirectMessagesModeSchema,
@@ -100,6 +117,7 @@ const DirectMessagesSchema = vb.optional(
 type DirectMessagesConfig = vb.InferOutput<typeof DirectMessagesSchema>;
 
 const DiscordSchema = vb.strictObject({
+  access: vb.exactOptional(AccessSchema, { mode: "disabled", users: [] }),
   directMessages: vb.exactOptional(DirectMessagesSchema, { mode: "owner", users: [] }),
   ownerId: vb.pipe(vb.string(), vb.nonEmpty(), vb.regex(/[0-9]+/)),
   token: vb.pipe(vb.string(), vb.nonEmpty()),
@@ -128,6 +146,7 @@ interface ConfigChangeEvent {
 type Watchers = AsyncIterableIterator<ConfigChangeEvent>;
 
 export {
+  AccessSchema,
   ApiKeySchema,
   DirectMessagesSchema,
   DiscordSchema,
@@ -144,6 +163,8 @@ export {
 };
 
 export type {
+  AccessConfig,
+  AccessMode,
   ApiKey,
   ChannelConfigMap,
   ConfigChangeEvent,

@@ -68,3 +68,19 @@ if (model.includes("kimi") && model.includes("2.5")) {
 ```
 
 You will see elevated error rates with Kimi K2.5 no matter what.
+
+### Models That Don't Use Tools
+
+Some models (especially smaller or weaker ones) emit plain text despite `tool_choice: required` being set. When this happens, the engine automatically retries up to `max_generation_retries` times (default: 2) by injecting the assistant's text into history alongside a nudge to use tools. If retries are exhausted the error propagates. Expect elevated failure rates with weak models even with retries.
+
+Configurable via `max_generation_retries` in `engine.toml`.
+
+### Models That Loop on the Same Tool
+
+Some models get stuck repeatedly calling the same tool when they can't find what they want — e.g., hunting for `dinner-ideas.md` because the user asked about dinner. The engine tracks consecutive `success: false` responses per tool and disables that tool for the rest of the turn once it hits `tool_fail_threshold` (default: 3). The agent receives a message instructing it to stop trying, ask for more information, or do something else.
+
+Configurable via `tool_fail_threshold` in `engine.toml`.
+
+### Models That Reject `tool_choice: required`
+
+Some OAI-compatible providers return a 400 error when `tool_choice: "required"` is set (similar to the Kimi K2.5 issue above, but at the API level rather than being model-specific). When this is detected, the engine automatically falls back to `tool_choice: "auto"` and appends a forceful system message demanding tool use. This is a reactive generalisation of the Kimi K2.5 special-case.

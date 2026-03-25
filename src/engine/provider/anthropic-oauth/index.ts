@@ -5,16 +5,20 @@ import type {
   ToolResponseContent,
 } from "$/engine/content.js";
 import type { Context, UsageInfo } from "$/engine/context.js";
+import { GenerationNoToolCallsError } from "$/engine/errors.js";
 import type { AssistantMessage, Message } from "$/engine/message.js";
 import type { Tool } from "$/engine/tool.js";
 import { debug } from "$/output/log.js";
 import { encode } from "$/util/base64.js";
+import { scaleForAnthropic } from "$/util/image.js";
 import type { KeyPool } from "$/util/key-pool.js";
 import { toJsonSchema } from "@valibot/to-json-schema";
+import * as vb from "valibot";
 
 const API_URL = "https://api.anthropic.com/v1/messages";
 
 interface AnthropicTextBlock {
+  cache_control?: { type: "ephemeral" };
   type: "text";
   text: string;
 }
@@ -63,10 +67,11 @@ function translateText(content: TextContent): AnthropicTextBlock {
   return { text: content.content, type: "text" };
 }
 
-function translateImage(content: ImageContent): AnthropicImageBlock {
+async function translateImage(content: ImageContent): Promise<AnthropicImageBlock> {
+  const scaled = await scaleForAnthropic(content.data);
   return {
     source: {
-      data: encode(content.data),
+      data: encode(scaled),
       media_type: content.mediaType,
       type: "base64",
     },
@@ -77,8 +82,10 @@ function translateImage(content: ImageContent): AnthropicImageBlock {
 function translateToolResponse(content: ToolResponseContent): AnthropicToolResultBlock {
   const outputStr =
     typeof content.output === "object" && content.output !== null
-      ? // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-        JSON.stringify({ name: content.name, ...(content.output as Record<string, unknown>) })
+      ? JSON.stringify({
+          name: content.name,
+          ...vb.parse(vb.record(vb.string(), vb.unknown()), content.output),
+        })
       : JSON.stringify({ name: content.name, output: content.output });
   return {
     content: outputStr,
@@ -91,7 +98,7 @@ function translateToolResponse(content: ToolResponseContent): AnthropicToolResul
 // Key differences from OAI: toolResponse messages must be merged into a single user message,
 // and any immediately following user message (typically pending images) is absorbed into that block.
 // Also filters out orphaned tool_result blocks that lack matching tool_use in the preceding assistant message.
-function translateMessages(messages: Message[]): AnthropicMessage[] {
+async function translateMessages(messages: Message[]): Promise<AnthropicMessage[]> {
   const result: AnthropicMessage[] = [];
   let lastToolUseIds = new Set<string>();
 
@@ -119,10 +126,14 @@ function translateMessages(messages: Message[]): AnthropicMessage[] {
       if (next?.role === "user") {
         const userContent = Array.isArray(next.content) ? next.content : [next.content];
         for (const block of userContent) {
+          if (block.type === "image_ref") {
+            throw new Error("A block of type image_ref should not exist here.");
+          }
+
           if (block.type === "text") {
             blocks.push(translateText(block));
           } else {
-            blocks.push(translateImage(block));
+            blocks.push(await translateImage(block));
           }
         }
         idx++;
@@ -135,10 +146,14 @@ function translateMessages(messages: Message[]): AnthropicMessage[] {
       const userContent = Array.isArray(msg.content) ? msg.content : [msg.content];
       const blocks: AnthropicUserContentBlock[] = [];
       for (const block of userContent) {
+        if (block.type === "image_ref") {
+          throw new Error("A block of type image_ref should not exist here.");
+        }
+
         if (block.type === "text") {
           blocks.push(translateText(block));
         } else {
-          blocks.push(translateImage(block));
+          blocks.push(await translateImage(block));
         }
       }
       result.push({ content: blocks, role: "user" });
@@ -182,17 +197,28 @@ export async function generate(
   context: Context,
   keyPool: KeyPool,
   model: string,
-  sampling: { maxTokens?: number; temperature?: number; topP?: number } = {},
+  sampling: { temperature?: number; topP?: number } = {},
 ): Promise<{ message: AssistantMessage; usage?: UsageInfo }> {
   // Required preamble for the claude-code-20250219 beta — the model checks for this.
-  const system = `You are Claude Code, Anthropic's official CLI for Claude.\n${context.systemPrompt}`;
+  const system = `You are Claude Code, Anthropic's official CLI for Claude.`;
 
   const body: Record<string, unknown> = {
-    cache_control: {
-      type: "ephemeral",
-    },
-    max_tokens: sampling.maxTokens ?? 8192,
-    messages: translateMessages(context.messages),
+    max_tokens: 64_000,
+    messages: [
+      {
+        content: [
+          {
+            cache_control: {
+              type: "ephemeral",
+            },
+            text: context.systemPrompt,
+            type: "text",
+          },
+        ],
+        role: "assistant",
+      } satisfies AnthropicMessage,
+      ...(await translateMessages(context.messages)),
+    ],
     model,
     system,
     tool_choice: { type: "any" },
@@ -255,25 +281,30 @@ export async function generate(
       );
     }
 
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const data = (await resp.json()) as {
-      content: {
-        id?: string;
-        input?: unknown;
-        name?: string;
-        text?: string;
-        type: string;
-      }[];
-      stop_reason: string;
-      usage: {
-        input_tokens: number;
-        output_tokens: number;
-      };
-    };
+    const AnthropicResponseSchema = vb.object({
+      content: vb.array(
+        vb.object({
+          id: vb.exactOptional(vb.string()),
+          input: vb.exactOptional(vb.unknown()),
+          name: vb.exactOptional(vb.string()),
+          text: vb.exactOptional(vb.string()),
+          type: vb.string(),
+        }),
+      ),
+      stop_reason: vb.string(),
+      usage: vb.object({
+        input_tokens: vb.number(),
+        output_tokens: vb.number(),
+      }),
+    });
+
+    const data = vb.parse(AnthropicResponseSchema, await resp.json());
 
     if (data.stop_reason !== "tool_use") {
-      throw new Error(
-        `Expected 'tool_use' stop_reason (tool_choice is any), got '${data.stop_reason}'`,
+      const textBlock = data.content.find((block) => block.type === "text");
+      throw new GenerationNoToolCallsError(
+        typeof textBlock?.text === "string" ? textBlock.text : undefined,
+        data.stop_reason,
       );
     }
 

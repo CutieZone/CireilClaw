@@ -16,20 +16,6 @@ const MatrixMetaSchema = vb.strictObject({
 
 type MatrixMeta = vb.InferOutput<typeof MatrixMetaSchema>;
 
-// Schema for image reference blocks in serialized history
-const ImageRefSchema = vb.strictObject({
-  id: vb.pipe(vb.string(), vb.nonEmpty()),
-  mediaType: vb.pipe(vb.string(), vb.nonEmpty()),
-  type: vb.literal("image_ref"),
-});
-
-type ImageRef = vb.InferOutput<typeof ImageRefSchema>;
-
-// Helper to check if an unknown value is an ImageRef
-function isImageRef(value: unknown): value is ImageRef {
-  return vb.is(ImageRefSchema, value);
-}
-
 // Schema for serialized history messages (loose validation for repair tool)
 const SerializedMessageSchema = vb.looseObject({
   content: vb.union([vb.string(), vb.array(vb.unknown())]),
@@ -44,12 +30,5 @@ const SerializedHistorySchema = vb.array(SerializedMessageSchema);
 
 type SerializedHistory = vb.InferOutput<typeof SerializedHistorySchema>;
 
-export {
-  DiscordMetaSchema,
-  ImageRefSchema,
-  MatrixMetaSchema,
-  SerializedHistorySchema,
-  SerializedMessageSchema,
-  isImageRef,
-};
-export type { DiscordMeta, ImageRef, MatrixMeta, SerializedHistory, SerializedMessage };
+export { DiscordMetaSchema, MatrixMetaSchema, SerializedHistorySchema, SerializedMessageSchema };
+export type { DiscordMeta, MatrixMeta, SerializedHistory, SerializedMessage };

@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 
-import { sandboxToReal, sanitizeError } from "$/util/paths.js";
+import { sandboxToReal } from "$/util/paths.js";
 import * as vb from "valibot";
 
 import type { ToolContext, ToolDef } from "./tool-def.js";
@@ -19,18 +19,11 @@ const readSkill: ToolDef = {
     "Your available skills are listed in the system prompt by slug and description. Call this tool when you need the complete instructions, examples, and pitfalls for a skill before following its process.\n\n" +
     'If you just need to browse available skills, use `list-dir` with path "/skills/" instead.',
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
-    try {
-      const data = vb.parse(SkillSchema, input);
-      const sandboxPath = `/skills/${data.slug}/SKILL.md`;
-      const realPath = sandboxToReal(sandboxPath, ctx.agentSlug);
-      const content = await readFile(realPath, "utf8");
-      return { content, slug: data.slug, success: true };
-    } catch (error: unknown) {
-      if (error instanceof vb.ValiError) {
-        return { error: error.message, issues: error.issues, success: false };
-      }
-      return { error: sanitizeError(error, ctx.agentSlug), success: false };
-    }
+    const data = vb.parse(SkillSchema, input);
+    const sandboxPath = `/skills/${data.slug}/SKILL.md`;
+    const realPath = sandboxToReal(sandboxPath, ctx.agentSlug);
+    const content = await readFile(realPath, "utf8");
+    return { content, slug: data.slug, success: true };
   },
   name: "read-skill",
   parameters: SkillSchema,

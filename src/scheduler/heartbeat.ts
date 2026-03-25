@@ -5,9 +5,9 @@ import { join } from "node:path";
 import type { Agent } from "$/agent/index.js";
 import type { HeartbeatConfig } from "$/config/heartbeat.js";
 import { saveSession } from "$/db/sessions.js";
-import { Engine } from "$/engine/index.js";
 import type { ChannelResolution } from "$/harness/channel-handler.js";
 import type { Session } from "$/harness/session.js";
+import { NamedInternalSession, TuiSession } from "$/harness/session.js";
 import colors from "$/output/colors.js";
 import { debug, warning } from "$/output/log.js";
 import { agentRoot } from "$/util/paths.js";
@@ -33,7 +33,25 @@ function resolveTarget(agent: Agent, target: string): Session | undefined {
     return best;
   }
 
-  return sessions.get(target);
+  const existing = sessions.get(target);
+  if (existing !== undefined) {
+    return existing;
+  }
+
+  // Auto-create named internal or TUI sessions if requested but missing.
+  if (target.startsWith("internal:")) {
+    const session = new NamedInternalSession(target.slice("internal:".length));
+    sessions.set(target, session);
+    return session;
+  }
+
+  if (target === "tui") {
+    const session = new TuiSession();
+    sessions.set(target, session);
+    return session;
+  }
+
+  return undefined;
 }
 
 // Check whether the current time falls within the configured active hours window.
@@ -112,6 +130,7 @@ export async function runHeartbeat(agent: Agent, cfg: HeartbeatConfig): Promise<
       type: "text",
     },
     role: "user",
+    timestamp: Date.now(),
   });
 
   async function resolveChannel(spec: string): Promise<ChannelResolution> {
@@ -121,18 +140,7 @@ export async function runHeartbeat(agent: Agent, cfg: HeartbeatConfig): Promise<
   }
 
   try {
-    const engine =
-      cfg.model === undefined
-        ? agent.engine
-        : new Engine({
-            apiBase: cfg.model.apiBase ?? agent.engine.apiBase,
-            apiKey: cfg.model.apiKey ?? agent.engine.apiKey,
-            channel: agent.engine.overrides,
-            compactPrompts: agent.engine.compactPrompts,
-            maxTurns: agent.engine.maxTurns,
-            model: cfg.model.model ?? agent.engine.model,
-            provider: cfg.model.provider ?? agent.engine.provider,
-          });
+    const engine = cfg.model === undefined ? agent.engine : agent.engine.derive(cfg.model);
 
     await engine.runTurn(
       session,
@@ -143,6 +151,7 @@ export async function runHeartbeat(agent: Agent, cfg: HeartbeatConfig): Promise<
       async (targetSession: Session, content: string): Promise<void> => {
         await agent.send(targetSession, content);
       },
+      undefined,
       undefined,
       undefined,
       resolveChannel,

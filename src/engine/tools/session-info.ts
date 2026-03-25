@@ -1,3 +1,4 @@
+import { ToolError } from "$/engine/errors.js";
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import { DiscordSession, InternalSession, MatrixSession, TuiSession } from "$/harness/session.js";
 import * as vb from "valibot";
@@ -25,6 +26,7 @@ export const sessionInfo: ToolDef = {
         guild_id: session.guildId,
         is_nsfw: session.isNsfw,
         platform: "discord",
+        session_id: session.id(),
         success: true,
       };
     }
@@ -33,26 +35,28 @@ export const sessionInfo: ToolDef = {
       return {
         platform: "matrix",
         room_id: session.roomId,
+        session_id: session.id(),
         success: true,
       };
     }
 
     if (session instanceof TuiSession) {
       return {
-        label: session.label,
         platform: "tui",
+        session_id: session.id(),
         success: true,
       };
     }
 
     if (session instanceof InternalSession) {
-      return { platform: "internal", success: true };
+      return {
+        platform: "internal",
+        session_id: session.id(),
+        success: true,
+      };
     }
 
-    return {
-      error: "Unknown session type",
-      success: false,
-    };
+    throw new ToolError("Unknown session type");
   },
   name: "session-info",
   parameters: Schema,

@@ -6,7 +6,7 @@ import type { ConfigMigration } from "$/config/migrations/index.js";
 import { parse } from "smol-toml";
 
 function yamlQuote(str: string): string {
-  return `"${str.replaceAll("\\", String.raw`\\`).replaceAll('"', String.raw`\"`)}"`; // oxlint-disable-line no-useless-escape
+  return `"${str.replaceAll("\\", String.raw`\\`).replaceAll('"', String.raw`\"`)}"`;
 }
 
 const migration: ConfigMigration = {
@@ -45,7 +45,6 @@ const migration: ConfigMigration = {
       await context.backupFile(flatPath);
 
       const tomlData = content.slice(3, ending);
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       const frontmatter = parse(tomlData) as { summary?: string; whenToUse?: string };
       const body = content.slice(ending + 3).trimStart();
 

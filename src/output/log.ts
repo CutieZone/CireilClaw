@@ -30,14 +30,12 @@ function setTuiSink(sink: LogSink | undefined): void {
 const MAX_BYTES = 10 * 1024 * 1024; // 10MB
 const MAX_BACKUPS = 5;
 
-// oxlint-disable-next-line init-declarations
-let _fd: number | undefined;
-// oxlint-disable-next-line init-declarations
-let _filePath: string | undefined;
+let _fd: number | undefined = undefined;
+let _filePath: string | undefined = undefined;
 let _bytesWritten = 0;
 
 // oxlint-disable-next-line no-control-regex
-const ANSI_RE = /\u001B\[[0-9;]*m/g;
+const ANSI_RE = /\u001B\[[0-9;]*m/gu;
 function stripAnsi(str: string): string {
   return str.replace(ANSI_RE, "");
 }

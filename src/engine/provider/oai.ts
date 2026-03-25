@@ -1,8 +1,9 @@
 import type { Content, ToolCallContent } from "$/engine/content.js";
 import type { Context, UsageInfo } from "$/engine/context.js";
+import { GenerationNoToolCallsError } from "$/engine/errors.js";
 import type { AssistantMessage, Message } from "$/engine/message.js";
 import type { Tool } from "$/engine/tool.js";
-import { debug } from "$/output/log.js";
+import { debug, warning } from "$/output/log.js";
 import { encode } from "$/util/base64.js";
 import type { KeyPool } from "$/util/key-pool.js";
 import { toJsonSchema } from "@valibot/to-json-schema";
@@ -16,6 +17,7 @@ import type {
   ChatCompletionMessageToolCall,
   ChatCompletionTool,
 } from "openai/resources";
+import * as vb from "valibot";
 
 function translateContent(
   content: Content,
@@ -38,6 +40,8 @@ function translateContent(
       throw new Error(
         `Content type '${content.type}' should not be translated via translateContent - handled separately in translateMsg`,
       );
+    case "image_ref":
+      throw new Error("Content type 'image_ref' should never end up here. How did it?");
     default:
       throw new Error("Unreachable");
   }
@@ -48,7 +52,7 @@ function translateMsg(message: Message): ChatCompletionMessageParam {
     case "user":
       if (Array.isArray(message.content)) {
         return {
-          content: message.content.map(translateContent),
+          content: message.content.map((it) => translateContent(it)),
           role: "user",
         };
       }
@@ -79,22 +83,32 @@ function translateMsg(message: Message): ChatCompletionMessageParam {
 
     case "assistant":
       if (Array.isArray(message.content)) {
-        return {
-          role: "assistant",
-          tool_calls: message.content
-            .filter((it) => it.type === "toolCall")
-            .map(
-              (it) =>
-                ({
-                  function: {
-                    arguments: JSON.stringify(it.input),
-                    name: it.name,
-                  },
-                  id: it.id,
-                  type: "function",
-                }) as ChatCompletionMessageToolCall,
-            ),
-        };
+        const toolCalls = message.content.filter((it) => it.type === "toolCall");
+        const otherContent = message.content.filter((it) => it.type !== "toolCall");
+
+        const result: ChatCompletionMessageParam = { role: "assistant" };
+
+        if (toolCalls.length > 0) {
+          result.tool_calls = toolCalls.map(
+            (it) =>
+              ({
+                function: {
+                  arguments: JSON.stringify(it.input),
+                  name: it.name,
+                },
+                id: it.id,
+                type: "function",
+              }) as ChatCompletionMessageToolCall,
+          );
+        }
+
+        if (otherContent.length > 0) {
+          result.content = otherContent
+            .filter((it): it is Extract<typeof it, { type: "text" }> => it.type === "text")
+            .map((it) => ({ text: it.content, type: "text" }) as const);
+        }
+
+        return result;
       }
       if (message.content.type === "text") {
         return {
@@ -118,11 +132,13 @@ function translateMsg(message: Message): ChatCompletionMessageParam {
 }
 
 function translateTool(tool: Tool): ChatCompletionTool {
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  const parameters = toJsonSchema(tool.parameters, {
-    target: "openapi-3.0",
-    typeMode: "input",
-  }) as OpenAI.FunctionParameters;
+  const parameters = vb.parse(
+    vb.record(vb.string(), vb.unknown()),
+    toJsonSchema(tool.parameters, {
+      target: "openapi-3.0",
+      typeMode: "input",
+    }),
+  );
 
   return {
     function: {
@@ -218,6 +234,21 @@ export async function generate(
           continue;
         }
 
+        // Some providers reject tool_choice: "required" with a 400.
+        // Fall back to tool_choice: "auto" with a stern message and retry.
+        if (error.status === 400 && error.message.toLowerCase().includes("tool_choice")) {
+          warning(
+            `Model '${model}' rejected tool_choice: required — falling back to tool_choice: auto`,
+          );
+          params.tool_choice = "auto";
+          params.messages.push({
+            content:
+              "You MUST call a tool. You are not allowed to respond with plain text. Call a tool NOW.",
+            role: "system",
+          });
+          continue;
+        }
+
         const apiErrorDetails: Record<string, unknown> = {
           code: error.code,
           error: error.error,
@@ -270,9 +301,9 @@ export async function generate(
         debug("Had at least one tool call.");
       }
 
-      throw new Error(
-        `Expected 'tool_calls' finish reason (tool_choice is required), got '${reason}'`,
-      );
+      const rawText =
+        typeof choice.message.content === "string" ? choice.message.content : undefined;
+      throw new GenerationNoToolCallsError(rawText, reason);
     }
 
     if (choice.message.tool_calls === undefined) {
