@@ -68,10 +68,24 @@ function translateText(content: TextContent): AnthropicTextBlock {
 }
 
 async function translateImage(content: ImageContent): Promise<AnthropicImageBlock> {
+  if (content.memoizedBase64 !== undefined) {
+    return {
+      source: {
+        data: content.memoizedBase64,
+        media_type: content.mediaType,
+        type: "base64",
+      },
+      type: "image",
+    };
+  }
+
   const scaled = await scaleForAnthropic(content.data);
+  const encoded = encode(scaled);
+  content.memoizedBase64 = encoded;
+
   return {
     source: {
-      data: encode(scaled),
+      data: encoded,
       media_type: content.mediaType,
       type: "base64",
     },
@@ -221,7 +235,13 @@ export async function generate(
     model,
     system,
     tool_choice: { type: "any" },
-    tools: context.tools.map(translateTool),
+    tools: context.tools.map((tool, idx, arr) => {
+      const translated = translateTool(tool);
+      if (idx === arr.length - 1) {
+        translated["cache_control"] = { type: "ephemeral" };
+      }
+      return translated;
+    }),
   };
 
   // Track attempted keys to avoid infinite loops

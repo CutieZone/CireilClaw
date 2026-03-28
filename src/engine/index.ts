@@ -102,40 +102,10 @@ async function buildSystemPrompt(
     "<base_instructions>",
     baseInstructions.trim(),
     "</base_instructions>",
-    "<metadata>",
-    `The current system date is: ${await formatDate()}`,
-    `The current session is on the platform: ${session.channel}`,
-  ];
-
-  if (session.channel === "discord") {
-    lines.push(`The channel id is: ${session.channelId}`);
-    if (session.guildId === undefined) {
-      lines.push("SFW/NSFW depending on the user");
-    } else {
-      lines.push(`This is considered a ${session.isNsfw ? "NSFW" : "SFW"} session`);
-    }
-  } else if (session instanceof InternalSession) {
-    lines.push(`This is an internal cron session (job ID: ${session.jobId})`);
-  } else if (session.channel === "internal") {
-    lines.push("This is a persistent internal session");
-  } else if (session.channel === "tui") {
-    lines.push("This is a TUI session with your person. SFW/NSFW depending on their preferences.");
-  } else {
-    throw new Error(`Unimplemented channel: ${session.channel}`);
-  }
-
-  lines.push(
-    `- reactions supported: ${capabilities.supportsReactions}`,
-    `- file attachments in respond supported: ${capabilities.supportsAttachments}`,
-    `- attachment downloads supported: ${capabilities.supportsDownloadAttachments}`,
-  );
-
-  lines.push(
-    "</metadata>",
     "<memory_blocks>",
     "The following blocks are engaged in your memory:",
     "",
-  );
+  ];
 
   for (const [key, value] of Object.entries(blocks)) {
     lines.push(
@@ -206,6 +176,36 @@ async function buildSystemPrompt(
 
     lines.push("</opened_files>");
   }
+
+  lines.push(
+    "<metadata>",
+    `The current system date is: ${await formatDate()}`,
+    `The current session is on the platform: ${session.channel}`,
+  );
+
+  if (session.channel === "discord") {
+    lines.push(`The channel id is: ${session.channelId}`);
+    if (session.guildId === undefined) {
+      lines.push("SFW/NSFW depending on the user");
+    } else {
+      lines.push(`This is considered a ${session.isNsfw ? "NSFW" : "SFW"} session`);
+    }
+  } else if (session instanceof InternalSession) {
+    lines.push(`This is an internal cron session (job ID: ${session.jobId})`);
+  } else if (session.channel === "internal") {
+    lines.push("This is a persistent internal session");
+  } else if (session.channel === "tui") {
+    lines.push("This is a TUI session with your person. SFW/NSFW depending on their preferences.");
+  } else {
+    throw new Error(`Unimplemented channel: ${session.channel}`);
+  }
+
+  lines.push(
+    `- reactions supported: ${capabilities.supportsReactions}`,
+    `- file attachments in respond supported: ${capabilities.supportsAttachments}`,
+    `- attachment downloads supported: ${capabilities.supportsDownloadAttachments}`,
+    "</metadata>",
+  );
 
   return lines.join("\n");
 }
@@ -602,6 +602,16 @@ export class Engine {
         }
         session.history.push(...session.pendingToolMessages);
         session.pendingToolMessages.length = 0;
+
+        // Prune ephemeral context (historical/reply-tree backfills) that we no
+        // longer need to send now that the turn is complete.
+        session.history = session.history.filter((msg) => {
+          if (msg.role === "user" || msg.role === "assistant") {
+            return msg.persist !== false;
+          }
+          return true;
+        });
+
         debug("Turn end", colors.keyword(agentSlug), colors.keyword(session.id()));
         return;
       }

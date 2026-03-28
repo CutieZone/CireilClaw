@@ -31,6 +31,19 @@ function isExecConfig(value: unknown): value is vb.InferOutput<typeof ExecToolCo
   return typeof value === "object" && value !== null && "binaries" in value;
 }
 
+function truncate(str: string, label: string): string {
+  const MAX_OUTPUT = 5000;
+  const HEAD_LIMIT = 1000;
+  const TAIL_LIMIT = 3500;
+
+  if (str.length <= MAX_OUTPUT) {
+    return str;
+  }
+
+  const omitted = str.length - (HEAD_LIMIT + TAIL_LIMIT);
+  return `${str.slice(0, HEAD_LIMIT)}\n\n... [${omitted} characters omitted from middle of ${label}] ...\n\n${str.slice(-TAIL_LIMIT)}`;
+}
+
 export const exec: ToolDef = {
   description:
     "Run a binary inside a bubblewrap sandbox. The working directory is /workspace.\n\n" +
@@ -87,8 +100,10 @@ export const exec: ToolDef = {
 
     return {
       exitCode: result.exitCode,
-      stderr: result.stderr,
-      stdout: result.stdout,
+      stderr: truncate(result.stderr, "stderr"),
+      stderrLength: result.stderr.length,
+      stdout: truncate(result.stdout, "stdout"),
+      stdoutLength: result.stdout.length,
       success: result.exitCode === 0,
     };
   },

@@ -7,6 +7,8 @@ interface ImageContent {
   type: "image";
   data: Uint8Array;
   mediaType: string;
+  // Optional base64 encoded string of the scaled/converted image.
+  memoizedBase64?: string;
 }
 
 interface ImageRef {
