@@ -28,13 +28,16 @@ function translateContent(
         text: content.content,
         type: "text",
       };
-    case "image":
+    case "image": {
+      const encoded = content.memoizedBase64 ?? encode(content.data);
+      content.memoizedBase64 = encoded;
       return {
         image_url: {
-          url: `data:${content.mediaType};base64,${encode(content.data)}`,
+          url: `data:${content.mediaType};base64,${encoded}`,
         },
         type: "image_url",
       };
+    }
     case "toolCall":
     case "toolResponse":
       throw new Error(
