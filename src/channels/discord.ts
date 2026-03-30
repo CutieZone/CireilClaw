@@ -747,25 +747,36 @@ async function handleMessageReactionAdd(
   reactor: Uncached | User | Member,
   reaction: EventReaction,
 ): Promise<void> {
-  const realMsg = await ctx.client.rest.channels.getMessage(msg.channelID, msg.id);
+  try {
+    const realMsg = await ctx.client.rest.channels.getMessage(msg.channelID, msg.id);
 
-  if (realMsg.author.id !== ctx.client.application.id) {
-    return; // not us
-  }
+    if (realMsg.author.id !== ctx.client.application.id) {
+      return; // not us
+    }
 
-  if (reactor.id !== ctx.ownerId) {
-    return; // not owner
-  }
+    if (reactor.id !== ctx.ownerId) {
+      return; // not owner
+    }
 
-  if (reaction.emoji.name !== "✨") {
-    return; // not ✨
-  }
+    if (reaction.emoji.name !== "✨") {
+      return; // not ✨
+    }
 
-  if (
-    realMsg.content.startsWith("⚠️ Engine error") ||
-    realMsg.content.startsWith(":warning: Engine error")
-  ) {
-    await realMsg.delete("No longer necessary");
+    if (
+      realMsg.content.startsWith("⚠️ Engine error") ||
+      realMsg.content.startsWith(":warning: Engine error")
+    ) {
+      await realMsg.delete("No longer necessary");
+    }
+  } catch (error: unknown) {
+    warning(
+      "Failed during reaction add handler:",
+      error instanceof Error ? error.message : String(error),
+    );
+
+    if (error instanceof Error) {
+      warning(error);
+    }
   }
 }
 
