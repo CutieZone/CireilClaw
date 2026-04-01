@@ -20,7 +20,7 @@ interface AppProps {
 
 function TuiApp({ bridge, agent, initialSessionId }: AppProps): ReactElement {
   const { exit } = useApp();
-  const [messages, setMessages] = useState<TuiMessage[]>(bridge.snapshot());
+  const [messages, setMessages] = useState(bridge.snapshot());
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
 
