@@ -20,7 +20,8 @@ export const openFile: ToolDef = {
     "- You need to reference or edit a file across multiple turns and want its contents always visible.\n\n" +
     "When NOT to use:\n" +
     "- You only need to see a file once — use `read` instead to avoid wasting context space.\n\n" +
-    "The file must exist at the given path. Allowed path roots: /workspace/, /memories/, /blocks/, /skills/.",
+    "The file must exist at the given path. Allowed path roots: /workspace/, /memories/, /blocks/, /skills/.\n" +
+    "Note that paths used here *must* be absolute.",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     const data = vb.parse(Schema, input);
     const realPath = sandboxToReal(data.path, ctx.agentSlug);

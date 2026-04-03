@@ -38,7 +38,8 @@ export const strReplace: ToolDef = {
     "Tip: Use `read` or `open-file` first to see the current file contents and craft an accurate match.\n\n" +
     "When NOT to use:\n" +
     "- Creating new files or rewriting an entire file — use `write` instead.\n" +
-    "- The file doesn't exist yet — use `write` instead.",
+    "- The file doesn't exist yet — use `write` instead.\n\n" +
+    "Note that paths used here *must* be absolute.",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     const data = vb.parse(Schema, input);
 

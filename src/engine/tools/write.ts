@@ -32,7 +32,8 @@ export const write: ToolDef = {
     "Parent directories are created automatically if they don't exist.\n\n" +
     "Constraints:\n" +
     "- Files under /blocks/ must have a .md extension.\n" +
-    "- Allowed path roots: /workspace/, /memories/, /blocks/, /skills/.\n\n" +
+    "- Allowed path roots: /workspace/, /memories/, /blocks/, /skills/.\n" +
+    "Note that paths used here *must* be absolute.\n\n" +
     "When to use:\n" +
     "- Creating new files from scratch.\n" +
     "- Replacing the entire contents of a file.\n\n" +

@@ -25,7 +25,8 @@ const Schema = vb.strictObject({
 export const listDir: ToolDef = {
   description:
     "List the files and subdirectories at the given path. Returns each entry's name and type (file, directory, or symlink).\n\n" +
-    "Allowed path roots: /workspace/, /memories/, /blocks/, /skills/, /usr/, /lib/, /lib64/, /nix/.\n\n" +
+    "Allowed path roots: /workspace/, /memories/, /blocks/, /skills/, /usr/, /lib/, /lib64/, /nix/.\n" +
+    "Note that paths used here *must* be absolute.\n\n" +
     "Use /bin to list the binaries available in the exec sandbox (derived from tools config, not the host filesystem).\n\n" +
     "Use this to explore directory structure before reading or writing specific files.",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
