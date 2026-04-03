@@ -84,3 +84,9 @@ Configurable via `tool_fail_threshold` in `engine.toml`.
 ### Models That Reject `tool_choice: required`
 
 Some OAI-compatible providers return a 400 error when `tool_choice: "required"` is set (similar to the Kimi K2.5 issue above, but at the API level rather than being model-specific). When this is detected, the engine automatically falls back to `tool_choice: "auto"` and appends a forceful system message demanding tool use. This is a reactive generalisation of the Kimi K2.5 special-case.
+
+## A Note on Em-Dashes
+
+yes. there are —s in the code. so what.
+it's human-written, llm written code is primarily simple stuff that i don't want to spend time on
+i'm lazy. judge me all you want, but the code is good :3
