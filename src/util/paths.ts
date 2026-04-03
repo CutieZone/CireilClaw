@@ -135,4 +135,36 @@ function checkConditionalAccess(
   }
 }
 
-export { sandboxToReal, sanitizeError, agentRoot, root, checkConditionalAccess };
+// Paths that are bound read-only into the exec sandbox (mirrors sandbox.ts bindings).
+// /bin is intentionally excluded — it is a synthetic sandbox dir, not a real host path.
+const EXEC_VISIBLE_PREFIXES = ["/usr", "/lib", "/lib64", "/nix"] as const;
+
+/**
+ * Validates a system path that is accessible in the exec sandbox.
+ * These paths are bound read-only from the host filesystem.
+ * Returns the normalized real path, or throws if the path is not allowed.
+ */
+function validateSystemPath(path: string): string {
+  if (path.includes("..")) {
+    throw new Error(`Access denied: path '${path}' contains path traversal.`);
+  }
+
+  const isAllowed = EXEC_VISIBLE_PREFIXES.some(
+    (prefix) => path === prefix || path.startsWith(`${prefix}/`),
+  );
+
+  if (!isAllowed) {
+    throw new Error(`Access denied: path '${path}' is outside the sandbox.`);
+  }
+
+  return normalize(path);
+}
+
+export {
+  sandboxToReal,
+  sanitizeError,
+  agentRoot,
+  root,
+  checkConditionalAccess,
+  validateSystemPath,
+};

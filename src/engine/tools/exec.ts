@@ -54,7 +54,7 @@ export const exec: ToolDef = {
     "Constraints:\n" +
     "- Filesystem access outside the sandbox is restricted.\n" +
     "- Commands that exceed the configured timeout are killed automatically.\n\n" +
-    "Tip: Run `ls /bin` to see which binaries are available in the sandbox.\n" +
+    "Tip: Use list-dir with path /bin to see which binaries are available in the sandbox.\n" +
     "Tip: The `/workspace/.env` file *is* sourced and can affect your $PATH and other environment variables.",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     const data = vb.parse(Schema, input);
