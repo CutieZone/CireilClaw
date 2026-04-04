@@ -35,7 +35,37 @@ interface ToolResponseContent {
   id: string;
 }
 
-type Content = TextContent | ImageContent | ImageRef | ToolCallContent | ToolResponseContent;
+interface ThinkingContent {
+  type: "thinking";
+  thinking: string;
+  // Anthropic-issued signature required to re-send the block in history.
+  // Absent for OAI-compatible providers that use reasoning_content instead.
+  signature?: string;
+}
+
+interface RedactedThinkingContent {
+  type: "redacted_thinking";
+  // Opaque base64 blob from Anthropic; must be echoed back verbatim.
+  data: string;
+}
+
+type Content =
+  | TextContent
+  | ImageContent
+  | ImageRef
+  | ToolCallContent
+  | ToolResponseContent
+  | ThinkingContent
+  | RedactedThinkingContent;
 
 export { isImageRef };
-export type { TextContent, ImageContent, ImageRef, ToolCallContent, ToolResponseContent, Content };
+export type {
+  TextContent,
+  ImageContent,
+  ImageRef,
+  ToolCallContent,
+  ToolResponseContent,
+  ThinkingContent,
+  RedactedThinkingContent,
+  Content,
+};

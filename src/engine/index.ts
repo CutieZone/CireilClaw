@@ -276,6 +276,7 @@ export class Engine {
   private readonly _overrides: EngineOverrides;
   private readonly _maxTurns: number;
   private readonly _maxGenerationRetries: number;
+  private readonly _thinkingBudget: number;
   private readonly _toolFailThreshold: number;
 
   constructor(cfg: EngineConfig) {
@@ -287,6 +288,7 @@ export class Engine {
     this._model = cfg.model;
     this._provider = cfg.provider;
     this._overrides = cfg.channel;
+    this._thinkingBudget = cfg.thinkingBudget;
     this._toolFailThreshold = cfg.toolFailThreshold;
   }
 
@@ -322,6 +324,10 @@ export class Engine {
     return this._maxTurns;
   }
 
+  get thinkingBudget(): number {
+    return this._thinkingBudget;
+  }
+
   get toolFailThreshold(): number {
     return this._toolFailThreshold;
   }
@@ -336,6 +342,7 @@ export class Engine {
       maxTurns: partial.maxTurns ?? this._maxTurns,
       model: partial.model ?? this._model,
       provider: partial.provider ?? this._provider,
+      thinkingBudget: partial.thinkingBudget ?? this._thinkingBudget,
       toolFailThreshold: partial.toolFailThreshold ?? this._toolFailThreshold,
     });
   }
@@ -462,6 +469,7 @@ export class Engine {
               context,
               effectiveKeyPool,
               effectiveModel,
+              this._thinkingBudget,
             ));
             break;
           }

@@ -1,6 +1,8 @@
 import type {
   ImageContent,
+  RedactedThinkingContent,
   TextContent,
+  ThinkingContent,
   ToolCallContent,
   ToolResponseContent,
 } from "$/engine/content.js";
@@ -45,11 +47,26 @@ interface AnthropicToolResultBlock {
   content: string;
 }
 
+interface AnthropicThinkingBlock {
+  type: "thinking";
+  thinking: string;
+  signature: string;
+}
+
+interface AnthropicRedactedThinkingBlock {
+  type: "redacted_thinking";
+  data: string;
+}
+
 type AnthropicUserContentBlock =
   | AnthropicTextBlock
   | AnthropicImageBlock
   | AnthropicToolResultBlock;
-type AnthropicAssistantContentBlock = AnthropicTextBlock | AnthropicToolUseBlock;
+type AnthropicAssistantContentBlock =
+  | AnthropicTextBlock
+  | AnthropicToolUseBlock
+  | AnthropicThinkingBlock
+  | AnthropicRedactedThinkingBlock;
 
 interface AnthropicUserMessage {
   role: "user";
@@ -182,6 +199,11 @@ async function translateMessages(messages: Message[]): Promise<AnthropicMessage[
           lastToolUseIds.add(block.id);
         } else if (block.type === "text") {
           blocks.push({ text: block.content, type: "text" });
+        } else if (block.type === "thinking" && block.signature !== undefined) {
+          // Signature is required to re-send Anthropic thinking blocks.
+          blocks.push({ signature: block.signature, thinking: block.thinking, type: "thinking" });
+        } else if (block.type === "redacted_thinking") {
+          blocks.push({ data: block.data, type: "redacted_thinking" });
         }
       }
       result.push({ content: blocks, role: "assistant" });
@@ -211,11 +233,12 @@ export async function generate(
   context: Context,
   keyPool: KeyPool,
   model: string,
+  thinkingBudget = 0,
 ): Promise<{ message: AssistantMessage; usage?: UsageInfo }> {
   // Required preamble for the claude-code-20250219 beta — the model checks for this.
   const system = `You are Claude Code, Anthropic's official CLI for Claude.`;
 
-  const body = {
+  const body: Record<string, unknown> = {
     max_tokens: 64_000,
     messages: [
       {
@@ -244,6 +267,10 @@ export async function generate(
     }),
   };
 
+  if (thinkingBudget > 0) {
+    body["thinking"] = { budget_tokens: thinkingBudget, type: "enabled" };
+  }
+
   // Track attempted keys to avoid infinite loops
   const attemptedKeys = new Set<string>();
 
@@ -268,7 +295,7 @@ export async function generate(
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
-        "anthropic-beta": "oauth-2025-04-20,claude-code-20250219",
+        "anthropic-beta": "oauth-2025-04-20,claude-code-20250219,interleaved-thinking-2025-05-14",
         "anthropic-version": "2023-06-01",
       },
       method: "POST",
@@ -295,10 +322,13 @@ export async function generate(
     const AnthropicResponseSchema = vb.object({
       content: vb.array(
         vb.object({
+          data: vb.exactOptional(vb.string()),
           id: vb.exactOptional(vb.string()),
           input: vb.exactOptional(vb.unknown()),
           name: vb.exactOptional(vb.string()),
+          signature: vb.exactOptional(vb.string()),
           text: vb.exactOptional(vb.string()),
+          thinking: vb.exactOptional(vb.string()),
           type: vb.string(),
         }),
       ),
@@ -325,20 +355,44 @@ export async function generate(
       throw new Error("Expected at least one tool_use block, but got none");
     }
 
-    const message: AssistantMessage = {
-      content: toolUseBlocks.map((block) => {
+    // Preserve thinking/redacted_thinking blocks so they can be re-sent in
+    // subsequent turns (retained reasoning). Order matters: thinking blocks
+    // must appear before the tool_use blocks they preceded.
+    const contentBlocks: AssistantMessage["content"] = [];
+
+    for (const block of data.content) {
+      if (
+        block.type === "thinking" &&
+        block.thinking !== undefined &&
+        block.signature !== undefined
+      ) {
+        contentBlocks.push({
+          signature: block.signature,
+          thinking: block.thinking,
+          type: "thinking",
+        } as ThinkingContent);
+      } else if (block.type === "redacted_thinking" && block.data !== undefined) {
+        contentBlocks.push({
+          data: block.data,
+          type: "redacted_thinking",
+        } as RedactedThinkingContent);
+      } else if (block.type === "tool_use") {
         if (block.id === undefined || block.name === undefined) {
           throw new Error(
             `Anthropic returned tool_use block missing id or name: ${JSON.stringify(block)}`,
           );
         }
-        return {
+        contentBlocks.push({
           id: block.id,
           input: block.input ?? {},
           name: block.name,
           type: "toolCall",
-        } as ToolCallContent;
-      }),
+        } as ToolCallContent);
+      }
+    }
+
+    const message: AssistantMessage = {
+      content: contentBlocks,
       role: "assistant",
     };
 

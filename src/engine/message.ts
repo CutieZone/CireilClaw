@@ -1,7 +1,9 @@
 import type {
   ImageContent,
   ImageRef,
+  RedactedThinkingContent,
   TextContent,
+  ThinkingContent,
   ToolCallContent,
   ToolResponseContent,
 } from "$/engine/content.js";
@@ -35,7 +37,12 @@ interface ToolMessage extends BaseMessage {
   content: ToolResponseContent;
 }
 
-type AssistantContent = TextContent | ImageContent | ToolCallContent;
+type AssistantContent =
+  | TextContent
+  | ImageContent
+  | ToolCallContent
+  | ThinkingContent
+  | RedactedThinkingContent;
 
 interface AssistantMessage extends BaseMessage {
   role: "assistant";

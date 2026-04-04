@@ -41,6 +41,8 @@ const EngineConfigSchema = vb.strictObject({
   maxTurns: vb.exactOptional(vb.pipe(vb.number(), vb.integer(), vb.minValue(1)), 30),
   model: nonEmptyString,
   provider: vb.exactOptional(nonEmptyString, "openai"),
+  // Max tokens the model may spend on reasoning per turn. 0 disables thinking.
+  thinkingBudget: vb.exactOptional(vb.pipe(vb.number(), vb.integer(), vb.minValue(0)), 16_384),
   toolFailThreshold: vb.exactOptional(vb.pipe(vb.number(), vb.integer(), vb.minValue(1)), 3),
 });
 

@@ -1,4 +1,4 @@
-import type { Content, ToolCallContent } from "$/engine/content.js";
+import type { Content, ThinkingContent, ToolCallContent } from "$/engine/content.js";
 import type { Context, UsageInfo } from "$/engine/context.js";
 import { GenerationNoToolCallsError } from "$/engine/errors.js";
 import type { AssistantMessage, Message } from "$/engine/message.js";
@@ -43,6 +43,11 @@ function translateContent(
       throw new Error(
         `Content type '${content.type}' should not be translated via translateContent - handled separately in translateMsg`,
       );
+    case "thinking":
+    case "redacted_thinking":
+      throw new Error(
+        `Content type '${content.type}' should not be translated via translateContent - handled separately in translateMsg`,
+      );
     case "image_ref":
       throw new Error("Content type 'image_ref' should never end up here. How did it?");
     default:
@@ -84,15 +89,24 @@ function translateMsg(message: Message): ChatCompletionMessageParam {
         tool_call_id: message.content.id,
       };
 
-    case "assistant":
+    case "assistant": {
       if (Array.isArray(message.content)) {
         const toolCalls = message.content.filter((it) => it.type === "toolCall");
-        const otherContent = message.content.filter((it) => it.type !== "toolCall");
+        const textBlocks = message.content.filter((it) => it.type === "text");
+        const thinkingBlocks = message.content.filter(
+          (it): it is ThinkingContent => it.type === "thinking",
+        );
 
-        const result: ChatCompletionMessageParam = { role: "assistant" };
+        // reasoning_content is not in the SDK types but is accepted by providers
+        // like DeepSeek and QwQ that expose reasoning in OAI-compat responses.
+        const msg: Record<string, unknown> = { role: "assistant" };
+
+        if (thinkingBlocks.length > 0) {
+          msg["reasoning_content"] = thinkingBlocks.map((it) => it.thinking).join("\n\n");
+        }
 
         if (toolCalls.length > 0) {
-          result.tool_calls = toolCalls.map(
+          msg["tool_calls"] = toolCalls.map(
             (it) =>
               ({
                 function: {
@@ -105,13 +119,12 @@ function translateMsg(message: Message): ChatCompletionMessageParam {
           );
         }
 
-        if (otherContent.length > 0) {
-          result.content = otherContent
-            .filter((it): it is Extract<typeof it, { type: "text" }> => it.type === "text")
-            .map((it) => ({ text: it.content, type: "text" }) as const);
+        if (textBlocks.length > 0) {
+          msg["content"] = textBlocks.map((it) => ({ text: it.content, type: "text" }) as const);
         }
 
-        return result;
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertions
+        return msg as unknown as ChatCompletionMessageParam;
       }
       if (message.content.type === "text") {
         return {
@@ -119,9 +132,18 @@ function translateMsg(message: Message): ChatCompletionMessageParam {
           role: "assistant",
         };
       }
+      if (message.content.type === "thinking") {
+        // Single thinking block, so send as reasoning_content with no text content.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertions
+        return {
+          reasoning_content: message.content.thinking,
+          role: "assistant",
+        } as unknown as ChatCompletionMessageParam;
+      }
       throw new Error(
         `Invalid translation: cannot convert ${message.content.type} into an OAI-compatible format`,
       );
+    }
 
     case "system":
       return {
@@ -220,7 +242,7 @@ export async function generate(
         // Fall back to tool_choice: "auto" with a stern message and retry.
         if (error.status === 400 && error.message.toLowerCase().includes("tool_choice")) {
           warning(
-            `Model '${model}' rejected tool_choice: required — falling back to tool_choice: auto`,
+            `Model '${model}' rejected tool_choice: required, falling back to tool_choice: auto`,
           );
           params.tool_choice = "auto";
           params.messages.push({
@@ -297,27 +319,35 @@ export async function generate(
       throw new Error("Expected at least one tool call, but got empty array");
     }
 
-    const message: AssistantMessage = {
-      content: choice.message.tool_calls.map((it) => {
-        if (it.type === "function") {
-          try {
-            return {
-              id: it.id,
-              input: it.function.arguments.trim() === "" ? {} : JSON.parse(it.function.arguments),
-              name: it.function.name,
-              type: "toolCall",
-            } as ToolCallContent;
-          } catch (error: unknown) {
-            throw new Error(
-              `Failed to parse tool-call arguments into a json object\n ${it.function.arguments}`,
-              {
-                cause: error,
-              },
-            );
-          }
+    const toolCallBlocks: ToolCallContent[] = choice.message.tool_calls.map((it) => {
+      if (it.type === "function") {
+        try {
+          return {
+            id: it.id,
+            input: it.function.arguments.trim() === "" ? {} : JSON.parse(it.function.arguments),
+            name: it.function.name,
+            type: "toolCall",
+          } as ToolCallContent;
+        } catch (error: unknown) {
+          throw new Error(
+            `Failed to parse tool-call arguments into a json object\n ${it.function.arguments}`,
+            { cause: error },
+          );
         }
-        throw new Error("custom not supported");
-      }),
+      }
+      throw new Error("custom not supported");
+    });
+
+    // Some OAI-compatible providers (DeepSeek R1, QwQ, etc.) expose their
+    // chain-of-thought as reasoning_content on the message object.
+    const rawMsg = choice.message as typeof choice.message & { reasoning_content?: string };
+    const messageContent: AssistantMessage["content"] =
+      typeof rawMsg.reasoning_content === "string" && rawMsg.reasoning_content.length > 0
+        ? [{ thinking: rawMsg.reasoning_content, type: "thinking" }, ...toolCallBlocks]
+        : toolCallBlocks;
+
+    const message: AssistantMessage = {
+      content: messageContent,
       role: "assistant",
     };
 
