@@ -268,6 +268,8 @@ export async function generate(
   };
 
   if (thinkingBudget > 0) {
+    // Anthropic rejects tool_choice: any when thinking is enabled.
+    body["tool_choice"] = { type: "auto" };
     body["thinking"] = { budget_tokens: thinkingBudget, type: "enabled" };
   }
 
