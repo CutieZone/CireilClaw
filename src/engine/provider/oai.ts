@@ -257,6 +257,7 @@ export async function generate(
 
     // Process successful response
     if (!Array.isArray(resp.choices)) {
+      debug("Got unexpected response", resp);
       throw new TypeError(
         `Unexpected API response: 'choices' is ${String(resp.choices)} — the model may not support vision, or the request was rejected`,
       );
