@@ -118,7 +118,13 @@ function deserializeHistory(json: string, agentSlug: string): Message[] {
       return { data, mediaType: ref.mediaType, type: "image" } satisfies ImageContent;
     }
 
-    if (ct.type === "text" || ct.type === "image" || ct.type === "toolCall") {
+    if (
+      ct.type === "text" ||
+      ct.type === "image" ||
+      ct.type === "toolCall" ||
+      ct.type === "thinking" ||
+      ct.type === "redacted_thinking"
+    ) {
       return ct;
     }
 
