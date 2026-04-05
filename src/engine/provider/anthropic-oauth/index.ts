@@ -85,10 +85,10 @@ function translateText(content: TextContent): AnthropicTextBlock {
 }
 
 async function translateImage(content: ImageContent): Promise<AnthropicImageBlock> {
-  if (content.memoizedBase64 !== undefined) {
+  if (content.memoized?.kind === "webp") {
     return {
       source: {
-        data: content.memoizedBase64,
+        data: content.memoized.data,
         media_type: content.mediaType,
         type: "base64",
       },
@@ -98,7 +98,7 @@ async function translateImage(content: ImageContent): Promise<AnthropicImageBloc
 
   const scaled = await scaleForAnthropic(content.data);
   const encoded = encode(scaled);
-  content.memoizedBase64 = encoded;
+  content.memoized = { data: encoded, kind: "webp" };
 
   return {
     source: {

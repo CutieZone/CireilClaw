@@ -4,8 +4,17 @@ import sharp from "sharp";
 // ~90 gives roughly a 10x size reduction over PNG with no perceptible loss.
 const WEBP_QUALITY = 90;
 
+const JPEG_QUALITY = 85;
+
 // Anthropic hard-limits images to 8000×8000 pixels.
 const ANTHROPIC_MAX_DIMENSION = 8000;
+
+async function toJpeg(data: Uint8Array): Promise<Uint8Array> {
+  const result = await sharp(Buffer.from(data.buffer, data.byteOffset, data.byteLength))
+    .jpeg({ quality: JPEG_QUALITY })
+    .toBuffer();
+  return result;
+}
 
 // Re-encode any supported image format to WebP before it is sent to the
 // vision API.  A typical 9 MiB PNG round-trips to a few hundred KiB this way,
@@ -35,4 +44,4 @@ async function scaleForAnthropic(data: Uint8Array): Promise<Uint8Array> {
     .toBuffer();
 }
 
-export { toWebp, scaleForAnthropic };
+export { toWebp, toJpeg, scaleForAnthropic };

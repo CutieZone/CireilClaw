@@ -5,6 +5,7 @@ import type { AssistantMessage, Message } from "$/engine/message.js";
 import type { Tool } from "$/engine/tool.js";
 import { debug, warning } from "$/output/log.js";
 import { encode } from "$/util/base64.js";
+import { toJpeg } from "$/util/image.js";
 import type { KeyPool } from "$/util/key-pool.js";
 import { toJsonSchema } from "@valibot/to-json-schema";
 import { OpenAI } from "openai/client.js";
@@ -19,6 +20,27 @@ import type {
 } from "openai/resources";
 import * as vb from "valibot";
 
+// Per-apiBase JPEG requirement flag. Set on first WebP rejection so subsequent
+// turns skip the doomed WebP attempt entirely.
+const jpegRequiredEndpoints = new Set<string>();
+
+async function prepareImages(messages: Message[], useJpeg: boolean): Promise<void> {
+  const wantKind = useJpeg ? "jpeg" : "webp";
+  for (const msg of messages) {
+    const parts = Array.isArray(msg.content) ? msg.content : [msg.content];
+    for (const part of parts) {
+      if (part.type !== "image") {
+        continue;
+      }
+      if (part.memoized?.kind === wantKind) {
+        continue;
+      }
+      const rawData = useJpeg ? await toJpeg(part.data) : part.data;
+      part.memoized = { data: encode(rawData), kind: wantKind };
+    }
+  }
+}
+
 function translateContent(
   content: Content,
 ): ChatCompletionContentPartImage | ChatCompletionContentPartText {
@@ -29,8 +51,7 @@ function translateContent(
         type: "text",
       };
     case "image": {
-      const encoded = content.memoizedBase64 ?? encode(content.data);
-      content.memoizedBase64 = encoded;
+      const encoded = content.memoized?.data ?? encode(content.data);
       return {
         image_url: {
           url: `data:${content.mediaType};base64,${encoded}`,
@@ -180,8 +201,11 @@ export async function generate(
   apiBase: string,
   keyPool: KeyPool,
   model: string,
+  forceJpeg = false,
 ): Promise<{ message: AssistantMessage; usage?: UsageInfo }> {
-  // Build params once - they don't change between retries
+  let useJpeg = forceJpeg || jpegRequiredEndpoints.has(apiBase);
+  await prepareImages(context.messages, useJpeg);
+
   const params: ChatCompletionCreateParamsNonStreaming = {
     messages: [
       { content: context.systemPrompt, role: "system" },
@@ -250,6 +274,23 @@ export async function generate(
               "You MUST call a tool. You are not allowed to respond with plain text. Call a tool NOW.",
             role: "system",
           });
+          continue;
+        }
+
+        // llama.cpp (and forks) reject WebP images with this message.
+        // Re-encode all images to JPEG, remember for subsequent turns, and retry.
+        if (!useJpeg && error.message.includes("Failed to load image or audio file")) {
+          warning(`Backend '${apiBase}' rejected WebP images, switching to JPEG for this endpoint`);
+          useJpeg = true;
+          jpegRequiredEndpoints.add(apiBase);
+          await prepareImages(context.messages, true);
+          // Rebuild only messages — preserves any tool_choice mutations already applied.
+          params.messages = [
+            { content: context.systemPrompt, role: "system" },
+            ...context.messages.map(translateMsg),
+          ];
+          // This is a format retry, not a key failure — reset so we can reuse the same key.
+          attemptedKeys.clear();
           continue;
         }
 

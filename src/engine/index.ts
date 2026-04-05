@@ -278,6 +278,7 @@ export class Engine {
   private readonly _maxGenerationRetries: number;
   private readonly _thinkingBudget: number;
   private readonly _toolFailThreshold: number;
+  private readonly _useJpegForImages: boolean;
 
   constructor(cfg: EngineConfig) {
     this._apiKey = cfg.apiKey;
@@ -290,6 +291,7 @@ export class Engine {
     this._overrides = cfg.channel;
     this._thinkingBudget = cfg.thinkingBudget;
     this._toolFailThreshold = cfg.toolFailThreshold;
+    this._useJpegForImages = cfg.useJpegForImages;
   }
 
   get apiBase(): string {
@@ -332,6 +334,10 @@ export class Engine {
     return this._toolFailThreshold;
   }
 
+  get useJpegForImages(): boolean {
+    return this._useJpegForImages;
+  }
+
   /** Create a new Engine based on this one, with select fields replaced. */
   derive(partial: Partial<EngineConfig>): Engine {
     return new Engine({
@@ -344,6 +350,7 @@ export class Engine {
       provider: partial.provider ?? this._provider,
       thinkingBudget: partial.thinkingBudget ?? this._thinkingBudget,
       toolFailThreshold: partial.toolFailThreshold ?? this._toolFailThreshold,
+      useJpegForImages: partial.useJpegForImages ?? this._useJpegForImages,
     });
   }
 
@@ -460,6 +467,7 @@ export class Engine {
               effectiveApiBase,
               effectiveKeyPool,
               effectiveModel,
+              this._useJpegForImages,
             ));
             break;
           }

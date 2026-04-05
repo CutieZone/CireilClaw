@@ -7,8 +7,9 @@ interface ImageContent {
   type: "image";
   data: Uint8Array;
   mediaType: string;
-  // Optional base64 encoded string of the scaled/converted image.
-  memoizedBase64?: string;
+  // Cached base64 encoding. Stored with the format it was encoded in so that
+  // a JPEG-mode provider can detect and skip a WebP-encoded cache entry.
+  memoized?: { data: string; kind: "webp" | "jpeg" };
 }
 
 interface ImageRef {
