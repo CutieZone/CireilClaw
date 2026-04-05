@@ -47,7 +47,7 @@ function translateContent(
 ):
   | ChatCompletionContentPartImage
   | ChatCompletionContentPartText
-  | { type: "video_url"; video_url: { url: string } } {
+  | { type: "video_url"; video_url: { url: string }; fps: number } {
   switch (content.type) {
     case "text":
       return {
@@ -67,6 +67,7 @@ function translateContent(
       const encoded = content.memoized?.data ?? encode(content.data);
       content.memoized = { data: encoded };
       return {
+        fps: 10,
         type: "video_url",
         video_url: { url: `data:${content.mediaType};base64,${encoded}` },
       };
@@ -397,7 +398,9 @@ export async function generate(
 
     // Some OAI-compatible providers (DeepSeek R1, QwQ, etc.) expose their
     // chain-of-thought as reasoning_content on the message object.
-    const rawMsg = choice.message as typeof choice.message & { reasoning_content?: string };
+    const rawMsg = choice.message as typeof choice.message & {
+      reasoning_content?: string;
+    };
     const messageContent: AssistantMessage["content"] =
       typeof rawMsg.reasoning_content === "string" && rawMsg.reasoning_content.length > 0
         ? [{ thinking: rawMsg.reasoning_content, type: "thinking" }, ...toolCallBlocks]

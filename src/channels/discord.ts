@@ -518,13 +518,15 @@ async function handleMessageCreate(
   msg: DiscordMessage,
 ): Promise<void> {
   // Ignore messages with no text and no image attachments.
-  const hasImages = msg.attachments.some(
+  const hasAttachmentsWeWant = msg.attachments.some(
     (attachment) =>
       attachment.contentType !== undefined &&
-      SUPPORTED_IMAGE_TYPES.has(attachment.contentType.split(";")[0]?.trim() ?? ""),
+      (SUPPORTED_IMAGE_TYPES.has(attachment.contentType.split(";")[0]?.trim() ?? "") ||
+        SUPPORTED_VIDEO_TYPES.has(attachment.contentType.split(";")[0]?.trim() ?? "") ||
+        attachment.contentType.includes("text")),
   );
   const hasStickers = msg.stickerItems !== undefined && msg.stickerItems.length > 0;
-  if (msg.content.trim().length === 0 && !hasImages && !hasStickers) {
+  if (msg.content.trim().length === 0 && !hasAttachmentsWeWant && !hasStickers) {
     return;
   }
 
