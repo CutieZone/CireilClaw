@@ -3,7 +3,8 @@ import { join } from "node:path";
 
 import { getDb } from "$/db/index.js";
 import { images, sessions } from "$/db/schema.js";
-import type { Content, ImageContent, ImageRef } from "$/engine/content.js";
+import type { Content, ImageContent, ImageRef, VideoContent, VideoRef } from "$/engine/content.js";
+import { isVideoContent, isVideoRef } from "$/engine/content.js";
 import { isMessage } from "$/engine/message.js";
 import type { AssistantContent, Message, UserContent } from "$/engine/message.js";
 import type { Session } from "$/harness/session.js";
@@ -13,6 +14,7 @@ import {
   NamedInternalSession,
   TuiSession,
 } from "$/harness/session.js";
+import { warning } from "$/output/log.js";
 import { agentRoot } from "$/util/paths.js";
 import { blake3 } from "@noble/hashes/blake3.js";
 import { and, eq, inArray, notInArray } from "drizzle-orm";
@@ -73,6 +75,15 @@ function serializeHistory(
       pendingImages.push({ data: img.data, id, mediaType: img.mediaType, path });
       return { id, mediaType: img.mediaType, type: "image_ref" } satisfies ImageRef;
     }
+    // Videos are not stored on disk — just keep the URL and attachmentId as a ref.
+    if (isVideoContent(ct)) {
+      return {
+        attachmentId: ct.attachmentId,
+        mediaType: ct.mediaType,
+        type: "video_ref",
+        url: ct.url,
+      } satisfies VideoRef;
+    }
     return ct;
   }
 
@@ -94,8 +105,8 @@ function serializeHistory(
   return { json: JSON.stringify(serialized), pendingImages };
 }
 
-function deserializeHistory(json: string, agentSlug: string): Message[] {
-  function deserializeUserContent(ct: Content | ImageRef): UserContent {
+async function deserializeHistory(json: string, agentSlug: string): Promise<Message[]> {
+  async function deserializeUserContent(ct: Content | ImageRef): Promise<UserContent | undefined> {
     if (ct.type === "image_ref") {
       const ref = ct;
       const path = imagePath(agentSlug, ref.id, ref.mediaType);
@@ -103,7 +114,33 @@ function deserializeHistory(json: string, agentSlug: string): Message[] {
       return { data, mediaType: ref.mediaType, type: "image" } satisfies ImageContent;
     }
 
-    if (ct.type === "text" || ct.type === "image") {
+    if (ct.type === "video_ref") {
+      const ref = ct;
+      try {
+        const response = await fetch(ref.url);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const data = new Uint8Array(await response.arrayBuffer());
+        return {
+          attachmentId: ref.attachmentId,
+          data,
+          mediaType: ref.mediaType,
+          type: "video",
+          url: ref.url,
+        } satisfies VideoContent;
+      } catch (error) {
+        warning(
+          "Failed to re-fetch video for session restore:",
+          ref.url,
+          error instanceof Error ? error.message : String(error),
+        );
+        // Drop the video from the restored message rather than crashing.
+        return undefined;
+      }
+    }
+
+    if (ct.type === "text" || ct.type === "image" || ct.type === "video") {
       return ct;
     }
 
@@ -134,25 +171,33 @@ function deserializeHistory(json: string, agentSlug: string): Message[] {
   const raw = vb.parse(vb.record(vb.string(), vb.unknown()), JSON.parse(json));
   const entries = Object.values(raw).filter((it) => isMessage(it));
 
-  return entries.map((msg) => {
+  const messages: Message[] = [];
+  for (const msg of entries) {
     if (msg.role === "user") {
-      return {
-        ...msg,
-        content: Array.isArray(msg.content)
-          ? msg.content.map((it) => deserializeUserContent(it))
-          : deserializeUserContent(msg.content),
-      };
+      if (Array.isArray(msg.content)) {
+        const resolved = await Promise.all(msg.content.map(deserializeUserContent));
+        const content = resolved.filter((it): it is UserContent => it !== undefined);
+        messages.push({ ...msg, content });
+      } else {
+        const resolved = await deserializeUserContent(msg.content);
+        // If the sole content was a video that failed to restore, use an empty
+        // text block to avoid a malformed message.
+        const content = resolved ?? ({ content: "", type: "text" } as const);
+        messages.push({ ...msg, content });
+      }
     } else if (msg.role === "assistant") {
-      return {
+      messages.push({
         ...msg,
         content: Array.isArray(msg.content)
           ? msg.content.map((it) => deserializeAssistantContent(it))
           : deserializeAssistantContent(msg.content),
-      };
+      });
+    } else {
+      messages.push(msg);
     }
+  }
 
-    return msg;
-  });
+  return messages;
 }
 
 // ---------------------------------------------------------------------------
@@ -257,14 +302,14 @@ function _flushSession(agentSlug: string, session: Session): void {
   }
 }
 
-function loadSessions(agentSlug: string): Map<string, Session> {
+async function loadSessions(agentSlug: string): Promise<Map<string, Session>> {
   const db = getDb(agentSlug);
   // All sessions in this DB belong to this agent — no slug filter needed.
   const rows = db.select().from(sessions).all();
   const map = new Map<string, Session>();
 
   for (const row of rows) {
-    const history = deserializeHistory(row.history, agentSlug);
+    const history = await deserializeHistory(row.history, agentSlug);
     const openedFiles = new Set(vb.parse(vb.array(vb.string()), JSON.parse(row.openedFiles)));
 
     let session: Session | undefined = undefined;
@@ -482,4 +527,48 @@ function updateSessionImages(
   }
 }
 
-export { flushAllSessions, loadSessions, saveSession, deleteSession, updateSessionImages };
+// Updates video_ref URLs in session history JSON. Called after /repair re-fetches
+// fresh Discord CDN URLs for expired video attachments. No files are written —
+// videos are not stored on disk.
+function updateSessionVideoRefs(
+  agentSlug: string,
+  sessionId: string,
+  newUrls: Map<string, string>, // attachmentId -> fresh CDN URL
+): void {
+  if (newUrls.size === 0) {
+    return;
+  }
+
+  const db = getDb(agentSlug);
+  const row = db.select().from(sessions).where(eq(sessions.id, sessionId)).get();
+  if (row === undefined) {
+    return;
+  }
+
+  const raw = vb.parse(vb.record(vb.string(), vb.unknown()), JSON.parse(row.history));
+  const entries = Object.values(raw).filter((it) => isMessage(it));
+
+  for (const msg of entries) {
+    const contentArr = Array.isArray(msg.content) ? msg.content : [msg.content];
+    for (const block of contentArr) {
+      if (isVideoRef(block)) {
+        const freshUrl = newUrls.get(block.attachmentId);
+        if (freshUrl !== undefined) {
+          block.url = freshUrl;
+        }
+      }
+    }
+  }
+
+  const updatedHistory = JSON.stringify(raw);
+  db.update(sessions).set({ history: updatedHistory }).where(eq(sessions.id, sessionId)).run();
+}
+
+export {
+  flushAllSessions,
+  loadSessions,
+  saveSession,
+  deleteSession,
+  updateSessionImages,
+  updateSessionVideoRefs,
+};

@@ -160,6 +160,11 @@ async function translateMessages(messages: Message[]): Promise<AnthropicMessage[
           if (block.type === "image_ref") {
             throw new Error("A block of type image_ref should not exist here.");
           }
+          if (block.type === "video" || block.type === "video_ref") {
+            throw new Error(
+              "Anthropic provider does not support video content — set supportsVideo: false",
+            );
+          }
 
           if (block.type === "text") {
             blocks.push(translateText(block));
@@ -179,6 +184,11 @@ async function translateMessages(messages: Message[]): Promise<AnthropicMessage[
       for (const block of userContent) {
         if (block.type === "image_ref") {
           throw new Error("A block of type image_ref should not exist here.");
+        }
+        if (block.type === "video" || block.type === "video_ref") {
+          throw new Error(
+            "Anthropic provider does not support video content — set supportsVideo: false",
+          );
         }
 
         if (block.type === "text") {

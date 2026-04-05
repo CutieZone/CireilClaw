@@ -9,7 +9,8 @@ import type { HandlerCtx } from "$/channels/discord/handler-ctx.js";
 import * as repairCommand from "$/channels/discord/repair-command.js";
 import { loadChannel } from "$/config/index.js";
 import { saveSession } from "$/db/sessions.js";
-import type { ImageContent, TextContent } from "$/engine/content.js";
+import type { ImageContent, TextContent, VideoContent } from "$/engine/content.js";
+import { Engine } from "$/engine/index.js";
 import type { Message } from "$/engine/message.js";
 import type { ChannelHandler } from "$/harness/channel-handler.js";
 import type { Harness } from "$/harness/index.js";
@@ -51,6 +52,11 @@ const TYPING_INTERVAL_MS = 5000;
 
 // Media types supported by OpenAI's vision API.
 const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
+
+// Video types to fetch when supportsVideo is enabled. Hard cap prevents
+// multi-MB payloads from being base64-encoded and sent to the API.
+const SUPPORTED_VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
+const VIDEO_SIZE_CAP = 10 * 1024 * 1024; // 10 MB
 
 // All registered slash commands. Add new command modules here — the hash
 // check on startup will detect changes and re-register with Discord's API.
@@ -309,6 +315,54 @@ async function fetchAllImages(msg: DiscordMessage): Promise<ImageContent[]> {
     fetchStickerImages(msg),
   ]);
   return [...attachmentImages, ...stickerImages];
+}
+
+// Fetches video attachments from a Discord message. Only called when the
+// agent's engine has supportsVideo enabled. Skips attachments that exceed
+// VIDEO_SIZE_CAP to avoid sending huge payloads to the API.
+async function fetchAttachmentVideos(msg: DiscordMessage): Promise<VideoContent[]> {
+  const fetchPromises = [...msg.attachments.values()].map(
+    async (attachment): Promise<(VideoContent & { sortId: string }) | undefined> => {
+      const mediaType = attachment.contentType?.split(";")[0]?.trim();
+      if (mediaType === undefined || !SUPPORTED_VIDEO_TYPES.has(mediaType)) {
+        return undefined;
+      }
+      if (attachment.size > VIDEO_SIZE_CAP) {
+        warning(
+          `Skipping video attachment '${attachment.filename}' — ${attachment.size} bytes exceeds ${VIDEO_SIZE_CAP}-byte cap`,
+        );
+        return undefined;
+      }
+      try {
+        const response = await fetch(attachment.url);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const data = new Uint8Array(await response.arrayBuffer());
+        return {
+          attachmentId: attachment.id,
+          data,
+          mediaType,
+          sortId: attachment.id,
+          type: "video",
+          url: attachment.url,
+        } as const;
+      } catch (error) {
+        warning(
+          "Failed to fetch video attachment:",
+          attachment.url,
+          error instanceof Error ? error.message : String(error),
+        );
+        return undefined;
+      }
+    },
+  );
+
+  const results = await Promise.all(fetchPromises);
+  return results
+    .filter((item): item is NonNullable<typeof item> => item !== undefined)
+    .toSorted((first, second) => first.sortId.localeCompare(second.sortId))
+    .map(({ sortId: _sortId, ...videoContent }) => videoContent);
 }
 
 // Fetches the last N messages from a Discord channel, including images.
@@ -665,12 +719,16 @@ async function handleMessageCreate(
     }
   }
 
-  // Push user message into history, including any image attachments.
+  // Push user message into history, including any image/video attachments.
   const textContent = await formatUserMessage(msg);
   const imageContents = await fetchAllImages(msg);
+  const sessionOverride = Engine.resolveOverride(ds, agent.engine.overrides);
+  const supportsVideo = sessionOverride?.supportsVideo ?? agent.engine.supportsVideo;
+  const videoContents = supportsVideo ? await fetchAttachmentVideos(msg) : [];
+  const mediaContents = [...imageContents, ...videoContents];
   const historyLengthBeforeTurn = session.history.length;
   session.history.push({
-    content: imageContents.length > 0 ? [textContent, ...imageContents] : textContent,
+    content: mediaContents.length > 0 ? [textContent, ...mediaContents] : textContent,
     id: msg.id,
     persist: true,
     role: "user",
@@ -837,8 +895,12 @@ async function handleMessageUpdate(
     ? await formatAssistantContext(realMsg)
     : await formatHistoryContext(realMsg);
   const images = await fetchAllImages(realMsg);
+  const msgOverride = Engine.resolveOverride(session, agent.engine.overrides);
+  const editSupportsVideo = msgOverride?.supportsVideo ?? agent.engine.supportsVideo;
+  const videos = editSupportsVideo ? await fetchAttachmentVideos(realMsg) : [];
+  const media = [...images, ...videos];
 
-  entry.content = images.length > 0 ? [textContent, ...images] : textContent;
+  entry.content = media.length > 0 ? [textContent, ...media] : textContent;
 
   saveSession(agentSlug, session);
 }

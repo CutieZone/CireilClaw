@@ -1,12 +1,12 @@
 import { initDb } from "$/db/index.js";
-import { repairSessionImages } from "$/util/repair-session.js";
+import { repairSession } from "$/util/repair-session.js";
 import type { CommandInteraction, CreateApplicationCommandOptions } from "oceanic.js";
 import { ApplicationCommandTypes, MessageFlags } from "oceanic.js";
 
 import type { HandlerCtx } from "./handler-ctx.js";
 
 const definition: CreateApplicationCommandOptions = {
-  description: "Repair corrupted images by re-fetching from Discord",
+  description: "Repair media attachments by re-fetching from Discord",
   name: "repair",
   type: ApplicationCommandTypes.CHAT_INPUT,
 };
@@ -20,7 +20,7 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
   initDb(ctx.agentSlug);
 
   try {
-    const result = await repairSessionImages(ctx.agentSlug, sessionId, ctx.client);
+    const result = await repairSession(ctx.agentSlug, sessionId, ctx.client);
 
     await interaction.createMessage({
       content: `Repair complete: ${result.updated} updated, ${result.failed} failed, ${result.skipped} skipped`,

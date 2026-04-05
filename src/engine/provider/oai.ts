@@ -24,26 +24,30 @@ import * as vb from "valibot";
 // turns skip the doomed WebP attempt entirely.
 const jpegRequiredEndpoints = new Set<string>();
 
-async function prepareImages(messages: Message[], useJpeg: boolean): Promise<void> {
+async function prepareMedia(messages: Message[], useJpeg: boolean): Promise<void> {
   const wantKind = useJpeg ? "jpeg" : "webp";
   for (const msg of messages) {
     const parts = Array.isArray(msg.content) ? msg.content : [msg.content];
     for (const part of parts) {
-      if (part.type !== "image") {
-        continue;
+      if (part.type === "image") {
+        if (part.memoized?.kind === wantKind) {
+          continue;
+        }
+        const rawData = useJpeg ? await toJpeg(part.data) : part.data;
+        part.memoized = { data: encode(rawData), kind: wantKind };
+      } else if (part.type === "video" && part.memoized === undefined) {
+        part.memoized = { data: encode(part.data) };
       }
-      if (part.memoized?.kind === wantKind) {
-        continue;
-      }
-      const rawData = useJpeg ? await toJpeg(part.data) : part.data;
-      part.memoized = { data: encode(rawData), kind: wantKind };
     }
   }
 }
 
 function translateContent(
   content: Content,
-): ChatCompletionContentPartImage | ChatCompletionContentPartText {
+):
+  | ChatCompletionContentPartImage
+  | ChatCompletionContentPartText
+  | { type: "video_url"; video_url: { url: string } } {
   switch (content.type) {
     case "text":
       return {
@@ -59,6 +63,14 @@ function translateContent(
         type: "image_url",
       };
     }
+    case "video": {
+      const encoded = content.memoized?.data ?? encode(content.data);
+      content.memoized = { data: encoded };
+      return {
+        type: "video_url",
+        video_url: { url: `data:${content.mediaType};base64,${encoded}` },
+      };
+    }
     case "toolCall":
     case "toolResponse":
       throw new Error(
@@ -71,6 +83,8 @@ function translateContent(
       );
     case "image_ref":
       throw new Error("Content type 'image_ref' should never end up here. How did it?");
+    case "video_ref":
+      throw new Error("Content type 'video_ref' should never end up here. How did it?");
     default:
       throw new Error("Unreachable");
   }
@@ -80,15 +94,17 @@ function translateMsg(message: Message): ChatCompletionMessageParam {
   switch (message.role) {
     case "user":
       if (Array.isArray(message.content)) {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         return {
           content: message.content.map((it) => translateContent(it)),
           role: "user",
-        };
+        } as unknown as ChatCompletionMessageParam;
       }
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       return {
         content: [translateContent(message.content)],
         role: "user",
-      };
+      } as unknown as ChatCompletionMessageParam;
 
     case "toolResponse":
       if (typeof message.content.output === "object") {
@@ -204,7 +220,7 @@ export async function generate(
   forceJpeg = false,
 ): Promise<{ message: AssistantMessage; usage?: UsageInfo }> {
   let useJpeg = forceJpeg || jpegRequiredEndpoints.has(apiBase);
-  await prepareImages(context.messages, useJpeg);
+  await prepareMedia(context.messages, useJpeg);
 
   const params: ChatCompletionCreateParamsNonStreaming = {
     messages: [
@@ -283,7 +299,7 @@ export async function generate(
           warning(`Backend '${apiBase}' rejected WebP images, switching to JPEG for this endpoint`);
           useJpeg = true;
           jpegRequiredEndpoints.add(apiBase);
-          await prepareImages(context.messages, true);
+          await prepareMedia(context.messages, true);
           // Rebuild only messages — preserves any tool_choice mutations already applied.
           params.messages = [
             { content: context.systemPrompt, role: "system" },

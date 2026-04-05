@@ -279,6 +279,7 @@ export class Engine {
   private readonly _thinkingBudget: number;
   private readonly _toolFailThreshold: number;
   private readonly _useJpegForImages: boolean;
+  private readonly _supportsVideo: boolean;
 
   constructor(cfg: EngineConfig) {
     this._apiKey = cfg.apiKey;
@@ -292,6 +293,7 @@ export class Engine {
     this._thinkingBudget = cfg.thinkingBudget;
     this._toolFailThreshold = cfg.toolFailThreshold;
     this._useJpegForImages = cfg.useJpegForImages;
+    this._supportsVideo = cfg.supportsVideo;
   }
 
   get apiBase(): string {
@@ -338,6 +340,10 @@ export class Engine {
     return this._useJpegForImages;
   }
 
+  get supportsVideo(): boolean {
+    return this._supportsVideo;
+  }
+
   /** Create a new Engine based on this one, with select fields replaced. */
   derive(partial: Partial<EngineConfig>): Engine {
     return new Engine({
@@ -348,6 +354,7 @@ export class Engine {
       maxTurns: partial.maxTurns ?? this._maxTurns,
       model: partial.model ?? this._model,
       provider: partial.provider ?? this._provider,
+      supportsVideo: partial.supportsVideo ?? this._supportsVideo,
       thinkingBudget: partial.thinkingBudget ?? this._thinkingBudget,
       toolFailThreshold: partial.toolFailThreshold ?? this._toolFailThreshold,
       useJpegForImages: partial.useJpegForImages ?? this._useJpegForImages,
@@ -439,12 +446,12 @@ export class Engine {
     }
 
     for (;;) {
-      // If tools queued images in the previous iteration, inject them as a user
-      // message AFTER pending tool responses. The OAI API only allows images in
+      // If tools or Discord queued images/videos, inject them as a user message
+      // AFTER pending tool responses. The OAI API only allows images/video in
       // user-role messages, and they must come after the matching tool responses.
-      if (session.pendingImages.length > 0) {
-        const images = session.pendingImages.splice(0);
-        session.pendingToolMessages.push({ content: images, role: "user" });
+      if (session.pendingImages.length > 0 || session.pendingVideos.length > 0) {
+        const media = [...session.pendingImages.splice(0), ...session.pendingVideos.splice(0)];
+        session.pendingToolMessages.push({ content: media, role: "user" });
       }
 
       const prompt = await buildSystemPrompt(agentSlug, session, capabilities, conditions);

@@ -6,6 +6,8 @@ import type {
   ThinkingContent,
   ToolCallContent,
   ToolResponseContent,
+  VideoContent,
+  VideoRef,
 } from "$/engine/content.js";
 import type { Role } from "$/engine/role.js";
 
@@ -17,7 +19,7 @@ interface BaseMessage {
   id?: string;
 }
 
-type UserContent = TextContent | ImageContent | ImageRef;
+type UserContent = TextContent | ImageContent | ImageRef | VideoContent | VideoRef;
 
 interface UserMessage extends BaseMessage {
   role: "user";

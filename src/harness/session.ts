@@ -1,5 +1,5 @@
 import type { TuiBridge } from "$/channels/tui/bridge.js";
-import type { ImageContent } from "$/engine/content.js";
+import type { ImageContent, VideoContent } from "$/engine/content.js";
 import type { Message } from "$/engine/message.js";
 
 const channelTypes = ["discord", "matrix", "internal", "tui"] as const;
@@ -14,6 +14,8 @@ abstract class BaseSession {
   pendingToolMessages: Message[] = new Array<Message>();
   // Images queued by tools (e.g. read) to be injected as a user message before the next generation.
   pendingImages: ImageContent[] = new Array<ImageContent>();
+  // Videos queued from Discord attachments to be injected alongside pending images.
+  pendingVideos: VideoContent[] = new Array<VideoContent>();
 
   // Concurrency gate — true while a turn (user or scheduled) is in progress.
   busy = false;

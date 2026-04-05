@@ -1,4 +1,4 @@
-import { repairImagesCommand } from "$/cli/repair-images-command.js";
+import { repairCommand } from "$/cli/repair-command.js";
 import { runCommand } from "$/cli/run-command.js";
 import { tuiCommand } from "$/cli/tui-command.js";
 import { buildApplication, buildRouteMap } from "@stricli/core";
@@ -15,7 +15,7 @@ const routes = buildRouteMap({
     clear: clearCommand,
     init: initCommand,
     migrate: migrateCommand,
-    "repair-images": repairImagesCommand,
+    repair: repairCommand,
     run: runCommand,
     tui: tuiCommand,
   },

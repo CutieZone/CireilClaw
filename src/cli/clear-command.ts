@@ -37,7 +37,7 @@ async function run(flags: Flags): Promise<void> {
   }
 
   initDb(agentSlug);
-  const sessions = loadSessions(agentSlug);
+  const sessions = await loadSessions(agentSlug);
 
   if (sessions.size === 0) {
     info("No sessions for", colors.keyword(agentSlug));

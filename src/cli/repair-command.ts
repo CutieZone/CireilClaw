@@ -5,14 +5,14 @@ import { getDb, initDb } from "$/db/index.js";
 import { sessions } from "$/db/schema.js";
 import colors from "$/output/colors.js";
 import { error as logError, info, warning } from "$/output/log.js";
-import { fetchSessionDisplayName, repairSessionImages } from "$/util/repair-session.js";
+import { fetchSessionDisplayName, repairSession } from "$/util/repair-session.js";
 import { select } from "@inquirer/prompts";
 import { buildCommand } from "@stricli/core";
 import * as vb from "valibot";
 
 // oceanic.js's ESM shim breaks under tsx's module loader (.default.default chain
 // resolves to undefined). Force CJS to get the real constructors.
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion
+// oxlint-disable-next-line typescript/no-unsafe-type-assertions
 const { Client, Intents } = createRequire(import.meta.url)(
   "oceanic.js",
   // oxlint-disable-next-line typescript/consistent-type-imports
@@ -127,12 +127,12 @@ async function run(): Promise<void> {
   // Select session to repair
   const sessionId = await select({
     choices: sessionChoices,
-    message: "Which session to repair images for?",
+    message: "Which session to repair?",
   });
 
   // Repair the session
-  info("Repairing images for session", colors.keyword(sessionId), "...");
-  const result = await repairSessionImages(agentSlug, sessionId, client);
+  info("Repairing session", colors.keyword(sessionId), "...");
+  const result = await repairSession(agentSlug, sessionId, client);
 
   info(
     "Repair complete:",
@@ -148,9 +148,9 @@ async function run(): Promise<void> {
   client.disconnect(false);
 }
 
-export const repairImagesCommand = buildCommand({
+export const repairCommand = buildCommand({
   docs: {
-    brief: "Repair corrupted images by re-fetching from Discord",
+    brief: "Repair media attachments by re-fetching from Discord",
   },
   func: run,
   parameters: {},

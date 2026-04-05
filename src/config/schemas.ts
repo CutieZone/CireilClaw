@@ -13,6 +13,10 @@ const EngineOverrideSchema = vb.partial(
     apiKey: ApiKeySchema,
     model: nonEmptyString,
     provider: vb.exactOptional(nonEmptyString, "openai"),
+    // Enable video attachment support. Only set this for providers that accept
+    // video_url content blocks (e.g. MiMo v2 Omni). Defaults to false so video
+    // attachments are silently ignored on providers that don't support them.
+    supportsVideo: vb.exactOptional(vb.boolean(), false),
     // Max tokens the model may spend on reasoning per turn. 0 disables thinking.
     thinkingBudget: vb.exactOptional(vb.pipe(vb.number(), vb.integer(), vb.minValue(0)), 16_384),
     toolFailThreshold: vb.exactOptional(vb.pipe(vb.number(), vb.integer(), vb.minValue(1)), 3),
@@ -47,6 +51,10 @@ const EngineConfigSchema = vb.strictObject({
   maxTurns: vb.exactOptional(vb.pipe(vb.number(), vb.integer(), vb.minValue(1)), 30),
   model: nonEmptyString,
   provider: vb.exactOptional(nonEmptyString, "openai"),
+  // Enable video attachment support. Only set this for providers that accept
+  // video_url content blocks (e.g. MiMo v2 Omni). Defaults to false so video
+  // attachments are silently ignored on providers that don't support them.
+  supportsVideo: vb.exactOptional(vb.boolean(), false),
   // Max tokens the model may spend on reasoning per turn. 0 disables thinking.
   thinkingBudget: vb.exactOptional(vb.pipe(vb.number(), vb.integer(), vb.minValue(0)), 16_384),
   toolFailThreshold: vb.exactOptional(vb.pipe(vb.number(), vb.integer(), vb.minValue(1)), 3),

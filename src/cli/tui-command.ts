@@ -35,7 +35,7 @@ async function run(_noFlags: {}, agentSlug: string): Promise<void> {
   initDb(agentSlug);
   const cfg = await loadEngine(agentSlug);
   const conditions = await loadConditions(agentSlug);
-  const sessions = loadSessions(agentSlug);
+  const sessions = await loadSessions(agentSlug);
 
   const choices: { name: string; value: string }[] = [];
 

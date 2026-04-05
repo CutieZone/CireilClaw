@@ -107,7 +107,7 @@ async function run(flags: Flags): Promise<void> {
     initDb(slug);
     const cfg = await loadEngine(slug);
     const conditions = await loadConditions(slug);
-    const sessions = loadSessions(slug);
+    const sessions = await loadSessions(slug);
     agents.set(slug, new Agent(slug, cfg, sessions, conditions));
     info("Loaded agent", colors.keyword(slug));
   }
