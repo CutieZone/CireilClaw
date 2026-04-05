@@ -13,6 +13,12 @@ const EngineOverrideSchema = vb.partial(
     apiKey: ApiKeySchema,
     model: nonEmptyString,
     provider: vb.exactOptional(nonEmptyString, "openai"),
+    // Max tokens the model may spend on reasoning per turn. 0 disables thinking.
+    thinkingBudget: vb.exactOptional(vb.pipe(vb.number(), vb.integer(), vb.minValue(0)), 16_384),
+    toolFailThreshold: vb.exactOptional(vb.pipe(vb.number(), vb.integer(), vb.minValue(1)), 3),
+    // Force JPEG encoding for image payloads. Set this for llama.cpp backends
+    // that don't support WebP. Auto-detected on first failure when unset.
+    useJpegForImages: vb.exactOptional(vb.boolean(), false),
   }),
 );
 
@@ -119,7 +125,10 @@ type DirectMessagesConfig = vb.InferOutput<typeof DirectMessagesSchema>;
 
 const DiscordSchema = vb.strictObject({
   access: vb.exactOptional(AccessSchema, { mode: "disabled", users: [] }),
-  directMessages: vb.exactOptional(DirectMessagesSchema, { mode: "owner", users: [] }),
+  directMessages: vb.exactOptional(DirectMessagesSchema, {
+    mode: "owner",
+    users: [],
+  }),
   ownerId: vb.pipe(vb.string(), vb.nonEmpty(), vb.regex(/[0-9]+/)),
   token: vb.pipe(vb.string(), vb.nonEmpty()),
 });

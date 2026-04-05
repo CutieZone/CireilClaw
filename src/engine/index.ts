@@ -423,6 +423,10 @@ export class Engine {
     const effectiveApiBase: string = override?.apiBase ?? this._apiBase;
     const effectiveModel: string = override?.model ?? this._model;
     const effectiveProvider = vb.parse(ProviderKindSchema, override?.provider ?? this._provider);
+    const effectiveThinkingBudget: number = override?.thinkingBudget ?? this._thinkingBudget;
+    const effectiveToolFailThreshold: number =
+      override?.toolFailThreshold ?? this._toolFailThreshold;
+    const effectiveUseJpegForImages: boolean = override?.useJpegForImages ?? this._useJpegForImages;
 
     if (session.history.length > this._maxTurns * 3) {
       debug(
@@ -467,7 +471,7 @@ export class Engine {
               effectiveApiBase,
               effectiveKeyPool,
               effectiveModel,
-              this._useJpegForImages,
+              effectiveUseJpegForImages,
             ));
             break;
           }
@@ -477,7 +481,7 @@ export class Engine {
               context,
               effectiveKeyPool,
               effectiveModel,
-              this._thinkingBudget,
+              effectiveThinkingBudget,
             ));
             break;
           }
@@ -566,14 +570,14 @@ export class Engine {
           const fails = (toolConsecutiveFailures.get(call.name) ?? 0) + 1;
           toolConsecutiveFailures.set(call.name, fails);
           if (
-            fails >= this._toolFailThreshold &&
+            fails >= effectiveToolFailThreshold &&
             !disabledTools.has(call.name) &&
             call.name !== "respond" &&
             call.name !== "no-response"
           ) {
             disabledTools.add(call.name);
             warning(
-              `Disabling tool '${call.name}' after ${fails} consecutive failures (threshold: ${this._toolFailThreshold})`,
+              `Disabling tool '${call.name}' after ${fails} consecutive failures (threshold: ${effectiveToolFailThreshold})`,
               colors.keyword(agentSlug),
               colors.keyword(session.id()),
             );
