@@ -26,9 +26,12 @@ type ExecToolConfig = vb.InferOutput<typeof ExecToolConfigSchema>;
 
 const ToolConfigSchema = vb.pipe(vb.boolean(), vb.description("Whether the tool is enabled"));
 
-const ToolsConfigSchema = vb.objectWithRest({
-  exec: ExecToolConfigSchema
-}, ToolConfigSchema);
+const ToolsConfigSchema = vb.objectWithRest(
+  {
+    exec: ExecToolConfigSchema,
+  },
+  ToolConfigSchema,
+);
 
 type ToolsConfig = vb.InferOutput<typeof ToolsConfigSchema>;
 

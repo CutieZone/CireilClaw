@@ -11,6 +11,7 @@ import type { AssistantMessage, Message, ToolMessage } from "$/engine/message.js
 import { generate as generateAnthropicOauth } from "$/engine/provider/anthropic-oauth.js";
 import { generate as generateOai } from "$/engine/provider/oai.js";
 import type { Tool } from "$/engine/tool.js";
+import { toolRegistry } from "$/engine/tools/index.js";
 import type { ToolContext } from "$/engine/tools/tool-def.js";
 import type {
   ChannelCapabilities,
@@ -33,8 +34,6 @@ import {
 } from "$/util/load.js";
 import { sandboxToReal, sanitizeError } from "$/util/paths.js";
 import * as vb from "valibot";
-
-import { toolRegistry } from "./tools/index.js";
 
 function truncateToTurns(messages: Message[], maxTurns: number): Message[] {
   const turns: Message[][] = [];

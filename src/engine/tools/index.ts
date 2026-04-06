@@ -16,9 +16,10 @@ import { respond } from "$/engine/tools/respond.js";
 import { schedule } from "$/engine/tools/schedule.js";
 import { sessionInfo } from "$/engine/tools/session-info.js";
 import { strReplace } from "$/engine/tools/str-replace.js";
+import type { ToolDef } from "$/engine/tools/tool-def.js";
 import { write } from "$/engine/tools/write.js";
 
-const toolRegistry = {
+const toolRegistry: Record<string, ToolDef> = {
   "brave-search": braveSearch,
   "close-file": closeFile,
   "download-attachments": downloadAttachments,
@@ -39,7 +40,5 @@ const toolRegistry = {
   "str-replace": strReplace,
   write,
 };
-type ToolNames = keyof typeof toolRegistry;
 
 export { toolRegistry };
-export type { ToolNames };
