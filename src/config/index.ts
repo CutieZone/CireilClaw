@@ -11,17 +11,17 @@ import { ConditionsConfigSchema } from "$/config/schemas/conditions.js";
 import { DiscordConfigSchema } from "$/config/schemas/discord.js";
 import type { DiscordConfig } from "$/config/schemas/discord.js";
 import { ProvidersConfigSchema } from "$/config/schemas/engine.js";
+import type { ProvidersConfig } from "$/config/schemas/engine.js";
 import { IntegrationsConfigSchema } from "$/config/schemas/integrations.js";
 import { SystemConfigSchema } from "$/config/schemas/system.js";
 import { ToolsConfigSchema } from "$/config/schemas/tools.js";
+import type { ToolsConfig } from "$/config/schemas/tools.js";
 import type { ChannelType } from "$/harness/session.js";
 import colors from "$/output/colors.js";
 import { root } from "$/util/paths.js";
 import type { TomlTable } from "smol-toml";
 import { parse } from "smol-toml";
 import * as vb from "valibot";
-
-type ToolsConfig = vb.InferOutput<typeof ToolsConfigSchema>;
 
 async function loadTools(agentSlug: string): Promise<ToolsConfig> {
   const file = join(root(), "agents", agentSlug, "config", "tools.toml");
@@ -35,8 +35,6 @@ async function loadTools(agentSlug: string): Promise<ToolsConfig> {
 
   throw new Error(`Tools config at path ${colors.path(file)} does not exist.`);
 }
-
-type ProvidersConfig = vb.InferOutput<typeof ProvidersConfigSchema>;
 
 /**
  * Load and parses the appropriate engine config.

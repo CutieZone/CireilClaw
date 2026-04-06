@@ -14,7 +14,7 @@ const ExecToolConfigSchema = vb.strictObject({
     vb.description("Whether the exec tool is enabled"),
   ),
   hostEnvPassthrough: vb.pipe(
-    vb.exactOptional(vb.pipe(vb.array(nonEmptyString), vb.minLength(1)), []),
+    vb.exactOptional(vb.pipe(vb.array(nonEmptyString)), []),
     vb.description("Which host environment variables to passthrough to the sandbox"),
   ),
   timeout: vb.pipe(
@@ -26,14 +26,9 @@ type ExecToolConfig = vb.InferOutput<typeof ExecToolConfigSchema>;
 
 const ToolConfigSchema = vb.pipe(vb.boolean(), vb.description("Whether the tool is enabled"));
 
-const SpecificToolConfigSchema = vb.strictObject({
-  exec: ExecToolConfigSchema,
-});
-
-const ToolsConfigSchema = vb.intersect([
-  vb.record(nonEmptyString, ToolConfigSchema),
-  SpecificToolConfigSchema,
-]);
+const ToolsConfigSchema = vb.objectWithRest({
+  exec: ExecToolConfigSchema
+}, ToolConfigSchema);
 
 type ToolsConfig = vb.InferOutput<typeof ToolsConfigSchema>;
 
