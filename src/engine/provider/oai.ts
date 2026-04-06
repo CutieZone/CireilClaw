@@ -213,12 +213,16 @@ function translateTool(tool: Tool): ChatCompletionTool {
   };
 }
 
+interface Options {
+  forceJpeg?: boolean;
+}
+
 export async function generate(
   context: Context,
   apiBase: string,
   keyPool: KeyPool,
   model: string,
-  forceJpeg = false,
+  { forceJpeg = false }: Options,
 ): Promise<{ message: AssistantMessage; usage?: UsageInfo }> {
   let useJpeg = forceJpeg || jpegRequiredEndpoints.has(apiBase);
   await prepareMedia(context.messages, useJpeg);

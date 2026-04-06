@@ -2,7 +2,7 @@ import { existsSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, normalize, relative } from "node:path";
 import { env } from "node:process";
 
-import type { ConditionsConfig, PathRule } from "$/config/conditions.js";
+import type { ConditionsConfig, PathRule } from "$/config/schemas/conditions.js";
 import type { Session } from "$/harness/session.js";
 import { checkPathAccess } from "$/util/conditions.js";
 

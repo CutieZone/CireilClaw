@@ -9,6 +9,9 @@ abstract class BaseSession {
   abstract readonly channel: ChannelType;
   readonly ephemeral: boolean = false;
 
+  selectedModel?: string;
+  selectedProvider?: string;
+
   history: Message[] = new Array<Message>();
   openedFiles: Set<string> = new Set<string>();
   pendingToolMessages: Message[] = new Array<Message>();
@@ -37,9 +40,18 @@ class DiscordSession extends BaseSession {
   typingInterval?: NodeJS.Timeout = undefined;
   lastMessageId?: string = undefined;
 
-  constructor(channelId: string, guildId?: string, isNsfw?: boolean) {
+  constructor(
+    channelId: string,
+    selectedProvider?: string,
+    selectedModel?: string,
+    guildId?: string,
+    isNsfw?: boolean,
+  ) {
     super();
     this.channelId = channelId;
+    this.selectedProvider = selectedProvider;
+    this.selectedModel = selectedModel;
+
     this.guildId = guildId;
     this.isNsfw = isNsfw ?? false;
   }

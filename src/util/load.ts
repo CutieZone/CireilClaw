@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { format, join } from "node:path";
 
-import type { ConditionsConfig } from "$/config/conditions.js";
+import type { ConditionsConfig } from "$/config/schemas/conditions.js";
 import type { MemoryBlock } from "$/engine/block.js";
 import type { Session } from "$/harness/session.js";
 import colors from "$/output/colors.js";

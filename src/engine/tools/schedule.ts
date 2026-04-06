@@ -77,7 +77,7 @@ const schedule: ToolDef = {
     });
 
     // Register with the live scheduler.
-    const scheduler = Harness.get().getScheduler(ctx.agentSlug);
+    const scheduler = Harness.get().agents.get(ctx.agentSlug)?.scheduler;
     if (scheduler !== undefined) {
       scheduler.scheduleDynamic(job);
     }

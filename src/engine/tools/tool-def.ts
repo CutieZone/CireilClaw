@@ -1,4 +1,4 @@
-import type { ConditionsConfig } from "$/config/index.js";
+import type { ConditionsConfig } from "$/config/schemas/conditions.js";
 import type { Database } from "$/db/index.js";
 import type { Tool } from "$/engine/tool.js";
 import type {

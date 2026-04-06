@@ -1,7 +1,6 @@
-import type { ConditionsConfig } from "$/config/index.js";
 import { loadConditions } from "$/config/index.js";
-import type { EngineConfig } from "$/config/schemas.js";
-import { Engine } from "$/engine/index.js";
+import type { ConditionsConfig } from "$/config/schemas/conditions.js";
+import { runTurn } from "$/engine/index.js";
 import { MINIMAL_HANDLER } from "$/harness/channel-handler.js";
 import type {
   ChannelHandler,
@@ -10,35 +9,31 @@ import type {
   HistoryMessage,
 } from "$/harness/channel-handler.js";
 import type { Session } from "$/harness/session.js";
+import { Scheduler } from "$/scheduler/index.js";
 import type { Client as OceanicClient } from "oceanic.js";
 
 export class Agent {
-  private _engine: Engine;
   private readonly _slug: string;
   private readonly _sessions: Map<string, Session>;
   private readonly _channelHandlers = new Map<string, ChannelHandler>();
   private _conditions: ConditionsConfig;
   private _discordClient?: OceanicClient;
   private _ownerId?: string;
+  private readonly _scheduler?: Scheduler;
 
   constructor(
     slug: string,
-    cfg: EngineConfig,
     sessions: Map<string, Session>,
+    signal?: AbortSignal,
     conditions?: ConditionsConfig,
   ) {
-    this._engine = new Engine(cfg);
     this._slug = slug;
     this._sessions = sessions;
     this._conditions = conditions ?? { blocks: {}, memories: {}, workspace: {} };
-  }
 
-  get engine(): Engine {
-    return this._engine;
-  }
-
-  updateEngine(cfg: EngineConfig): void {
-    this._engine = new Engine(cfg);
+    if (signal !== undefined) {
+      this._scheduler = new Scheduler(this, signal);
+    }
   }
 
   async updateConditions(): Promise<void> {
@@ -51,6 +46,10 @@ export class Agent {
 
   get slug(): string {
     return this._slug;
+  }
+
+  get scheduler(): Scheduler | undefined {
+    return this._scheduler;
   }
 
   get sessions(): Map<string, Session> {
@@ -170,9 +169,10 @@ export class Agent {
     const resolveChannel = async (spec: string): Promise<ChannelResolution> =>
       this.resolveChannel(spec, session);
 
-    await this._engine.runTurn(
+    await runTurn(
       session,
       this._slug,
+      {},
       send,
       sendTo,
       react,

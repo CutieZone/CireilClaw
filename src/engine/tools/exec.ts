@@ -1,5 +1,4 @@
 import { loadTools } from "$/config/index.js";
-import type { ExecToolConfigSchema } from "$/config/schemas.js";
 import { ToolError } from "$/engine/errors.js";
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import { exec as sandboxExec } from "$/util/sandbox.js";
@@ -26,10 +25,6 @@ const Schema = vb.strictObject({
     ),
   ),
 });
-
-function isExecConfig(value: unknown): value is vb.InferOutput<typeof ExecToolConfigSchema> {
-  return typeof value === "object" && value !== null && "binaries" in value;
-}
 
 function truncate(str: string, label: string): string {
   const MAX_OUTPUT = 5000;
@@ -59,17 +54,7 @@ export const exec: ToolDef = {
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     const data = vb.parse(Schema, input);
     const toolsConfig = await loadTools(ctx.agentSlug);
-    const execConfig = toolsConfig["exec"];
-
-    if (execConfig === false) {
-      throw new ToolError("Exec tool is disabled in configuration.");
-    }
-
-    if (!isExecConfig(execConfig)) {
-      throw new ToolError(
-        "Exec tool configuration is invalid or missing. Configure [exec] with binaries list in tools.toml.",
-      );
-    }
+    const execConfig = toolsConfig.exec;
 
     if (!execConfig.enabled) {
       throw new ToolError("Exec tool is disabled in configuration.");

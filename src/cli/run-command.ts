@@ -1,15 +1,15 @@
-import path from "node:path";
+import { watch } from "node:fs/promises";
+import path, { join } from "node:path";
 
 import { Agent } from "$/agent/index.js";
 import { startDiscord } from "$/channels/discord.js";
-import { loadAgents, loadConditions, loadEngine, watcher } from "$/config/index.js";
+import { loadAgents, loadConditions } from "$/config/index.js";
 import { runMigrations } from "$/config/migrations/runner.js";
-import type { ConfigChangeEvent } from "$/config/schemas.js";
 import { initDb } from "$/db/index.js";
 import { flushAllSessions, loadSessions } from "$/db/sessions.js";
 import { Harness } from "$/harness/index.js";
 import colors from "$/output/colors.js";
-import { config, debug, info, setLogFile } from "$/output/log.js";
+import { config, debug, info, setLogFile, warning } from "$/output/log.js";
 import { root } from "$/util/paths.js";
 import { onShutdown, registerSigint } from "$/util/shutdown.js";
 import { buildCommand } from "@stricli/core";
@@ -28,35 +28,17 @@ function extractSlugFromPath(configPath: string): string | undefined {
   return parts[0];
 }
 
-async function handleConfigChange(
-  event: ConfigChangeEvent,
-  agents: Map<string, Agent>,
-): Promise<void> {
+interface ConfigChangeEvent {
+  filename?: string;
+  basePath: string;
+}
+
+async function handleConfigChange(event: ConfigChangeEvent): Promise<void> {
+  const { agents } = Harness.get();
+
   // Handle both "change" and "rename" events (some editors use atomic renames)
   const filename = event.filename ?? "";
-  if (filename === "engine.toml") {
-    const slug = extractSlugFromPath(event.basePath);
-    if (slug === undefined) {
-      // Global config changed - would need to reload all agents
-      // For now, skip as agent-specific config overrides global
-      info("Global engine.toml changed - restart required to apply");
-      return;
-    }
-
-    const agent = agents.get(slug);
-    if (agent === undefined) {
-      info("Unknown agent", colors.keyword(slug), "- skipping reload");
-      return;
-    }
-
-    try {
-      const cfg = await loadEngine(slug);
-      agent.updateEngine(cfg);
-      info("Reloaded engine config for", colors.keyword(slug));
-    } catch (error) {
-      info("Failed to reload engine config for", colors.keyword(slug), "-", error);
-    }
-  } else if (filename === "conditions.toml") {
+  if (filename === "conditions.toml") {
     const slug = extractSlugFromPath(event.basePath);
     if (slug === undefined) {
       info("Global conditions.toml changed - restart required to apply");
@@ -82,6 +64,33 @@ interface Flags {
   logLevel: "error" | "warning" | "info" | "debug";
 }
 
+async function runWatcher(agentSlug: string, signal: AbortSignal): Promise<void> {
+  const agentDir = join(root(), "agents", agentSlug, "config");
+  const watcher = watch(agentDir, {
+    encoding: "utf8",
+    recursive: true,
+    signal: signal,
+  });
+
+  for await (const event of watcher) {
+    info("Config change", colors.keyword(event.eventType), colors.path(event.filename ?? ""));
+    const evt = {
+      basePath: agentDir,
+      filename: event.filename ?? undefined,
+    };
+    await handleConfigChange(evt);
+
+    const filename = event.filename ?? "";
+    if (filename === "heartbeat.toml" || filename === "cron.toml") {
+      const slug = extractSlugFromPath(evt.basePath);
+      if (slug !== undefined) {
+        debug("Reloading scheduler for agent", colors.keyword(slug));
+        await Harness.get().reloadScheduler(slug);
+      }
+    }
+  }
+}
+
 async function run(flags: Flags): Promise<void> {
   config.level = flags.logLevel;
   setLogFile(path.join(root(), "logs", "cireilclaw.log"));
@@ -105,15 +114,19 @@ async function run(flags: Flags): Promise<void> {
 
   for (const slug of slugs) {
     initDb(slug);
-    const cfg = await loadEngine(slug);
     const conditions = await loadConditions(slug);
     const sessions = await loadSessions(slug);
-    agents.set(slug, new Agent(slug, cfg, sessions, conditions));
+    agents.set(slug, new Agent(slug, sessions, sc.signal, conditions));
+
+    // oxlint-disable-next-line promise/prefer-await-to-then
+    runWatcher(slug, sc.signal).catch((error: unknown) => {
+      warning("Failed to watch changes", error);
+    });
+
     info("Loaded agent", colors.keyword(slug));
   }
 
-  const watchers = await watcher(sc.signal);
-  const harness = Harness.init(agents, watchers);
+  const harness = Harness.init(agents);
 
   // Register after harness is created so the reference is valid at shutdown.
   onShutdown(() => {
@@ -123,23 +136,9 @@ async function run(flags: Flags): Promise<void> {
   for (const slug of agents.keys()) {
     await startDiscord(harness, slug);
   }
-  await harness.startSchedulers(sc.signal);
+  await harness.startSchedulers();
 
   info("Running with", colors.number(agents.size), "agents");
-
-  for await (const event of harness.watcher) {
-    info("Config change", colors.keyword(event.eventType), colors.path(event.filename ?? ""));
-    await handleConfigChange(event, agents);
-
-    const filename = event.filename ?? "";
-    if (filename === "heartbeat.toml" || filename === "cron.toml") {
-      const slug = extractSlugFromPath(event.basePath);
-      if (slug !== undefined) {
-        debug("Reloading scheduler for agent", colors.keyword(slug));
-        await harness.reloadScheduler(slug);
-      }
-    }
-  }
 }
 
 export const runCommand = buildCommand({

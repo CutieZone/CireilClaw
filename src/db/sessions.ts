@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { nonEmptyString } from "$/config/schemas/shared.js";
 import { getDb } from "$/db/index.js";
 import { images, sessions } from "$/db/schema.js";
 import type { Content, ImageContent, ImageRef, VideoContent, VideoRef } from "$/engine/content.js";
@@ -205,15 +206,17 @@ async function deserializeHistory(json: string, agentSlug: string): Promise<Mess
 // ---------------------------------------------------------------------------
 
 const DiscordMetaSchema = vb.object({
-  channelId: vb.string(),
-  guildId: vb.exactOptional(vb.string()),
+  channelId: nonEmptyString,
+  guildId: vb.exactOptional(nonEmptyString),
   isNsfw: vb.exactOptional(vb.boolean()),
+  selectedModel: vb.exactOptional(nonEmptyString),
+  selectedProvider: vb.exactOptional(nonEmptyString),
 });
 
 type DiscordMeta = vb.InferOutput<typeof DiscordMetaSchema>;
 
 const MatrixMetaSchema = vb.object({
-  roomId: vb.string(),
+  roomId: nonEmptyString,
 });
 
 // type MatrixMeta = vb.InferOutput<typeof MatrixMetaSchema>;
@@ -315,7 +318,13 @@ async function loadSessions(agentSlug: string): Promise<Map<string, Session>> {
     let session: Session | undefined = undefined;
     if (row.channel === "discord") {
       const meta = vb.parse(DiscordMetaSchema, JSON.parse(row.meta));
-      session = new DiscordSession(meta.channelId, meta.guildId, meta.isNsfw);
+      session = new DiscordSession(
+        meta.channelId,
+        meta.selectedProvider,
+        meta.selectedModel,
+        meta.guildId,
+        meta.isNsfw,
+      );
     } else if (row.channel === "matrix") {
       const meta = vb.parse(MatrixMetaSchema, JSON.parse(row.meta));
       session = new MatrixSession(meta.roomId);

@@ -1,36 +1,27 @@
 import { existsSync } from "node:fs";
-import { readdir, readFile, watch } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import type { ConditionsConfig } from "$/config/conditions.js";
-import { ConditionsConfigSchema } from "$/config/conditions.js";
 import type { CronConfig } from "$/config/cron.js";
 import { CronConfigSchema } from "$/config/cron.js";
 import type { HeartbeatConfig } from "$/config/heartbeat.js";
 import { HeartbeatConfigSchema } from "$/config/heartbeat.js";
-import type {
-  ChannelConfigMap,
-  ConfigChangeEvent,
-  EngineConfig,
-  IntegrationsConfig,
-  SystemConfig,
-  ToolsConfig,
-  Watchers,
-} from "$/config/schemas.js";
-import {
-  DiscordSchema,
-  EngineConfigSchema,
-  IntegrationsConfigSchema,
-  SystemConfigSchema,
-  ToolsConfigSchema,
-} from "$/config/schemas.js";
+import type { ConditionsConfig } from "$/config/schemas/conditions.js";
+import { ConditionsConfigSchema } from "$/config/schemas/conditions.js";
+import { DiscordConfigSchema } from "$/config/schemas/discord.js";
+import type { DiscordConfig } from "$/config/schemas/discord.js";
+import { ProvidersConfigSchema } from "$/config/schemas/engine.js";
+import { IntegrationsConfigSchema } from "$/config/schemas/integrations.js";
+import { SystemConfigSchema } from "$/config/schemas/system.js";
+import { ToolsConfigSchema } from "$/config/schemas/tools.js";
 import type { ChannelType } from "$/harness/session.js";
 import colors from "$/output/colors.js";
 import { root } from "$/util/paths.js";
-import merge from "fast-merge-async-iterators";
 import type { TomlTable } from "smol-toml";
 import { parse } from "smol-toml";
 import * as vb from "valibot";
+
+type ToolsConfig = vb.InferOutput<typeof ToolsConfigSchema>;
 
 async function loadTools(agentSlug: string): Promise<ToolsConfig> {
   const file = join(root(), "agents", agentSlug, "config", "tools.toml");
@@ -45,11 +36,13 @@ async function loadTools(agentSlug: string): Promise<ToolsConfig> {
   throw new Error(`Tools config at path ${colors.path(file)} does not exist.`);
 }
 
+type ProvidersConfig = vb.InferOutput<typeof ProvidersConfigSchema>;
+
 /**
  * Load and parses the appropriate engine config.
  * @param agentSlug Optional slug to specify the agent for which to load the engine config for
  */
-async function loadEngine(agentSlug?: string): Promise<EngineConfig> {
+async function loadEngine(agentSlug?: string): Promise<ProvidersConfig> {
   let obj: TomlTable | undefined = undefined;
   if (agentSlug === undefined) {
     const file = join(root(), "config", "engine.toml");
@@ -73,10 +66,39 @@ async function loadEngine(agentSlug?: string): Promise<EngineConfig> {
     }
   }
 
-  const cfg = vb.parse(EngineConfigSchema, obj);
+  const cfg = vb.parse(ProvidersConfigSchema, obj);
+
+  // Validate that a global default provider exists
+  const defaultProvider = Object.values(cfg).filter((it) => it.isGlobalDefault);
+
+  if (defaultProvider.length === 0) {
+    if (agentSlug === undefined) {
+      throw new Error(
+        `There is no global default provider in the loaded global engine configuration. Assign a provider the 'isGlobalDefault' tag`,
+      );
+    } else {
+      throw new Error(
+        `There is no global default provider in the loaded engine configuration for agent ${colors.keyword(agentSlug)}. Assign a provider the 'isGlobalDefault' tag`,
+      );
+    }
+  }
+
+  if (defaultProvider.length > 1) {
+    if (agentSlug === undefined) {
+      throw new Error(
+        `There is more than 1  global default provider in the loaded global engine configuration. Assign only one provider the 'isGlobalDefault' tag`,
+      );
+    } else {
+      throw new Error(
+        `There is more than 1 global default provider in the loaded engine configuration for agent ${colors.keyword(agentSlug)}. Assign only one provider the 'isGlobalDefault' tag`,
+      );
+    }
+  }
 
   return cfg;
 }
+
+type IntegrationsConfig = vb.InferOutput<typeof IntegrationsConfigSchema>;
 
 async function loadIntegrations(): Promise<IntegrationsConfig> {
   const file = join(root(), "config", "integrations.toml");
@@ -91,6 +113,12 @@ async function loadIntegrations(): Promise<IntegrationsConfig> {
   return vb.parse(IntegrationsConfigSchema, obj);
 }
 
+interface ChannelConfigMap {
+  discord: DiscordConfig;
+
+  [index: string]: unknown;
+}
+
 async function loadChannel<Key extends ChannelType>(
   channel: Key,
   agentSlug: string,
@@ -102,7 +130,7 @@ async function loadChannel<Key extends ChannelType>(
   // oxlint-disable-next-line typescript/switch-exhaustiveness-check
   switch (channel) {
     case "discord":
-      schema = DiscordSchema;
+      schema = DiscordConfigSchema;
       break;
 
     default:
@@ -121,54 +149,6 @@ async function loadChannel<Key extends ChannelType>(
 
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return vb.parse(schema, obj) as ChannelConfigMap[Key];
-}
-
-// Tags events from a watcher with the base path being watched
-async function* tagWatcher(
-  toTag: AsyncIterableIterator<{ eventType: "change" | "rename"; filename: string | null }>,
-  basePath: string,
-): AsyncGenerator<ConfigChangeEvent> {
-  for await (const event of toTag) {
-    yield { ...event, basePath };
-  }
-}
-
-async function watcher(signal: AbortSignal): Promise<Watchers> {
-  const globalConfigDir = join(root(), "config");
-  const globalConfigWatcher = watch(globalConfigDir, {
-    encoding: "utf8",
-    recursive: true,
-    signal: signal,
-  });
-
-  if (!existsSync(join(root(), "agents"))) {
-    return tagWatcher(globalConfigWatcher, globalConfigDir);
-  }
-
-  const agentsFiles = await readdir(join(root(), "agents"), {
-    encoding: "utf8",
-    withFileTypes: true,
-  });
-
-  const taggedWatchers = [
-    tagWatcher(globalConfigWatcher, globalConfigDir),
-    ...agentsFiles
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => join(entry.parentPath, entry.name, "config"))
-      .filter((configPath) => existsSync(configPath))
-      .map((configPath) =>
-        tagWatcher(
-          watch(configPath, {
-            encoding: "utf8",
-            recursive: true,
-            signal: signal,
-          }),
-          configPath,
-        ),
-      ),
-  ];
-
-  return merge.default("iters-close-wait", ...taggedWatchers);
 }
 
 async function loadHeartbeat(agentSlug: string): Promise<HeartbeatConfig> {
@@ -221,6 +201,8 @@ async function loadConditions(agentSlug: string): Promise<ConditionsConfig> {
   return vb.parse(ConditionsConfigSchema, obj);
 }
 
+type SystemConfig = vb.InferOutput<typeof SystemConfigSchema>;
+
 async function loadSystem(): Promise<SystemConfig> {
   const file = join(root(), "config", "system.toml");
 
@@ -244,7 +226,4 @@ export {
   loadIntegrations,
   loadSystem,
   loadTools,
-  watcher,
 };
-
-export type { ConditionsConfig, SystemConfig };

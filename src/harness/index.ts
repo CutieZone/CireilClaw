@@ -1,21 +1,16 @@
 import type { Agent } from "$/agent/index.js";
-import type { Watchers } from "$/config/schemas.js";
-import { Scheduler } from "$/scheduler/index.js";
 
 export class Harness {
   private static _instance: Harness | undefined;
 
   private readonly _agents: Map<string, Agent>;
-  private readonly _watcher: Watchers;
-  private readonly _schedulers = new Map<string, Scheduler>();
 
-  private constructor(agents: Map<string, Agent>, watcher: Watchers) {
+  private constructor(agents: Map<string, Agent>) {
     this._agents = agents;
-    this._watcher = watcher;
   }
 
-  static init(agents: Map<string, Agent>, watcher: Watchers): Harness {
-    Harness._instance = new Harness(agents, watcher);
+  static init(agents: Map<string, Agent>): Harness {
+    Harness._instance = new Harness(agents);
     return Harness._instance;
   }
 
@@ -30,33 +25,22 @@ export class Harness {
     return this._agents;
   }
 
-  get watcher(): Watchers {
-    return this._watcher;
-  }
-
-  async startSchedulers(signal: AbortSignal): Promise<void> {
+  async startSchedulers(): Promise<void> {
     for (const agent of this._agents.values()) {
-      const scheduler = new Scheduler(agent, signal);
-      this._schedulers.set(agent.slug, scheduler);
-      await scheduler.start();
+      await agent.scheduler?.start();
     }
   }
 
   stopSchedulers(): void {
-    for (const scheduler of this._schedulers.values()) {
-      scheduler.stop();
+    for (const agent of this.agents.values()) {
+      agent.scheduler?.stop();
     }
-    this._schedulers.clear();
   }
 
   async reloadScheduler(agentSlug: string): Promise<void> {
-    const scheduler = this._schedulers.get(agentSlug);
+    const scheduler = this.agents.get(agentSlug)?.scheduler;
     if (scheduler !== undefined) {
       await scheduler.reload();
     }
-  }
-
-  getScheduler(agentSlug: string): Scheduler | undefined {
-    return this._schedulers.get(agentSlug);
   }
 }

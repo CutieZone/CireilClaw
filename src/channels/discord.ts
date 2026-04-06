@@ -7,10 +7,9 @@ import { basename, join } from "node:path";
 import * as clearCommand from "$/channels/discord/clear-command.js";
 import type { HandlerCtx } from "$/channels/discord/handler-ctx.js";
 import * as repairCommand from "$/channels/discord/repair-command.js";
-import { loadChannel } from "$/config/index.js";
+import { loadChannel, loadEngine } from "$/config/index.js";
 import { saveSession } from "$/db/sessions.js";
 import type { ImageContent, TextContent, VideoContent } from "$/engine/content.js";
-import { Engine } from "$/engine/index.js";
 import type { Message } from "$/engine/message.js";
 import type { ChannelHandler } from "$/harness/channel-handler.js";
 import type { Harness } from "$/harness/index.js";
@@ -18,6 +17,7 @@ import { DiscordSession } from "$/harness/session.js";
 import colors from "$/output/colors.js";
 import { debug, error as logError, info, warning } from "$/output/log.js";
 import { formatDate } from "$/util/date.js";
+import { getDefaultProviderAndModel } from "$/util/default-provider-and-model.js";
 import { toWebp } from "$/util/image.js";
 import { root, sandboxToReal } from "$/util/paths.js";
 import type {
@@ -532,16 +532,16 @@ async function handleMessageCreate(
 
   const userId = msg.author.id;
 
-  // Check access control (whitelist/blacklist). Owner always bypasses.
+  // Check access control (allowlist/denylist). Owner always bypasses.
   if (userId !== ownerId) {
-    const { mode, users } = access ?? { mode: "disabled", users: [] };
-    if (mode === "whitelist" && !users.includes(userId)) {
-      debug("Ignoring message from", colors.keyword(userId), "- not in whitelist");
-      return; // User not in whitelist
+    const { mode, users } = access;
+    if (mode === "allowlist" && !users.includes(userId)) {
+      debug("Ignoring message from", colors.keyword(userId), ": not in allowlist");
+      return; // User not in allowlist
     }
-    if (mode === "blacklist" && users.includes(userId)) {
-      debug("Ignoring message from", colors.keyword(userId), "- blacklisted");
-      return; // User is blacklisted
+    if (mode === "denylist" && users.includes(userId)) {
+      debug("Ignoring message from", colors.keyword(userId), ": denylisted");
+      return; // User is denylisted
     }
   }
 
@@ -551,14 +551,17 @@ async function handleMessageCreate(
   // DMs bypass the mention/reply requirement but are still subject to mode restrictions
   const shouldProcess = isDm;
   if (isDm) {
-    const { mode, users } = directMessages ?? { mode: "owner", users: [] };
+    const { mode, users } = directMessages;
 
     // Enforce DM mode
     if (mode === "owner" && userId !== ownerId) {
       return; // Only owner can DM
     }
-    if (mode === "whitelist" && userId !== ownerId && !users.includes(userId)) {
-      return; // Only owner and whitelisted users can DM
+    if (mode === "allowlist" && userId !== ownerId && !users.includes(userId)) {
+      return; // Only owner and allowlisted users can DM
+    }
+    if (mode === "denylist" && userId !== ownerId && users.includes(userId)) {
+      return; // Only owner and non-denylisted users can DM
     }
     // mode === "public" allows anyone to DM
   }
@@ -633,6 +636,8 @@ async function handleMessageCreate(
     throw new TypeError(`invalid session type: expected discord, got ${session.channel}`);
   }
 
+  const defaults = getDefaultProviderAndModel(await loadEngine(agentSlug));
+
   const isNsfw =
     msgChannel.type === ChannelTypes.DM ||
     msgChannel.type === ChannelTypes.ANNOUNCEMENT_THREAD ||
@@ -642,7 +647,13 @@ async function handleMessageCreate(
       : msgChannel.nsfw;
 
   if (session === undefined) {
-    session = new DiscordSession(msg.channelID, msg.guildID ?? undefined, isNsfw);
+    session = new DiscordSession(
+      msg.channelID,
+      defaults.provider.name,
+      defaults.model.name,
+      msg.guildID ?? undefined,
+      isNsfw,
+    );
 
     agent.sessions.set(sessionId, session);
   } else {
@@ -724,8 +735,22 @@ async function handleMessageCreate(
   // Push user message into history, including any image/video attachments.
   const textContent = await formatUserMessage(msg);
   const imageContents = await fetchAllImages(msg);
-  const sessionOverride = Engine.resolveOverride(ds, agent.engine.overrides);
-  const supportsVideo = sessionOverride?.supportsVideo ?? agent.engine.supportsVideo;
+
+  const engineConfig = await loadEngine(agentSlug);
+
+  const provider = engineConfig[session.selectedProvider ?? defaults.provider.name];
+  if (provider === undefined) {
+    throw new Error(
+      `Could not load the provider ${session.selectedProvider} from the engine config: check your configuration`,
+    );
+  }
+  const { models } = provider;
+  const modelSupportsVideo =
+    models?.[session.selectedModel ?? defaults.model.name] === undefined
+      ? false
+      : models[session.selectedModel ?? defaults.model.name]?.supportsVideo;
+
+  const supportsVideo = models === undefined ? false : (modelSupportsVideo ?? false);
   const videoContents = supportsVideo ? await fetchAttachmentVideos(msg) : [];
   const mediaContents = [...imageContents, ...videoContents];
   const historyLengthBeforeTurn = session.history.length;
@@ -897,9 +922,23 @@ async function handleMessageUpdate(
     ? await formatAssistantContext(realMsg)
     : await formatHistoryContext(realMsg);
   const images = await fetchAllImages(realMsg);
-  const msgOverride = Engine.resolveOverride(session, agent.engine.overrides);
-  const editSupportsVideo = msgOverride?.supportsVideo ?? agent.engine.supportsVideo;
-  const videos = editSupportsVideo ? await fetchAttachmentVideos(realMsg) : [];
+  const engineConfig = await loadEngine(agentSlug);
+  const defaults = getDefaultProviderAndModel(engineConfig);
+
+  const provider = engineConfig[session.selectedProvider ?? defaults.provider.name];
+  if (provider === undefined) {
+    throw new Error(
+      `Could not load the provider ${session.selectedProvider} from the engine config: check your configuration`,
+    );
+  }
+  const { models } = provider;
+  const modelSupportsVideo =
+    models?.[session.selectedModel ?? defaults.model.name] === undefined
+      ? false
+      : models[session.selectedModel ?? defaults.model.name]?.supportsVideo;
+
+  const supportsVideo = models === undefined ? false : (modelSupportsVideo ?? false);
+  const videos = supportsVideo ? await fetchAttachmentVideos(realMsg) : [];
   const media = [...images, ...videos];
 
   entry.content = media.length > 0 ? [textContent, ...media] : textContent;
@@ -1085,8 +1124,27 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
           if (existing !== undefined) {
             return existing;
           }
+
+          const engine = await loadEngine(agentSlug);
+          const [defaultProvider] = Object.entries(engine)
+            .filter((kvp) => kvp[1].isGlobalDefault)
+            .map((it) => it[0]);
+
+          if (defaultProvider === undefined) {
+            throw new Error("Could not load a default provider from the engine config.");
+          }
+
+          const providerConfig = engine[defaultProvider];
+          if (providerConfig === undefined) {
+            throw new Error(
+              "This should not happen. A provider config for a provider we know exists turned out to not exist.",
+            );
+          }
+
+          const { defaultModel } = providerConfig;
+
           // Return a new session for this DM channel
-          return new DiscordSession(dmChannel.id, undefined, false);
+          return new DiscordSession(dmChannel.id, defaultProvider, defaultModel, undefined, false);
         } catch {
           return { error: "failed to create DM channel with owner" };
         }

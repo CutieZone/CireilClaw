@@ -1,5 +1,4 @@
 import { loadIntegrations } from "$/config/index.js";
-import type { ApiKey } from "$/config/schemas.js";
 import { ToolError } from "$/engine/errors.js";
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import { debug } from "$/output/log.js";
@@ -35,12 +34,6 @@ function isBraveSearchResponse(value: unknown): value is BraveSearchResponse {
   return typeof value === "object" && value !== null;
 }
 
-function hasApiKey(
-  integrations: Awaited<ReturnType<typeof loadIntegrations>>,
-): integrations is { brave: { apiKey: ApiKey } } {
-  return integrations.brave?.apiKey !== undefined;
-}
-
 export const braveSearch: ToolDef = {
   description:
     "Search the web via Brave Search and return a list of results. Each result contains a title, short description snippet, and URL.\n\n" +
@@ -50,7 +43,7 @@ export const braveSearch: ToolDef = {
     const data = vb.parse(Schema, input);
     const integrations = await loadIntegrations();
 
-    if (!hasApiKey(integrations)) {
+    if (integrations.brave?.apiKey === undefined) {
       throw new ToolError("Brave Search is not configured. Add an API key to integrations.toml.");
     }
 

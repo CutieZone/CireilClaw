@@ -1,6 +1,5 @@
+import { nonEmptyString } from "$/config/schemas/shared.js";
 import * as vb from "valibot";
-
-import { EngineOverrideSchema } from "./schemas.js";
 
 // Schedule variants:
 // every: run every N seconds (min 60)
@@ -11,11 +10,11 @@ const EveryScheduleSchema = vb.strictObject({
 });
 
 const CronExpressionScheduleSchema = vb.strictObject({
-  cron: vb.pipe(vb.string(), vb.nonEmpty()),
+  cron: nonEmptyString,
 });
 
 const AtScheduleSchema = vb.strictObject({
-  at: vb.pipe(vb.string(), vb.nonEmpty()),
+  at: nonEmptyString,
 });
 
 const ScheduleSchema = vb.union([
@@ -30,12 +29,13 @@ const CronJobConfigSchema = vb.strictObject({
   enabled: vb.exactOptional(vb.boolean(), true),
   // Whether to run in the main session or an isolated one.
   execution: vb.exactOptional(vb.picklist(["main", "isolated"]), "isolated"),
-  id: vb.pipe(vb.string(), vb.nonEmpty()),
-  model: vb.exactOptional(EngineOverrideSchema),
-  prompt: vb.pipe(vb.string(), vb.nonEmpty()),
+  id: nonEmptyString,
+  model: vb.exactOptional(nonEmptyString, undefined),
+  prompt: nonEmptyString,
+  provider: vb.exactOptional(nonEmptyString, undefined),
   schedule: ScheduleSchema,
   // Session target for announce delivery.
-  target: vb.exactOptional(vb.pipe(vb.string(), vb.nonEmpty()), "last"),
+  target: vb.exactOptional(nonEmptyString, "last"),
   // Webhook URL — only required if delivery = "webhook".
   webhookUrl: vb.exactOptional(vb.pipe(vb.string(), vb.nonEmpty(), vb.url())),
 });

@@ -1,16 +1,11 @@
 import { readdir } from "node:fs/promises";
 
 import { loadTools } from "$/config/index.js";
-import type { ExecToolConfigSchema } from "$/config/schemas.js";
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import { checkConditionalAccess, sandboxToReal, validateSystemPath } from "$/util/paths.js";
 import * as vb from "valibot";
 
 const AGENT_SANDBOX_PREFIXES = ["/workspace", "/memories", "/blocks", "/skills", "/tasks"] as const;
-
-function isExecConfig(value: unknown): value is vb.InferOutput<typeof ExecToolConfigSchema> {
-  return typeof value === "object" && value !== null && "binaries" in value;
-}
 
 const Schema = vb.strictObject({
   path: vb.pipe(
@@ -35,9 +30,9 @@ export const listDir: ToolDef = {
     // /bin is synthetic in the exec sandbox, so just return configured binaries directly
     if (data.path === "/bin") {
       const toolsConfig = await loadTools(ctx.agentSlug);
-      const execConfig = toolsConfig["exec"];
+      const execConfig = toolsConfig.exec;
 
-      if (execConfig === false || !isExecConfig(execConfig) || !execConfig.enabled) {
+      if (!execConfig.enabled) {
         return { entries: [], path: data.path, success: true };
       }
 

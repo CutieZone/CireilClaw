@@ -1,4 +1,4 @@
-import type { BlockRule, Condition, PathRule } from "$/config/conditions.js";
+import type { BlockRule, Condition, PathRule } from "$/config/schemas/conditions.js";
 import type { Session } from "$/harness/session.js";
 
 /**
