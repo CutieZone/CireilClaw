@@ -4,7 +4,6 @@ import type { ProviderConfig } from "$/config/schemas/engine.js";
 import { nonEmptyString } from "$/config/schemas/shared.js";
 import { saveSession } from "$/db/sessions.js";
 import { DiscordSession } from "$/harness/session.js";
-import { debug } from "$/output/log.js";
 import { ApplicationCommandOptionTypes, ApplicationCommandTypes, MessageFlags } from "oceanic.js";
 import type {
   AutocompleteInteraction,
@@ -61,7 +60,6 @@ async function fetchModelListFor(
 
       const json = await modelList.json();
       const list = vb.parse(OpenAIModelListSchema, json);
-      debug("Parsed list:", list);
 
       return list.data.map((it) => ({ id: it.id, name: it.name ?? it.id }));
     }
@@ -71,11 +69,15 @@ async function fetchModelListFor(
       const modelList = await fetch(`https://api.anthropic.com/v1/models`, {
         headers: {
           Authorization: `Bearer ${key}`,
+          "Content-Type": "application/json",
+          "anthropic-beta": "oauth-2025-04-20,claude-code-20250219,interleaved-thinking-2025-05-14",
           "anthropic-version": "2023-06-01",
         },
       });
 
-      const list = vb.parse(AnthropicModelListSchema, await modelList.json());
+      const json = await modelList.json();
+
+      const list = vb.parse(AnthropicModelListSchema, json);
 
       return list.data.map((it) => ({
         id: it.id,
@@ -192,12 +194,11 @@ async function handleAutocomplete(
         .filter(
           ({ name, id }) =>
             typeof focused.value === "string" &&
-            focused.value.length > 1 &&
-            (name.startsWith(focused.value) || id.startsWith(focused.value)),
+            ((focused.value.length > 1 &&
+              (name.startsWith(focused.value) || id.startsWith(focused.value))) ||
+              focused.value.length === 0),
         )
         .map(({ name, id }) => ({ name: id, value: name }));
-
-      debug("Filtered list:", models);
     } else if (selected !== undefined) {
       models = selected.availableModels.map((it) => ({ name: it, value: it }));
     }
