@@ -70,8 +70,8 @@ async function fetchModelListFor(
 
       const modelList = await fetch(`https://api.anthropic.com/v1/models`, {
         headers: {
+          Authorization: `Bearer ${key}`,
           "anthropic-version": "2023-06-01",
-          "x-api-key": key,
         },
       });
 
@@ -151,6 +151,7 @@ async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): 
         flags: MessageFlags.EPHEMERAL,
       });
     }
+    return;
   } else if (
     providerCfg.availableModels.includes(model.value) ||
     providerCfg.models?.[model.value] !== undefined
