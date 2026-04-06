@@ -486,6 +486,7 @@ export class Engine {
           case "anthropic-oauth": {
             ({ message: assistantMsg, usage } = await generateAnthropicOauth(
               context,
+              effectiveApiBase,
               effectiveKeyPool,
               effectiveModel,
               effectiveThinkingBudget,

@@ -9,7 +9,7 @@ import type { UserMessage } from "$/engine/message.js";
 import { NamedInternalSession, TuiSession } from "$/harness/session.js";
 import { Box, render, Static, Text, useApp, useInput } from "ink";
 import { MultilineInput } from "ink-multiline-input";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ReactElement } from "react";
 
 interface AppProps {
