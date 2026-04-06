@@ -6,6 +6,7 @@ import { basename, join } from "node:path";
 
 import * as clearCommand from "$/channels/discord/clear-command.js";
 import type { HandlerCtx } from "$/channels/discord/handler-ctx.js";
+import * as modelCommand from "$/channels/discord/model-command.js";
 import * as repairCommand from "$/channels/discord/repair-command.js";
 import { loadChannel, loadEngine } from "$/config/index.js";
 import { saveSession } from "$/db/sessions.js";
@@ -30,6 +31,7 @@ import type {
   User,
   Member,
   EventReaction,
+  AutocompleteInteraction,
 } from "oceanic.js";
 import {
   ChannelTypes,
@@ -60,12 +62,18 @@ const VIDEO_SIZE_CAP = 10 * 1024 * 1024; // 10 MB
 
 // All registered slash commands. Add new command modules here — the hash
 // check on startup will detect changes and re-register with Discord's API.
-const SLASH_COMMANDS = [clearCommand.definition, repairCommand.definition];
+const SLASH_COMMANDS = [clearCommand.definition, repairCommand.definition, modelCommand.definition];
 
 type SlashHandler = (interaction: CommandInteraction, ctx: HandlerCtx) => Promise<void>;
 const SLASH_HANDLERS = new Map<string, SlashHandler>([
   ["clear", clearCommand.handle],
   ["repair", repairCommand.handle],
+  ["model", modelCommand.handleCommand],
+]);
+
+type AutocompleteHandler = (interaction: AutocompleteInteraction, ctx: HandlerCtx) => Promise<void>;
+const AUTOCOMPLETE_HANDLERS = new Map<string, AutocompleteHandler>([
+  ["model", modelCommand.handleAutocomplete],
 ]);
 
 // Persisted hash of SLASH_COMMANDS to avoid re-registering on every startup.
@@ -985,17 +993,22 @@ async function handleInteractionCreate(
   ctx: HandlerCtx,
   interaction: AnyInteractionGateway,
 ): Promise<void> {
-  if (interaction.type !== InteractionTypes.APPLICATION_COMMAND) {
-    return;
-  }
   // Only respond to the configured owner.
   if (interaction.user.id !== ctx.ownerId) {
     return;
   }
 
-  const handler = SLASH_HANDLERS.get(interaction.data.name);
-  if (handler !== undefined) {
-    await handler(interaction, ctx);
+  if (interaction.type === InteractionTypes.APPLICATION_COMMAND) {
+    await interaction.defer();
+    const handler = SLASH_HANDLERS.get(interaction.data.name);
+    if (handler !== undefined) {
+      await handler(interaction, ctx);
+    }
+  } else if (interaction.type === InteractionTypes.APPLICATION_COMMAND_AUTOCOMPLETE) {
+    const handler = AUTOCOMPLETE_HANDLERS.get(interaction.data.name);
+    if (handler !== undefined) {
+      await handler(interaction, ctx);
+    }
   }
 }
 

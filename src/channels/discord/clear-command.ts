@@ -19,7 +19,7 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
   let found = false;
   const agent = ctx.owner.agents.get(ctx.agentSlug);
   if (agent === undefined) {
-    await interaction.createMessage({
+    await interaction.createFollowup({
       content: "Failed to find valid session: no such agent exists here.",
     });
     return;
@@ -31,7 +31,7 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
     found = true;
   }
 
-  await interaction.createMessage({
+  await interaction.createFollowup({
     content: found ? "Session cleared." : "No active session to clear.",
   });
 }

@@ -22,12 +22,12 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
   try {
     const result = await repairSession(ctx.agentSlug, sessionId, ctx.client);
 
-    await interaction.createMessage({
+    await interaction.createFollowup({
       content: `Repair complete: ${result.updated} updated, ${result.failed} failed, ${result.skipped} skipped`,
       flags: MessageFlags.EPHEMERAL,
     });
   } catch (error) {
-    await interaction.createMessage({
+    await interaction.createFollowup({
       content: `Repair failed: ${error instanceof Error ? error.message : String(error)}`,
       flags: MessageFlags.EPHEMERAL,
     });
