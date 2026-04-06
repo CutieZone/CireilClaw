@@ -394,6 +394,7 @@ export async function runTurn(
         case "anthropic-oauth": {
           ({ message: assistantMsg, usage } = await generateAnthropicOauth(
             context,
+            selectedProvider.apiBase,
             keyPool,
             selectedModel,
             {

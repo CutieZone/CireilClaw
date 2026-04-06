@@ -35,7 +35,7 @@ const downloadAttachments: ToolDef = {
 
     const saved: string[] = [];
     for (const { filename, data } of files) {
-      const sandboxPath = join(to, filename).replaceAll("\\", "/");
+      const sandboxPath = join(to, `${message_id}-${filename}`).replaceAll("\\", "/");
 
       if (ctx.conditions !== undefined) {
         checkConditionalAccess(sandboxPath, ctx.agentSlug, ctx.conditions, ctx.session);

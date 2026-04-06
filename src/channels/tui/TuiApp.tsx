@@ -7,7 +7,7 @@ import { createTuiMessage } from "$/channels/tui/tui-message.js";
 import type { TuiMessage } from "$/channels/tui/tui-message.js";
 import type { UserMessage } from "$/engine/message.js";
 import { NamedInternalSession, TuiSession } from "$/harness/session.js";
-import { Box, render, Static, Text, useApp } from "ink";
+import { Box, render, Static, Text, useApp, useInput } from "ink";
 import { MultilineInput } from "ink-multiline-input";
 import { useCallback, useEffect, useState } from "react";
 import type { ReactElement } from "react";
@@ -26,6 +26,13 @@ function TuiApp({ bridge, agent, initialSessionId }: AppProps): ReactElement {
 
   // Calculate rows based on input content (min 1, max 10)
   const inputRows = Math.max(1, Math.min(10, input.split("\n").length));
+
+  // Keep process alive by consuming stdin — Ink exits if nothing reads input
+  useInput((_input, key) => {
+    if (key.ctrl && (_input === "c" || _input === "d")) {
+      exit();
+    }
+  });
 
   useEffect(() => {
     function onMessage(msg: TuiMessage): void {

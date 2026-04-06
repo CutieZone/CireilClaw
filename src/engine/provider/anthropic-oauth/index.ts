@@ -17,8 +17,6 @@ import type { KeyPool } from "$/util/key-pool.js";
 import { toJsonSchema } from "@valibot/to-json-schema";
 import * as vb from "valibot";
 
-const API_URL = "https://api.anthropic.com/v1/messages";
-
 interface AnthropicTextBlock {
   cache_control?: { type: "ephemeral" };
   type: "text";
@@ -241,6 +239,7 @@ function translateTool(tool: Tool): Record<string, unknown> {
 
 export async function generate(
   context: Context,
+  apiBase: string,
   keyPool: KeyPool,
   model: string,
   thinkingBudget = 0,
@@ -302,7 +301,7 @@ export async function generate(
     attemptedKeys.add(token);
 
     debug("Starting Anthropic message generation...");
-    const resp = await fetch(API_URL, {
+    const resp = await fetch(`${apiBase}/messages`, {
       body: JSON.stringify(body),
       headers: {
         Authorization: `Bearer ${token}`,
