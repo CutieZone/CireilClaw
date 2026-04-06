@@ -18,8 +18,6 @@ import type { KeyPool } from "$/util/key-pool.js";
 import { toJsonSchema } from "@valibot/to-json-schema";
 import * as vb from "valibot";
 
-const API_URL = "https://api.anthropic.com/v1/messages";
-
 interface AnthropicTextBlock {
   cache_control?: { type: "ephemeral" };
   type: "text";
@@ -206,13 +204,22 @@ async function translateMessages(messages: Message[]): Promise<AnthropicMessage[
       lastToolUseIds = new Set<string>();
       for (const block of assistantContent) {
         if (block.type === "toolCall") {
-          blocks.push({ id: block.id, input: block.input, name: block.name, type: "tool_use" });
+          blocks.push({
+            id: block.id,
+            input: block.input,
+            name: block.name,
+            type: "tool_use",
+          });
           lastToolUseIds.add(block.id);
         } else if (block.type === "text") {
           blocks.push({ text: block.content, type: "text" });
         } else if (block.type === "thinking" && block.signature !== undefined) {
           // Signature is required to re-send Anthropic thinking blocks.
-          blocks.push({ signature: block.signature, thinking: block.thinking, type: "thinking" });
+          blocks.push({
+            signature: block.signature,
+            thinking: block.thinking,
+            type: "thinking",
+          });
         } else if (block.type === "redacted_thinking") {
           blocks.push({ data: block.data, type: "redacted_thinking" });
         }
@@ -247,6 +254,7 @@ interface Options {
 
 export async function generate(
   context: Context,
+  apiBase: string,
   keyPool: KeyPool,
   model: string,
   { reasoning = true, reasoningBudget = DefaultReasoningBudget }: Options,
@@ -308,7 +316,7 @@ export async function generate(
     attemptedKeys.add(token);
 
     debug("Starting Anthropic message generation...");
-    const resp = await fetch(API_URL, {
+    const resp = await fetch(`${apiBase}/messages`, {
       body: JSON.stringify(body),
       headers: {
         Authorization: `Bearer ${token}`,
