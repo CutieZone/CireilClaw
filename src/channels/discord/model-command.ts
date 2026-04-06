@@ -1,9 +1,9 @@
 import type { HandlerCtx } from "$/channels/discord/handler-ctx.js";
 import { loadEngine } from "$/config/index.js";
+import type { ProviderConfig } from "$/config/schemas/engine.js";
 import { nonEmptyString } from "$/config/schemas/shared.js";
 import { saveSession } from "$/db/sessions.js";
 import { DiscordSession } from "$/harness/session.js";
-import colors from "$/output/colors.js";
 import { debug } from "$/output/log.js";
 import { ApplicationCommandOptionTypes, ApplicationCommandTypes, MessageFlags } from "oceanic.js";
 import type {
@@ -35,6 +35,61 @@ const definition: CreateApplicationCommandOptions = {
   type: ApplicationCommandTypes.CHAT_INPUT,
 };
 
+const OpenAIModelListSchema = vb.object({
+  data: vb.array(
+    vb.object({
+      id: nonEmptyString,
+      name: vb.exactOptional(nonEmptyString),
+    }),
+  ),
+});
+
+const AnthropicModelListSchema = vb.object({
+  data: vb.array(
+    vb.object({
+      id: nonEmptyString,
+    }),
+  ),
+});
+
+async function fetchModelListFor(
+  selected: ProviderConfig,
+): Promise<{ name: string; id: string }[]> {
+  switch (selected.kind) {
+    case "openai": {
+      const modelList = await fetch(`${selected.apiBase}/models`);
+
+      const json = await modelList.json();
+      const list = vb.parse(OpenAIModelListSchema, json);
+      debug("Parsed list:", list);
+
+      return list.data.map((it) => ({ id: it.id, name: it.name ?? it.id }));
+    }
+    case "anthropic-oauth": {
+      const key = Array.isArray(selected.apiKey) ? selected.apiKey[0] : selected.apiKey;
+
+      const modelList = await fetch(`https://api.anthropic.com/v1/models`, {
+        headers: {
+          "anthropic-version": "2023-06-01",
+          "x-api-key": key,
+        },
+      });
+
+      const list = vb.parse(AnthropicModelListSchema, await modelList.json());
+
+      return list.data.map((it) => ({
+        id: it.id,
+        name: it.id,
+      }));
+    }
+    default: {
+      const _exhaustive = selected.kind;
+      // oxlint-disable-next-line typescript/restrict-template-expressions
+      throw new Error(`Unimplemented provider: ${_exhaustive}`);
+    }
+  }
+}
+
 async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): Promise<void> {
   const provider = interaction.data.options.getStringOption("provider", true);
   const model = interaction.data.options.getStringOption("model", true);
@@ -56,10 +111,14 @@ async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): 
   const providerCfg = engineCfg[provider.value];
 
   if (providerCfg === undefined) {
+    await interaction.createFollowup({
+      content: "Could not find the provider you requested.",
+      flags: MessageFlags.EPHEMERAL,
+    });
     return;
   }
 
-  if (providerCfg.models?.[model.value] !== undefined) {
+  async function success(): Promise<void> {
     const sessionId =
       (interaction.guildID ?? undefined) === undefined
         ? `discord:${interaction.channelID}`
@@ -78,6 +137,25 @@ async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): 
       content: "Successfully changed to the requested provider & model.",
       flags: MessageFlags.EPHEMERAL,
     });
+  }
+
+  if (providerCfg.availableModels === "analyze") {
+    const models = await fetchModelListFor(providerCfg);
+
+    if (models.some((it) => it.id === model.value)) {
+      await success();
+    } else {
+      await interaction.createFollowup({
+        content:
+          "Could not find the model you requested. If you are certain it exists, use `availableModels` to properly list it.",
+        flags: MessageFlags.EPHEMERAL,
+      });
+    }
+  } else if (
+    providerCfg.availableModels.includes(model.value) ||
+    providerCfg.models?.[model.value] !== undefined
+  ) {
+    await success();
     return;
   }
 
@@ -86,23 +164,6 @@ async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): 
     flags: MessageFlags.EPHEMERAL,
   });
 }
-
-const OpenAIModelListSchema = vb.object({
-  data: vb.array(
-    vb.object({
-      id: nonEmptyString,
-      name: vb.exactOptional(nonEmptyString),
-    }),
-  ),
-});
-
-const AnthropicModelListSchema = vb.object({
-  data: vb.array(
-    vb.object({
-      id: nonEmptyString,
-    }),
-  ),
-});
 
 async function handleAutocomplete(
   interaction: AutocompleteInteraction,
@@ -122,68 +183,22 @@ async function handleAutocomplete(
       })),
     );
   } else if (focused.name === "model") {
-    let models: [string, string][] | undefined = undefined;
+    let models: { value: string; name: string }[] | undefined = undefined;
 
     if (selected?.availableModels === "analyze") {
-      switch (selected.kind) {
-        case "openai": {
-          debug(
-            "Fetching model list for",
-            colors.keyword(providerField),
-            "(apiBase:",
-            colors.keyword(selected.apiBase),
-            ")",
-          );
-          const modelList = await fetch(`${selected.apiBase}/models`);
-
-          debug("Got response:", modelList.status, modelList.statusText);
-          const json = await modelList.json();
-          debug("Raw json", json);
-          const list = vb.parse(OpenAIModelListSchema, json);
-          debug("Parsed list:", list);
-
-          models = list.data
-            .filter(
-              (it) =>
-                typeof focused.value === "string" &&
-                focused.value.length > 1 &&
-                (it.name?.startsWith(focused.value) === true || it.id.startsWith(focused.value)),
-            )
-            .map((it) => [it.id, it.name ?? it.id]);
-          break;
-        }
-        case "anthropic-oauth": {
-          const key = Array.isArray(selected.apiKey) ? selected.apiKey[0] : selected.apiKey;
-
-          const modelList = await fetch(`https://api.anthropic.com/v1/models`, {
-            headers: {
-              "anthropic-version": "2023-06-01",
-              "x-api-key": key,
-            },
-          });
-
-          const list = vb.parse(AnthropicModelListSchema, await modelList.json());
-
-          models = list.data
-            .filter(
-              (it) =>
-                typeof focused.value === "string" &&
-                focused.value.length > 1 &&
-                it.id.startsWith(focused.value),
-            )
-            .map((it) => [it.id, it.id]);
-          break;
-        }
-        default: {
-          const _exhaustive = selected.kind;
-          // oxlint-disable-next-line typescript/restrict-template-expressions
-          throw new Error(`Unimplemented provider: ${_exhaustive}`);
-        }
-      }
+      const tmp = await fetchModelListFor(selected);
+      models = tmp
+        .filter(
+          ({ name, id }) =>
+            typeof focused.value === "string" &&
+            focused.value.length > 1 &&
+            (name.startsWith(focused.value) || id.startsWith(focused.value)),
+        )
+        .map(({ name, id }) => ({ name: id, value: name }));
 
       debug("Filtered list:", models);
     } else if (selected !== undefined) {
-      models = selected.availableModels.map((it) => [it, it]);
+      models = selected.availableModels.map((it) => ({ name: it, value: it }));
     }
 
     if (models === undefined) {
@@ -206,12 +221,7 @@ async function handleAutocomplete(
       return;
     }
 
-    await interaction.result(
-      models.map(([key, name]) => ({
-        name: name,
-        value: key,
-      })),
-    );
+    await interaction.result(models);
   }
 }
 

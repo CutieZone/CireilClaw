@@ -36,6 +36,7 @@ import type {
 import {
   ChannelTypes,
   InteractionTypes,
+  MessageFlags,
   StickerFormatTypes,
   TextableChannelTypes,
 } from "oceanic.js";
@@ -999,9 +1000,10 @@ async function handleInteractionCreate(
   }
 
   if (interaction.type === InteractionTypes.APPLICATION_COMMAND) {
-    await interaction.defer();
     const handler = SLASH_HANDLERS.get(interaction.data.name);
     if (handler !== undefined) {
+      await interaction.defer(interaction.data.name === "model" ? MessageFlags.EPHEMERAL : 0);
+
       await handler(interaction, ctx);
     }
   } else if (interaction.type === InteractionTypes.APPLICATION_COMMAND_AUTOCOMPLETE) {
