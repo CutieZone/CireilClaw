@@ -46,7 +46,7 @@ const downloadAttachments: ToolDef = {
       if (existsSync(realPath)) {
         throw new ToolError(
           `File already exists at ${sandboxPath}`,
-          "Choose a different path or use write tool to overwrite if you really intend to.",
+          "Choose a different path, or if necessary remove the previous file.",
         );
       }
 
