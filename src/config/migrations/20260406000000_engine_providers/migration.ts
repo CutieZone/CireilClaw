@@ -160,7 +160,7 @@ export const migration: ConfigMigration = {
     }
   },
 
-  targets: ["engine.toml", "cron.toml", "heartbeat.toml"],
+  targets: ["engine.toml", "cron.toml", "heartbeat.toml", "channels/discord.toml"],
 
   transform(rawData: TomlTable, context: MigrationContext): TomlTable {
     const agentId = context.agentSlug ?? "global";
@@ -237,7 +237,7 @@ export const migration: ConfigMigration = {
             modelOverride["toolFailThreshold"] = overrideRaw.toolFailThreshold;
           }
 
-          newData[providerName] = {
+          const guildProvider: Record<string, unknown> = {
             apiBase: overrideRaw.apiBase ?? baseConfig["apiBase"],
             apiKey: overrideRaw.apiKey ?? baseConfig["apiKey"],
             defaultModel: modelName,
@@ -247,6 +247,13 @@ export const migration: ConfigMigration = {
             },
             useJpegForImages: overrideRaw.useJpegForImages ?? baseConfig["useJpegForImages"],
           };
+          if (baseConfig["maxGenerationRetries"] !== undefined) {
+            guildProvider["maxGenerationRetries"] = baseConfig["maxGenerationRetries"];
+          }
+          if (baseConfig["maxTurns"] !== undefined) {
+            guildProvider["maxTurns"] = baseConfig["maxTurns"];
+          }
+          newData[providerName] = guildProvider;
 
           dbUpdates.get(agentId)?.push({
             id: guildId,
@@ -274,7 +281,7 @@ export const migration: ConfigMigration = {
             modelOverride["toolFailThreshold"] = overrideRaw.toolFailThreshold;
           }
 
-          newData[providerName] = {
+          const roomProvider: Record<string, unknown> = {
             apiBase: overrideRaw.apiBase ?? baseConfig["apiBase"],
             apiKey: overrideRaw.apiKey ?? baseConfig["apiKey"],
             defaultModel: modelName,
@@ -284,6 +291,13 @@ export const migration: ConfigMigration = {
             },
             useJpegForImages: overrideRaw.useJpegForImages ?? baseConfig["useJpegForImages"],
           };
+          if (baseConfig["maxGenerationRetries"] !== undefined) {
+            roomProvider["maxGenerationRetries"] = baseConfig["maxGenerationRetries"];
+          }
+          if (baseConfig["maxTurns"] !== undefined) {
+            roomProvider["maxTurns"] = baseConfig["maxTurns"];
+          }
+          newData[providerName] = roomProvider;
 
           dbUpdates.get(agentId)?.push({
             id: roomId,
@@ -405,6 +419,30 @@ export const migration: ConfigMigration = {
       extraProviders.set(agentId, agentExtra);
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       return cleanUndefined(data) as TomlTable;
+    }
+
+    if (context.configPath.endsWith("channels/discord.toml")) {
+      const { access, directMessages } = rawData;
+
+      if (typeof access === "object" && "mode" in access) {
+        const rec = access as Record<string, unknown>;
+        if (rec["mode"] === "whitelist") {
+          rec["mode"] = "allowlist";
+        } else if (rec["mode"] === "blacklist") {
+          rec["mode"] = "denylist";
+        }
+      }
+
+      if (typeof directMessages === "object" && "mode" in directMessages) {
+        const rec = directMessages as Record<string, unknown>;
+        if (rec["mode"] === "whitelist") {
+          rec["mode"] = "allowlist";
+        } else if (rec["mode"] === "blacklist") {
+          rec["mode"] = "denylist";
+        }
+      }
+
+      return rawData;
     }
 
     return rawData;

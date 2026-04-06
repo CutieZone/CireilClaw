@@ -28,8 +28,10 @@ export function getDefaultProviderAndModel(cfg: ProvidersConfig): Result {
     );
   }
 
+  // Safety net: the length check above guarantees this is defined, but the
+  // linter can't narrow it through the destructuring assignment.
   if (defaultProvider === undefined) {
-    throw new Error("Unreachable");
+    throw new Error("Unreachable: defaultProvider must be defined after length === 1 check");
   }
 
   return {

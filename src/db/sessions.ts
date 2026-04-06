@@ -318,13 +318,13 @@ async function loadSessions(agentSlug: string): Promise<Map<string, Session>> {
     let session: Session | undefined = undefined;
     if (row.channel === "discord") {
       const meta = vb.parse(DiscordMetaSchema, JSON.parse(row.meta));
-      session = new DiscordSession(
-        meta.channelId,
-        meta.selectedProvider,
-        meta.selectedModel,
-        meta.guildId,
-        meta.isNsfw,
-      );
+      session = new DiscordSession({
+        channelId: meta.channelId,
+        guildId: meta.guildId,
+        isNsfw: meta.isNsfw,
+        selectedModel: meta.selectedModel,
+        selectedProvider: meta.selectedProvider,
+      });
     } else if (row.channel === "matrix") {
       const meta = vb.parse(MatrixMetaSchema, JSON.parse(row.meta));
       session = new MatrixSession(meta.roomId);
@@ -388,6 +388,50 @@ function deleteSession(agentSlug: string, sessionId: string): void {
 
   db.delete(images).where(eq(images.sessionId, sessionId)).run();
   db.delete(sessions).where(eq(sessions.id, sessionId)).run();
+}
+
+// Clears conversation state (history, images, opened files) for a session
+// while keeping the session row and its meta (provider/model selections).
+function resetSession(agentSlug: string, sessionId: string): void {
+  const db = getDb(agentSlug);
+
+  // Prune image files that are no longer referenced by any other session.
+  const referenced = db
+    .select({ id: images.id, mediaType: images.mediaType })
+    .from(images)
+    .where(eq(images.sessionId, sessionId))
+    .all();
+
+  if (referenced.length > 0) {
+    const ids = referenced.map((ref) => ref.id);
+
+    const stillShared = new Set(
+      db
+        .select({ id: images.id })
+        .from(images)
+        .where(and(notInArray(images.sessionId, [sessionId]), inArray(images.id, ids)))
+        .all()
+        .map((ref) => ref.id),
+    );
+
+    for (const img of referenced) {
+      if (stillShared.has(img.id)) {
+        continue;
+      }
+      const path = imagePath(agentSlug, img.id, img.mediaType);
+      try {
+        unlinkSync(path);
+      } catch {
+        // Already gone.
+      }
+    }
+  }
+
+  db.delete(images).where(eq(images.sessionId, sessionId)).run();
+  db.update(sessions)
+    .set({ history: "[]", openedFiles: "[]" })
+    .where(eq(sessions.id, sessionId))
+    .run();
 }
 
 // Schedules a save after DEBOUNCE_MS. Resets the timer on repeated calls so
@@ -578,6 +622,7 @@ export {
   loadSessions,
   saveSession,
   deleteSession,
+  resetSession,
   updateSessionImages,
   updateSessionVideoRefs,
 };

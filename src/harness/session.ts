@@ -28,6 +28,15 @@ abstract class BaseSession {
   sendFilter?: (content: string) => boolean = undefined;
 
   abstract id(): string;
+
+  /** Wipe conversation state while preserving session identity and user selections. */
+  reset(): void {
+    this.history = [];
+    this.openedFiles = new Set();
+    this.pendingToolMessages = [];
+    this.pendingImages = [];
+    this.pendingVideos = [];
+  }
 }
 
 class DiscordSession extends BaseSession {
@@ -40,20 +49,20 @@ class DiscordSession extends BaseSession {
   typingInterval?: NodeJS.Timeout = undefined;
   lastMessageId?: string = undefined;
 
-  constructor(
-    channelId: string,
-    selectedProvider?: string,
-    selectedModel?: string,
-    guildId?: string,
-    isNsfw?: boolean,
-  ) {
+  constructor(opts: {
+    channelId: string;
+    selectedProvider?: string;
+    selectedModel?: string;
+    guildId?: string;
+    isNsfw?: boolean;
+  }) {
     super();
-    this.channelId = channelId;
-    this.selectedProvider = selectedProvider;
-    this.selectedModel = selectedModel;
+    this.channelId = opts.channelId;
+    this.selectedProvider = opts.selectedProvider;
+    this.selectedModel = opts.selectedModel;
 
-    this.guildId = guildId;
-    this.isNsfw = isNsfw ?? false;
+    this.guildId = opts.guildId;
+    this.isNsfw = opts.isNsfw ?? false;
   }
 
   override id(): string {

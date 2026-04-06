@@ -309,13 +309,17 @@ export async function runTurn(
 
   debug("Turn start", colors.keyword(agentSlug), colors.keyword(session.id()));
 
-  const selectedProvider =
-    session.selectedProvider === undefined
-      ? engineDefaults.provider.config
-      : engineCfg[override.provider ?? session.selectedProvider];
+  const providerName = override.provider ?? session.selectedProvider;
+  let selectedProvider =
+    providerName === undefined ? engineDefaults.provider.config : engineCfg[providerName];
 
   if (selectedProvider === undefined) {
-    throw new Error("Could not resolve a valid provider.");
+    warning(
+      `Provider '${providerName}' not found in config, falling back to default`,
+      colors.keyword(agentSlug),
+      colors.keyword(session.id()),
+    );
+    selectedProvider = engineDefaults.provider.config;
   }
 
   const selectedModel = override.model ?? session.selectedModel ?? engineDefaults.model.name;

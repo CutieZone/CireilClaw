@@ -656,13 +656,13 @@ async function handleMessageCreate(
       : msgChannel.nsfw;
 
   if (session === undefined) {
-    session = new DiscordSession(
-      msg.channelID,
-      defaults.provider.name,
-      defaults.model.name,
-      msg.guildID ?? undefined,
+    session = new DiscordSession({
+      channelId: msg.channelID,
+      guildId: msg.guildID ?? undefined,
       isNsfw,
-    );
+      selectedModel: defaults.model.name,
+      selectedProvider: defaults.provider.name,
+    });
 
     agent.sessions.set(sessionId, session);
   } else {
@@ -1159,7 +1159,12 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
           const { defaultModel } = providerConfig;
 
           // Return a new session for this DM channel
-          return new DiscordSession(dmChannel.id, defaultProvider, defaultModel, undefined, false);
+          return new DiscordSession({
+            channelId: dmChannel.id,
+            isNsfw: false,
+            selectedModel: defaultModel,
+            selectedProvider: defaultProvider,
+          });
         } catch {
           return { error: "failed to create DM channel with owner" };
         }

@@ -1,4 +1,4 @@
-import { deleteSession } from "$/db/sessions.js";
+import { resetSession } from "$/db/sessions.js";
 import type { CommandInteraction, CreateApplicationCommandOptions } from "oceanic.js";
 import { ApplicationCommandTypes } from "oceanic.js";
 
@@ -16,7 +16,6 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
   const sessionId =
     guildId === undefined ? `discord:${channelId}` : `discord:${channelId}|${guildId}`;
 
-  let found = false;
   const agent = ctx.owner.agents.get(ctx.agentSlug);
   if (agent === undefined) {
     await interaction.createFollowup({
@@ -25,15 +24,16 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
     return;
   }
 
-  if (agent.sessions.has(sessionId)) {
-    agent.sessions.delete(sessionId);
-    deleteSession(ctx.agentSlug, sessionId);
-    found = true;
+  const session = agent.sessions.get(sessionId);
+  if (session === undefined) {
+    await interaction.createFollowup({ content: "No active session to clear." });
+    return;
   }
 
-  await interaction.createFollowup({
-    content: found ? "Session cleared." : "No active session to clear.",
-  });
+  session.reset();
+  resetSession(ctx.agentSlug, sessionId);
+
+  await interaction.createFollowup({ content: "Session cleared." });
 }
 
 export { definition, handle };

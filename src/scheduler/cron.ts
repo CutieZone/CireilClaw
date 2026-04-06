@@ -168,14 +168,14 @@ async function runIsolatedSession(agent: Agent, job: CronJobConfig): Promise<voi
     return result;
   }
 
-  session.selectedProvider = job.provider;
-  session.selectedModel = job.model;
-
   try {
     await runTurn(
       session,
       agent.slug,
-      {},
+      {
+        model: job.model,
+        provider: job.provider,
+      },
       async (content: string): Promise<void> => {
         await agent.send(session, content);
       },
