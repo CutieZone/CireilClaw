@@ -4,6 +4,7 @@ import type { ProviderConfig } from "$/config/schemas/engine.js";
 import { nonEmptyString } from "$/config/schemas/shared.js";
 import { saveSession } from "$/db/sessions.js";
 import { DiscordSession } from "$/harness/session.js";
+import { warning } from "$/output/log.js";
 import { sanitizeError } from "$/util/paths.js";
 import { ApplicationCommandOptionTypes, ApplicationCommandTypes, MessageFlags } from "oceanic.js";
 import type {
@@ -180,6 +181,7 @@ async function handleAutocomplete(
   interaction: AutocompleteInteraction,
   ctx: HandlerCtx,
 ): Promise<void> {
+  let responded = false;
   try {
     const focused = interaction.data.options.getFocused(true);
     const providerField = interaction.data.options.getString("provider");
@@ -188,6 +190,7 @@ async function handleAutocomplete(
     const selected = providerField === undefined ? undefined : engineCfg[providerField];
 
     if (focused.name === "provider") {
+      responded = true;
       await interaction.result(
         Object.keys(engineCfg).map((key) => ({
           name: key,
@@ -213,6 +216,7 @@ async function handleAutocomplete(
       }
 
       if (models === undefined) {
+        responded = true;
         await interaction.result([
           {
             name: "Pick a provider first",
@@ -223,6 +227,7 @@ async function handleAutocomplete(
       }
 
       if (models.length === 0) {
+        responded = true;
         await interaction.result([
           {
             name: "This provider has no available models",
@@ -232,15 +237,19 @@ async function handleAutocomplete(
         return;
       }
 
+      responded = true;
       await interaction.result(models);
     }
-  } catch {
-    await interaction.result([
-      {
-        name: "Error loading models",
-        value: "invalid",
-      },
-    ]);
+  } catch (error: unknown) {
+    warning(`Autocomplete failed for model command: ${sanitizeError(error, ctx.agentSlug)}`);
+    if (!responded) {
+      await interaction.result([
+        {
+          name: "Failed to fetch model list",
+          value: "invalid",
+        },
+      ]);
+    }
   }
 }
 
