@@ -37,6 +37,12 @@ const ProviderConfigSchema = vb.strictObject({
       "Either a list of available models, or 'analyze' to attempt automatic resolution of a model list",
     ),
   ),
+  customHeaders: vb.pipe(
+    vb.exactOptional(
+      vb.record(nonEmptyString, vb.union([nonEmptyString, vb.array(nonEmptyString)])),
+    ),
+    vb.description("Optional custom headers to apply to the generation requests to this provider."),
+  ),
   defaultModel: vb.pipe(
     vb.pipe(nonEmptyString, vb.minLength(1)),
     vb.description("The default model to use from this provider"),

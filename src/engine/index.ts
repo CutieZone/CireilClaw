@@ -385,6 +385,7 @@ export async function runTurn(
             keyPool,
             selectedModel,
             {
+              customHeaders: selectedProvider.customHeaders,
               forceJpeg: selectedProvider.useJpegForImages,
             },
           ));
@@ -398,6 +399,7 @@ export async function runTurn(
             keyPool,
             selectedModel,
             {
+              customHeaders: selectedProvider.customHeaders,
               reasoning: modelCfg.reasoning,
               reasoningBudget: modelCfg.reasoningBudget,
             },

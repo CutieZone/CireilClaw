@@ -250,6 +250,7 @@ function translateTool(tool: Tool): Record<string, unknown> {
 interface Options {
   reasoning?: boolean;
   reasoningBudget?: number;
+  customHeaders?: Record<string, string | string[]>;
 }
 
 export async function generate(
@@ -257,7 +258,7 @@ export async function generate(
   apiBase: string,
   keyPool: KeyPool,
   model: string,
-  { reasoning = true, reasoningBudget = DefaultReasoningBudget }: Options,
+  { reasoning = true, reasoningBudget = DefaultReasoningBudget, customHeaders }: Options,
 ): Promise<{ message: AssistantMessage; usage?: UsageInfo }> {
   // Required preamble for the claude-code-20250219 beta — the model checks for this.
   const system = `You are Claude Code, Anthropic's official CLI for Claude.`;
@@ -323,6 +324,7 @@ export async function generate(
         "Content-Type": "application/json",
         "anthropic-beta": "oauth-2025-04-20,claude-code-20250219,interleaved-thinking-2025-05-14",
         "anthropic-version": "2023-06-01",
+        ...customHeaders,
       },
       method: "POST",
     });

@@ -215,6 +215,7 @@ function translateTool(tool: Tool): ChatCompletionTool {
 
 interface Options {
   forceJpeg?: boolean;
+  customHeaders?: Record<string, string | string[]>;
 }
 
 export async function generate(
@@ -222,7 +223,7 @@ export async function generate(
   apiBase: string,
   keyPool: KeyPool,
   model: string,
-  { forceJpeg = false }: Options,
+  { forceJpeg = false, customHeaders }: Options,
 ): Promise<{ message: AssistantMessage; usage?: UsageInfo }> {
   let useJpeg = forceJpeg || jpegRequiredEndpoints.has(apiBase);
   await prepareMedia(context.messages, useJpeg);
@@ -267,6 +268,7 @@ export async function generate(
     const client = new OpenAI({
       apiKey: apiKey,
       baseURL: apiBase,
+      defaultHeaders: customHeaders,
     });
 
     let resp: Awaited<ReturnType<typeof client.chat.completions.create>> | undefined = undefined;
