@@ -27,7 +27,7 @@ type ModelConfig = vb.InferOutput<typeof ModelConfigSchema>;
 
 const ProviderConfigSchema = vb.strictObject({
   apiBase: vb.pipe(nonEmptyString, vb.url(), vb.description("A valid API base URL")),
-  apiKey: ApiKeySchema,
+  apiKey: vb.exactOptional(ApiKeySchema, "not-needed"),
   availableModels: vb.pipe(
     vb.exactOptional(
       vb.union([vb.pipe(vb.array(nonEmptyString), vb.minLength(1)), vb.literal("analyze")]),

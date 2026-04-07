@@ -146,7 +146,7 @@ async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): 
 
     if (providerCfg === undefined) {
       await interaction.createFollowup({
-        content: "Could not find the provider \`${provider.value}\`",
+        content: `Could not find the provider \`\${provider.value}\``,
         flags: MessageFlags.EPHEMERAL,
       });
       return;
