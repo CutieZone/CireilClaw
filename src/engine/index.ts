@@ -387,6 +387,7 @@ export async function runTurn(
             {
               customHeaders: selectedProvider.customHeaders,
               forceJpeg: selectedProvider.useJpegForImages,
+              useToolChoiceAuto: selectedProvider.useToolChoiceAuto,
             },
           ));
           break;

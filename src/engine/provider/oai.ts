@@ -216,14 +216,17 @@ function translateTool(tool: Tool): ChatCompletionTool {
 interface Options {
   forceJpeg?: boolean;
   customHeaders?: Record<string, string | string[]>;
+  useToolChoiceAuto?: boolean;
 }
+
+const knownKimiOffenders = ["2.5", "-for-code"];
 
 export async function generate(
   context: Context,
   apiBase: string,
   keyPool: KeyPool,
   model: string,
-  { forceJpeg = false, customHeaders }: Options,
+  { forceJpeg = false, customHeaders, useToolChoiceAuto = false }: Options,
 ): Promise<{ message: AssistantMessage; usage?: UsageInfo }> {
   let useJpeg = forceJpeg || jpegRequiredEndpoints.has(apiBase);
   await prepareMedia(context.messages, useJpeg);
@@ -238,7 +241,10 @@ export async function generate(
     tools: context.tools.map(translateTool),
   };
 
-  if (model.includes("kimi") && model.includes("2.5")) {
+  if (
+    useToolChoiceAuto ||
+    (model.includes("kimi") && knownKimiOffenders.some((it) => model.includes(it)))
+  ) {
     params.tool_choice = "auto";
     params.messages.push({
       content: "You ***must*** use a tool to do anything. A text response *will* fail.",

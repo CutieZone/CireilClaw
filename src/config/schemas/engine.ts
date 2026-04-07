@@ -73,6 +73,10 @@ const ProviderConfigSchema = vb.strictObject({
     vb.exactOptional(vb.boolean(), false),
     vb.description("Whether to force the use of JPEG over WEBP for images"),
   ),
+  useToolChoiceAuto: vb.pipe(
+    vb.exactOptional(vb.boolean(), false),
+    vb.description("Whether to prefer `tool_choice: auto` over `tool_choice: required`"),
+  ),
 });
 
 const ProvidersConfigSchema = vb.record(nonEmptyString, ProviderConfigSchema);
