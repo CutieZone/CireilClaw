@@ -18,7 +18,7 @@ type MatrixMeta = vb.InferOutput<typeof MatrixMetaSchema>;
 
 // Schema for serialized history messages (loose validation for repair tool)
 const SerializedMessageSchema = vb.looseObject({
-  content: vb.union([vb.string(), vb.array(vb.unknown())]),
+  content: vb.union([vb.string(), vb.array(vb.unknown()), vb.object({})]),
   id: vb.exactOptional(vb.string()),
   role: vb.exactOptional(vb.string()),
 });

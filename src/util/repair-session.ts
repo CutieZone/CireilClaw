@@ -3,6 +3,7 @@ import { sessions } from "$/db/schema.js";
 import { updateSessionImages, updateSessionVideoRefs } from "$/db/sessions.js";
 import { DiscordMetaSchema, SerializedHistorySchema } from "$/db/validation.js";
 import { isImageRef, isVideoRef } from "$/engine/content.js";
+import { warning } from "$/output/log.js";
 import { toWebp } from "$/util/image.js";
 import { eq } from "drizzle-orm";
 import type { Client as OceanicClient } from "oceanic.js";
@@ -128,6 +129,11 @@ async function repairSession(
         );
 
         for (const ref of videoRefs) {
+          if (!isVideoRef(ref)) {
+            warning("Should be unreachable.");
+            continue;
+          }
+
           if (videoAttachments.has(ref.attachmentId)) {
             videoRefsToFetch.push({ attachmentId: ref.attachmentId, msgId });
           } else {
