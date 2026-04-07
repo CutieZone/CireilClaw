@@ -4,7 +4,8 @@ import type { ProviderConfig } from "$/config/schemas/engine.js";
 import { nonEmptyString } from "$/config/schemas/shared.js";
 import { saveSession } from "$/db/sessions.js";
 import { DiscordSession } from "$/harness/session.js";
-import { warning } from "$/output/log.js";
+import colors from "$/output/colors.js";
+import { debug, warning } from "$/output/log.js";
 import { sanitizeError } from "$/util/paths.js";
 import { ApplicationCommandOptionTypes, ApplicationCommandTypes, MessageFlags } from "oceanic.js";
 import type {
@@ -133,12 +134,19 @@ async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): 
       return;
     }
 
+    debug(
+      "Attempting model change to",
+      colors.keyword(model.value),
+      "from provider",
+      colors.keyword(provider.value),
+    );
+
     const engineCfg = await loadEngine(ctx.agentSlug);
     const providerCfg = engineCfg[provider.value];
 
     if (providerCfg === undefined) {
       await interaction.createFollowup({
-        content: "Could not find the provider you requested.",
+        content: "Could not find the provider \`${provider.value}\`",
         flags: MessageFlags.EPHEMERAL,
       });
       return;
@@ -151,8 +159,7 @@ async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): 
         await success(model.value, provider.value);
       } else {
         await interaction.createFollowup({
-          content:
-            "Could not find the model you requested. If you are certain it exists, use `availableModels` to properly list it.",
+          content: `:warning: Could not find the model \`${model.value}\` from the provider \`${provider.value}\`. If you are certain it exists, use \`availableModels\` to forcibly list it.`,
           flags: MessageFlags.EPHEMERAL,
         });
       }
@@ -210,9 +217,12 @@ async function handleAutocomplete(
                 (name.startsWith(focused.value) || id.startsWith(focused.value))) ||
                 focused.value.length === 0),
           )
-          .map(({ name, id }) => ({ name: id, value: name }));
+          .map(({ name, id }) => ({ name: name, value: id }));
       } else if (selected !== undefined) {
-        models = selected.availableModels.map((it) => ({ name: it, value: it }));
+        models = selected.availableModels.map((it) => ({
+          name: it,
+          value: it,
+        }));
       }
 
       if (models === undefined) {
