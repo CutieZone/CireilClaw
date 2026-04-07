@@ -171,6 +171,7 @@ async function applyMigrationToFile(
   migration: ConfigMigration,
   configPath: string,
   context: MigrationContext,
+  backedUpFiles: Set<string>,
 ): Promise<void> {
   if (!existsSync(configPath)) {
     return;
@@ -178,8 +179,11 @@ async function applyMigrationToFile(
 
   const originalData = await readFile(configPath, { encoding: "utf8" });
 
-  // Create backup before modifying
-  await createBackup(migration.id, configPath, originalData);
+  // Create backup before modifying (only if not already backed up)
+  if (!backedUpFiles.has(configPath)) {
+    backedUpFiles.add(configPath);
+    await createBackup(migration.id, configPath, originalData);
+  }
 
   // Parse TOML
   const { parse } = await import("smol-toml");
@@ -214,12 +218,20 @@ async function applyMigration(
 
   info(`  Applying migration ${colors.path(migration.id)}...`);
 
+  // Track backed up files to prevent overwriting original backups
+  const backedUpFiles = new Set<string>();
+
   // Helper to create backup function for this migration
   function createBackupHelper(): MigrationContext["backupFile"] {
     return async (filePath: string): Promise<void> => {
       if (!existsSync(filePath)) {
         return;
       }
+      // Skip if already backed up - preserve the original backup
+      if (backedUpFiles.has(filePath)) {
+        return;
+      }
+      backedUpFiles.add(filePath);
       const content = await readFile(filePath, { encoding: "utf8" });
       await createBackup(migration.id, filePath, content);
     };
@@ -235,7 +247,7 @@ async function applyMigration(
         configPath,
         configType: "global",
       };
-      await applyMigrationToFile(migration, configPath, context);
+      await applyMigrationToFile(migration, configPath, context, backedUpFiles);
     }
   }
 
@@ -258,7 +270,7 @@ async function applyMigration(
           configPath,
           configType: "agent",
         };
-        await applyMigrationToFile(migration, configPath, context);
+        await applyMigrationToFile(migration, configPath, context, backedUpFiles);
       }
     }
   }
