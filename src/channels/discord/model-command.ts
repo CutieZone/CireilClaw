@@ -238,6 +238,10 @@ async function handleAutocomplete(
       }
 
       responded = true;
+      if (models.length >= 25) {
+        models.length = 20;
+      }
+
       await interaction.result(models);
     }
   } catch (error: unknown) {
