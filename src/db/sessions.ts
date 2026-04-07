@@ -217,6 +217,8 @@ type DiscordMeta = vb.InferOutput<typeof DiscordMetaSchema>;
 
 const MatrixMetaSchema = vb.object({
   roomId: nonEmptyString,
+  selectedModel: vb.exactOptional(nonEmptyString),
+  selectedProvider: vb.exactOptional(nonEmptyString),
 });
 
 // type MatrixMeta = vb.InferOutput<typeof MatrixMetaSchema>;
@@ -261,9 +263,20 @@ function _flushSession(agentSlug: string, session: Session): void {
       channelId: session.channelId,
       guildId: session.guildId,
       isNsfw: session.isNsfw,
+      selectedModel: session.selectedModel,
+      selectedProvider: session.selectedProvider,
     } satisfies DiscordMeta;
   } else if (session.channel === "matrix") {
-    meta = { roomId: session.roomId };
+    meta = {
+      roomId: session.roomId,
+      selectedModel: session.selectedModel,
+      selectedProvider: session.selectedProvider,
+    };
+  } else {
+    meta = {
+      selectedModel: session.selectedModel,
+      selectedProvider: session.selectedProvider,
+    };
   }
 
   const lastActivity =
@@ -315,9 +328,11 @@ async function loadSessions(agentSlug: string): Promise<Map<string, Session>> {
     const history = await deserializeHistory(row.history, agentSlug);
     const openedFiles = new Set(vb.parse(vb.array(vb.string()), JSON.parse(row.openedFiles)));
 
+    const metaJson: unknown = JSON.parse(row.meta);
+
     let session: Session | undefined = undefined;
     if (row.channel === "discord") {
-      const meta = vb.parse(DiscordMetaSchema, JSON.parse(row.meta));
+      const meta = vb.parse(DiscordMetaSchema, metaJson);
       session = new DiscordSession({
         channelId: meta.channelId,
         guildId: meta.guildId,
@@ -326,8 +341,10 @@ async function loadSessions(agentSlug: string): Promise<Map<string, Session>> {
         selectedProvider: meta.selectedProvider,
       });
     } else if (row.channel === "matrix") {
-      const meta = vb.parse(MatrixMetaSchema, JSON.parse(row.meta));
+      const meta = vb.parse(MatrixMetaSchema, metaJson);
       session = new MatrixSession(meta.roomId);
+      session.selectedModel = meta.selectedModel;
+      session.selectedProvider = meta.selectedProvider;
     } else if (row.channel === "internal") {
       const name = row.id.startsWith("internal:") ? row.id.slice("internal:".length) : row.id;
       session = new NamedInternalSession(name);
@@ -338,6 +355,20 @@ async function loadSessions(agentSlug: string): Promise<Map<string, Session>> {
     } else {
       // Unknown or legacy channel type — skip.
       continue;
+    }
+
+    if (session.selectedModel === undefined || session.selectedProvider === undefined) {
+      const common = vb.safeParse(
+        vb.looseObject({
+          selectedModel: vb.exactOptional(nonEmptyString),
+          selectedProvider: vb.exactOptional(nonEmptyString),
+        }),
+        metaJson,
+      );
+      if (common.success) {
+        session.selectedModel ??= common.output.selectedModel;
+        session.selectedProvider ??= common.output.selectedProvider;
+      }
     }
 
     session.history = history;
