@@ -8,6 +8,7 @@
     "lint": "oxlint --type-aware --type-check .",
     "lint:fix": "oxlint --type-aware --type-check --fix .",
     "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
     "start": "tsx ./src/entrypoint.ts"
   },
   "dependencies": {
@@ -42,6 +43,7 @@
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"
   },
+  "packageManager": "pnpm",
   "pnpm": {
     "onlyBuiltDependencies": [
       "better-sqlite3",
