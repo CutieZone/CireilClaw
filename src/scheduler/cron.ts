@@ -8,6 +8,7 @@ import type { Session } from "$/harness/session.js";
 import { InternalSession } from "$/harness/session.js";
 import colors from "$/output/colors.js";
 import { debug, warning } from "$/output/log.js";
+import { sanitizeError } from "$/util/paths.js";
 import { MessageFlags } from "oceanic.js";
 
 // Returns the best session to target based on a target string.
@@ -138,7 +139,7 @@ async function runMainSession(agent: Agent, job: CronJobConfig): Promise<void> {
     debug("Cron: main-session job", colors.keyword(job.id), "completed");
   } catch (error) {
     session.history.length = historyLengthBefore;
-    const reason = error instanceof Error ? error.message : String(error);
+    const reason = sanitizeError(error, agent.slug);
     warning("Cron: error in main-session job", colors.keyword(job.id), reason);
     await deliverOutput(agent, job, `⚠️ Engine error: ${reason}`, MessageFlags.EPHEMERAL);
   } finally {
@@ -191,7 +192,7 @@ async function runIsolatedSession(agent: Agent, job: CronJobConfig): Promise<voi
     );
     debug("Cron: isolated job", colors.keyword(job.id), "completed");
   } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
+    const reason = sanitizeError(error, agent.slug);
     warning("Cron: error in isolated job", colors.keyword(job.id), reason);
     await deliverOutput(agent, job, `⚠️ Engine error: ${reason}`, MessageFlags.EPHEMERAL);
     return;

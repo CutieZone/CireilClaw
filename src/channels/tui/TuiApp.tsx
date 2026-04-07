@@ -7,6 +7,7 @@ import { createTuiMessage } from "$/channels/tui/tui-message.js";
 import type { TuiMessage } from "$/channels/tui/tui-message.js";
 import type { UserMessage } from "$/engine/message.js";
 import { NamedInternalSession, TuiSession } from "$/harness/session.js";
+import { sanitizeError } from "$/util/paths.js";
 import { Box, render, Static, Text, useApp, useInput } from "ink";
 import { MultilineInput } from "ink-multiline-input";
 import { useCallback, useEffect, useState } from "react";
@@ -103,12 +104,7 @@ function TuiApp({ bridge, agent, initialSessionId }: AppProps): ReactElement {
       } catch (error: unknown) {
         session.history.length = historyLengthBeforeTurn;
         session.pendingToolMessages.length = 0;
-        bridge.push(
-          createTuiMessage(
-            "system",
-            `error: ${error instanceof Error ? error.message : String(error)}`,
-          ),
-        );
+        bridge.push(createTuiMessage("system", `error: ${sanitizeError(error, agent.slug)}`));
       } finally {
         setBusy(false);
       }

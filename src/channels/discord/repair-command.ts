@@ -1,4 +1,5 @@
 import { initDb } from "$/db/index.js";
+import { sanitizeError } from "$/util/paths.js";
 import { repairSession } from "$/util/repair-session.js";
 import type { CommandInteraction, CreateApplicationCommandOptions } from "oceanic.js";
 import { ApplicationCommandTypes, MessageFlags } from "oceanic.js";
@@ -28,7 +29,7 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
     });
   } catch (error) {
     await interaction.createFollowup({
-      content: `Repair failed: ${error instanceof Error ? error.message : String(error)}`,
+      content: `Repair failed: ${sanitizeError(error, ctx.agentSlug)}`,
       flags: MessageFlags.EPHEMERAL,
     });
   }

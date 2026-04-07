@@ -20,7 +20,7 @@ import { debug, error as logError, info, warning } from "$/output/log.js";
 import { formatDate } from "$/util/date.js";
 import { getDefaultProviderAndModel } from "$/util/default-provider-and-model.js";
 import { toWebp } from "$/util/image.js";
-import { root, sandboxToReal } from "$/util/paths.js";
+import { root, sanitizeError, sandboxToReal } from "$/util/paths.js";
 import type {
   AnyInteractionGateway,
   Client as OceanicClient,
@@ -803,7 +803,7 @@ async function handleMessageCreate(
     if (error instanceof Error && error.stack !== undefined) {
       warning("Stack trace:", error.stack);
     }
-    const reason = error instanceof Error ? error.message : String(error);
+    const reason = sanitizeError(error, agentSlug);
     try {
       const newMsg = await msgChannel.createMessage({
         allowedMentions: {
@@ -878,116 +878,130 @@ async function handleMessageUpdate(
   ctx: HandlerCtx,
   msg: DiscordMessage | PossiblyUncachedMessage,
 ): Promise<void> {
-  const { agentSlug, owner, client } = ctx;
-  const agent = owner.agents.get(agentSlug);
-  if (agent === undefined) {
-    return;
-  }
+  try {
+    const { agentSlug, owner, client } = ctx;
+    const agent = owner.agents.get(agentSlug);
+    if (agent === undefined) {
+      return;
+    }
 
-  const sessionId =
-    msg.guildID === undefined
-      ? `discord:${msg.channelID}`
-      : `discord:${msg.channelID}|${msg.guildID}`;
+    const sessionId =
+      msg.guildID === undefined
+        ? `discord:${msg.channelID}`
+        : `discord:${msg.channelID}|${msg.guildID}`;
 
-  const session = agent.sessions.get(sessionId);
-  if (session === undefined || !(session instanceof DiscordSession)) {
-    return;
-  }
+    const session = agent.sessions.get(sessionId);
+    if (session === undefined || !(session instanceof DiscordSession)) {
+      return;
+    }
 
-  const entryIndex = session.history.findIndex((historyMsg) => historyMsg.id === msg.id);
-  if (entryIndex === -1) {
-    return;
-  }
+    const entryIndex = session.history.findIndex((historyMsg) => historyMsg.id === msg.id);
+    if (entryIndex === -1) {
+      return;
+    }
 
-  // oxlint-disable-next-line typescript/no-non-null-assertion
-  const entry = session.history[entryIndex]!;
+    // oxlint-disable-next-line typescript/no-non-null-assertion
+    const entry = session.history[entryIndex]!;
 
-  // Fetch full message to ensure we have content/author/attachments
-  let realMsg: DiscordMessage | undefined = undefined;
-  if ("author" in msg) {
-    realMsg = msg as DiscordMessage;
-  } else {
-    try {
-      realMsg = await client.rest.channels.getMessage(msg.channelID, msg.id);
-    } catch {
-      return; // Failed to fetch, can't update
+    // Fetch full message to ensure we have content/author/attachments
+    let realMsg: DiscordMessage | undefined = undefined;
+    if ("author" in msg) {
+      realMsg = msg as DiscordMessage;
+    } else {
+      try {
+        realMsg = await client.rest.channels.getMessage(msg.channelID, msg.id);
+      } catch {
+        return; // Failed to fetch, can't update
+      }
+    }
+
+    const botId = client.application.id;
+    const isFromBot = realMsg.author.id === botId;
+
+    // Bot's own messages are assistant role, others are user role
+    const role = isFromBot ? ("assistant" as const) : ("user" as const);
+
+    // We should NOT update the role, but just the content.
+    // Actually, if a message was updated, it's likely still the same role.
+    if (entry.role !== role) {
+      // This shouldn't really happen in Discord unless someone's doing something very weird.
+      return;
+    }
+
+    const textContent = isFromBot
+      ? await formatAssistantContext(realMsg)
+      : await formatHistoryContext(realMsg);
+    const images = await fetchAllImages(realMsg);
+    const engineConfig = await loadEngine(agentSlug);
+    const defaults = getDefaultProviderAndModel(engineConfig);
+
+    const provider = engineConfig[session.selectedProvider ?? defaults.provider.name];
+    if (provider === undefined) {
+      throw new Error(
+        `Could not load the provider ${session.selectedProvider} from the engine config: check your configuration`,
+      );
+    }
+    const { models } = provider;
+    const modelSupportsVideo =
+      models?.[session.selectedModel ?? defaults.model.name] === undefined
+        ? false
+        : models[session.selectedModel ?? defaults.model.name]?.supportsVideo;
+
+    const supportsVideo = models === undefined ? false : (modelSupportsVideo ?? false);
+    const videos = supportsVideo ? await fetchAttachmentVideos(realMsg) : [];
+    const media = [...images, ...videos];
+
+    entry.content = media.length > 0 ? [textContent, ...media] : textContent;
+
+    saveSession(agentSlug, session);
+  } catch (error: unknown) {
+    warning("Error in messageUpdate handler:", error instanceof Error ? error.message : error);
+    if (error instanceof Error) {
+      warning(error);
     }
   }
-
-  const botId = client.application.id;
-  const isFromBot = realMsg.author.id === botId;
-
-  // Bot's own messages are assistant role, others are user role
-  const role = isFromBot ? ("assistant" as const) : ("user" as const);
-
-  // We should NOT update the role, but just the content.
-  // Actually, if a message was updated, it's likely still the same role.
-  if (entry.role !== role) {
-    // This shouldn't really happen in Discord unless someone's doing something very weird.
-    return;
-  }
-
-  const textContent = isFromBot
-    ? await formatAssistantContext(realMsg)
-    : await formatHistoryContext(realMsg);
-  const images = await fetchAllImages(realMsg);
-  const engineConfig = await loadEngine(agentSlug);
-  const defaults = getDefaultProviderAndModel(engineConfig);
-
-  const provider = engineConfig[session.selectedProvider ?? defaults.provider.name];
-  if (provider === undefined) {
-    throw new Error(
-      `Could not load the provider ${session.selectedProvider} from the engine config: check your configuration`,
-    );
-  }
-  const { models } = provider;
-  const modelSupportsVideo =
-    models?.[session.selectedModel ?? defaults.model.name] === undefined
-      ? false
-      : models[session.selectedModel ?? defaults.model.name]?.supportsVideo;
-
-  const supportsVideo = models === undefined ? false : (modelSupportsVideo ?? false);
-  const videos = supportsVideo ? await fetchAttachmentVideos(realMsg) : [];
-  const media = [...images, ...videos];
-
-  entry.content = media.length > 0 ? [textContent, ...media] : textContent;
-
-  saveSession(agentSlug, session);
 }
 
 async function handleMessageDelete(ctx: HandlerCtx, msg: PossiblyUncachedMessage): Promise<void> {
-  const { agentSlug, owner } = ctx;
-  const agent = owner.agents.get(agentSlug);
-  if (agent === undefined) {
-    return;
+  try {
+    const { agentSlug, owner } = ctx;
+    const agent = owner.agents.get(agentSlug);
+    if (agent === undefined) {
+      return;
+    }
+
+    const sessionId =
+      msg.guildID === undefined
+        ? `discord:${msg.channelID}`
+        : `discord:${msg.channelID}|${msg.guildID}`;
+
+    const session = agent.sessions.get(sessionId);
+    if (session === undefined || !(session instanceof DiscordSession)) {
+      return;
+    }
+
+    const entryIndex = session.history.findIndex((historyMsg) => historyMsg.id === msg.id);
+    if (entryIndex === -1) {
+      return;
+    }
+
+    session.history.splice(entryIndex, 1);
+
+    // If we deleted the last message, update the lastMessageId pointer
+    if (session.lastMessageId === msg.id) {
+      const lastUserMsg = session.history.findLast((historyMsg) => historyMsg.id !== undefined);
+      session.lastMessageId = lastUserMsg?.id;
+    }
+
+    // Dummy await to satisfy require-await lint rule
+    await Promise.resolve();
+    saveSession(agentSlug, session);
+  } catch (error: unknown) {
+    warning("Error in messageDelete handler:", error instanceof Error ? error.message : error);
+    if (error instanceof Error) {
+      warning(error);
+    }
   }
-
-  const sessionId =
-    msg.guildID === undefined
-      ? `discord:${msg.channelID}`
-      : `discord:${msg.channelID}|${msg.guildID}`;
-
-  const session = agent.sessions.get(sessionId);
-  if (session === undefined || !(session instanceof DiscordSession)) {
-    return;
-  }
-
-  const entryIndex = session.history.findIndex((historyMsg) => historyMsg.id === msg.id);
-  if (entryIndex === -1) {
-    return;
-  }
-
-  session.history.splice(entryIndex, 1);
-
-  // If we deleted the last message, update the lastMessageId pointer
-  if (session.lastMessageId === msg.id) {
-    const lastUserMsg = session.history.findLast((historyMsg) => historyMsg.id !== undefined);
-    session.lastMessageId = lastUserMsg?.id;
-  }
-
-  // Dummy await to satisfy require-await lint rule
-  await Promise.resolve();
-  saveSession(agentSlug, session);
 }
 
 async function handleInteractionCreate(
@@ -1245,27 +1259,47 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
 
   // oxlint-disable-next-line typescript/no-misused-promises
   client.on("messageReactionAdd", async (msg, reactor, reaction) => {
-    await handleMessageReactionAdd(ctx, msg, reactor, reaction);
+    try {
+      await handleMessageReactionAdd(ctx, msg, reactor, reaction);
+    } catch (error: unknown) {
+      logError("Unhandled error in messageReactionAdd handler:", error);
+    }
   });
 
   // oxlint-disable-next-line typescript/no-misused-promises
   client.on("messageCreate", async (msg) => {
-    await handleMessageCreate(ctx, msg);
+    try {
+      await handleMessageCreate(ctx, msg);
+    } catch (error: unknown) {
+      logError("Unhandled error in messageCreate handler:", error);
+    }
   });
 
   // oxlint-disable-next-line typescript/no-misused-promises
   client.on("messageUpdate", async (msg) => {
-    await handleMessageUpdate(ctx, msg);
+    try {
+      await handleMessageUpdate(ctx, msg);
+    } catch (error: unknown) {
+      logError("Unhandled error in messageUpdate handler:", error);
+    }
   });
 
   // oxlint-disable-next-line typescript/no-misused-promises
   client.on("messageDelete", async (msg) => {
-    await handleMessageDelete(ctx, msg);
+    try {
+      await handleMessageDelete(ctx, msg);
+    } catch (error: unknown) {
+      logError("Unhandled error in messageDelete handler:", error);
+    }
   });
 
   // oxlint-disable-next-line typescript/no-misused-promises
   client.on("interactionCreate", async (interaction) => {
-    await handleInteractionCreate(ctx, interaction);
+    try {
+      await handleInteractionCreate(ctx, interaction);
+    } catch (error: unknown) {
+      logError("Unhandled error in interactionCreate handler:", error);
+    }
   });
 
   await client.connect();

@@ -4,6 +4,7 @@ import type { ProviderConfig } from "$/config/schemas/engine.js";
 import { nonEmptyString } from "$/config/schemas/shared.js";
 import { saveSession } from "$/db/sessions.js";
 import { DiscordSession } from "$/harness/session.js";
+import { sanitizeError } from "$/util/paths.js";
 import { ApplicationCommandOptionTypes, ApplicationCommandTypes, MessageFlags } from "oceanic.js";
 import type {
   AutocompleteInteraction,
@@ -93,34 +94,7 @@ async function fetchModelListFor(
 }
 
 async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): Promise<void> {
-  const provider = interaction.data.options.getStringOption("provider", true);
-  const model = interaction.data.options.getStringOption("model", true);
-
-  if (
-    provider.value === "invalid" ||
-    model.value === "invalid" ||
-    provider.value.length === 0 ||
-    model.value.length === 0
-  ) {
-    await interaction.createFollowup({
-      content: "Failed to change model. Either provider or model was invalid.",
-      flags: MessageFlags.EPHEMERAL,
-    });
-    return;
-  }
-
-  const engineCfg = await loadEngine(ctx.agentSlug);
-  const providerCfg = engineCfg[provider.value];
-
-  if (providerCfg === undefined) {
-    await interaction.createFollowup({
-      content: "Could not find the provider you requested.",
-      flags: MessageFlags.EPHEMERAL,
-    });
-    return;
-  }
-
-  async function success(): Promise<void> {
+  async function success(model: string, provider: string): Promise<void> {
     const sessionId =
       (interaction.guildID ?? undefined) === undefined
         ? `discord:${interaction.channelID}`
@@ -131,8 +105,8 @@ async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): 
       return;
     }
 
-    session.selectedModel = model.value;
-    session.selectedProvider = provider.value;
+    session.selectedModel = model;
+    session.selectedProvider = provider;
 
     saveSession(ctx.agentSlug, session);
     await interaction.createFollowup({
@@ -141,89 +115,132 @@ async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): 
     });
   }
 
-  if (providerCfg.availableModels === "analyze") {
-    const models = await fetchModelListFor(providerCfg);
+  try {
+    const provider = interaction.data.options.getStringOption("provider", true);
+    const model = interaction.data.options.getStringOption("model", true);
 
-    if (models.some((it) => it.id === model.value)) {
-      await success();
-    } else {
+    if (
+      provider.value === "invalid" ||
+      model.value === "invalid" ||
+      provider.value.length === 0 ||
+      model.value.length === 0
+    ) {
       await interaction.createFollowup({
-        content:
-          "Could not find the model you requested. If you are certain it exists, use `availableModels` to properly list it.",
+        content: "Failed to change model. Either provider or model was invalid.",
         flags: MessageFlags.EPHEMERAL,
       });
+      return;
     }
-    return;
-  } else if (
-    providerCfg.availableModels.includes(model.value) ||
-    providerCfg.models?.[model.value] !== undefined
-  ) {
-    await success();
-    return;
-  }
 
-  await interaction.createFollowup({
-    content: "Failed to set model and provider.",
-    flags: MessageFlags.EPHEMERAL,
-  });
+    const engineCfg = await loadEngine(ctx.agentSlug);
+    const providerCfg = engineCfg[provider.value];
+
+    if (providerCfg === undefined) {
+      await interaction.createFollowup({
+        content: "Could not find the provider you requested.",
+        flags: MessageFlags.EPHEMERAL,
+      });
+      return;
+    }
+
+    if (providerCfg.availableModels === "analyze") {
+      const models = await fetchModelListFor(providerCfg);
+
+      if (models.some((it) => it.id === model.value)) {
+        await success(model.value, provider.value);
+      } else {
+        await interaction.createFollowup({
+          content:
+            "Could not find the model you requested. If you are certain it exists, use `availableModels` to properly list it.",
+          flags: MessageFlags.EPHEMERAL,
+        });
+      }
+      return;
+    } else if (
+      providerCfg.availableModels.includes(model.value) ||
+      providerCfg.models?.[model.value] !== undefined
+    ) {
+      await success(model.value, provider.value);
+      return;
+    }
+
+    await interaction.createFollowup({
+      content: "Failed to set model and provider.",
+      flags: MessageFlags.EPHEMERAL,
+    });
+  } catch (error) {
+    await interaction.createFollowup({
+      content: `Model change failed: ${sanitizeError(error, ctx.agentSlug)}`,
+      flags: MessageFlags.EPHEMERAL,
+    });
+  }
 }
 
 async function handleAutocomplete(
   interaction: AutocompleteInteraction,
   ctx: HandlerCtx,
 ): Promise<void> {
-  const focused = interaction.data.options.getFocused(true);
-  const providerField = interaction.data.options.getString("provider");
+  try {
+    const focused = interaction.data.options.getFocused(true);
+    const providerField = interaction.data.options.getString("provider");
 
-  const engineCfg = await loadEngine(ctx.agentSlug);
-  const selected = providerField === undefined ? undefined : engineCfg[providerField];
+    const engineCfg = await loadEngine(ctx.agentSlug);
+    const selected = providerField === undefined ? undefined : engineCfg[providerField];
 
-  if (focused.name === "provider") {
-    await interaction.result(
-      Object.keys(engineCfg).map((key) => ({
-        name: key,
-        value: key,
-      })),
-    );
-  } else if (focused.name === "model") {
-    let models: { value: string; name: string }[] | undefined = undefined;
+    if (focused.name === "provider") {
+      await interaction.result(
+        Object.keys(engineCfg).map((key) => ({
+          name: key,
+          value: key,
+        })),
+      );
+    } else if (focused.name === "model") {
+      let models: { value: string; name: string }[] | undefined = undefined;
 
-    if (selected?.availableModels === "analyze") {
-      const tmp = await fetchModelListFor(selected);
-      models = tmp
-        .filter(
-          ({ name, id }) =>
-            typeof focused.value === "string" &&
-            ((focused.value.length > 1 &&
-              (name.startsWith(focused.value) || id.startsWith(focused.value))) ||
-              focused.value.length === 0),
-        )
-        .map(({ name, id }) => ({ name: id, value: name }));
-    } else if (selected !== undefined) {
-      models = selected.availableModels.map((it) => ({ name: it, value: it }));
+      if (selected?.availableModels === "analyze") {
+        const tmp = await fetchModelListFor(selected);
+        models = tmp
+          .filter(
+            ({ name, id }) =>
+              typeof focused.value === "string" &&
+              ((focused.value.length > 1 &&
+                (name.startsWith(focused.value) || id.startsWith(focused.value))) ||
+                focused.value.length === 0),
+          )
+          .map(({ name, id }) => ({ name: id, value: name }));
+      } else if (selected !== undefined) {
+        models = selected.availableModels.map((it) => ({ name: it, value: it }));
+      }
+
+      if (models === undefined) {
+        await interaction.result([
+          {
+            name: "Pick a provider first",
+            value: "invalid",
+          },
+        ]);
+        return;
+      }
+
+      if (models.length === 0) {
+        await interaction.result([
+          {
+            name: "This provider has no available models",
+            value: "invalid",
+          },
+        ]);
+        return;
+      }
+
+      await interaction.result(models);
     }
-
-    if (models === undefined) {
-      await interaction.result([
-        {
-          name: "Pick a provider first",
-          value: "invalid",
-        },
-      ]);
-      return;
-    }
-
-    if (models.length === 0) {
-      await interaction.result([
-        {
-          name: "This provider has no available models",
-          value: "invalid",
-        },
-      ]);
-      return;
-    }
-
-    await interaction.result(models);
+  } catch {
+    await interaction.result([
+      {
+        name: "Error loading models",
+        value: "invalid",
+      },
+    ]);
   }
 }
 
