@@ -2,6 +2,7 @@ import { readFile, stat } from "node:fs/promises";
 import { extname } from "node:path";
 
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
+import { IMAGE_EXT_TO_MEDIA_TYPE } from "$/supports.js";
 import { toWebp } from "$/util/image.js";
 import { checkConditionalAccess, sandboxToReal } from "$/util/paths.js";
 import * as vb from "valibot";
@@ -14,19 +15,10 @@ const Schema = vb.strictObject({
   ),
 });
 
-// Extensions recognised as images and their corresponding MIME types.
-const IMAGE_EXT_TO_MEDIA_TYPE: Record<string, string> = {
-  ".gif": "image/gif",
-  ".jpeg": "image/jpeg",
-  ".jpg": "image/jpeg",
-  ".png": "image/png",
-  ".webp": "image/webp",
-};
-
 export const read: ToolDef = {
   description:
     "Read the full contents of a file at the given sandbox path and return it as text.\n\n" +
-    "Image files (.jpg, .jpeg, .png, .gif, .webp) are automatically converted to WebP and injected into your next turn as a visual — you will see the image, not raw bytes.\n\n" +
+    "Image files are automatically converted to WebP and injected into your next turn as a visual — you will see the image, not raw bytes.\n\n" +
     "Allowed path roots: /workspace/, /memories/, /blocks/, /skills/.\n" +
     "Note that paths used here *must* be absolute.\n" +
     "When to use:\n" +

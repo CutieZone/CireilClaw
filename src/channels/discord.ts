@@ -17,6 +17,7 @@ import type { Harness } from "$/harness/index.js";
 import { DiscordSession } from "$/harness/session.js";
 import colors from "$/output/colors.js";
 import { debug, error as logError, info, warning } from "$/output/log.js";
+import { SUPPORTED_IMAGE_TYPES, SUPPORTED_VIDEO_TYPES, VIDEO_SIZE_CAP } from "$/supports.js";
 import { formatDate } from "$/util/date.js";
 import { getDefaultProviderAndModel } from "$/util/default-provider-and-model.js";
 import { toWebp } from "$/util/image.js";
@@ -52,14 +53,6 @@ const { Client, Intents } = createRequire(import.meta.url)(
 // 200-char safety buffer below Discord's 2000-char hard limit.
 const CHUNK_LIMIT = 1800;
 const TYPING_INTERVAL_MS = 5000;
-
-// Media types supported by OpenAI's vision API.
-const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
-
-// Video types to fetch when supportsVideo is enabled. Hard cap prevents
-// multi-MB payloads from being base64-encoded and sent to the API.
-const SUPPORTED_VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
-const VIDEO_SIZE_CAP = 10 * 1024 * 1024; // 10 MB
 
 // All registered slash commands. Add new command modules here — the hash
 // check on startup will detect changes and re-register with Discord's API.

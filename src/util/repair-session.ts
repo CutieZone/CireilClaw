@@ -4,14 +4,12 @@ import { updateSessionImages, updateSessionVideoRefs } from "$/db/sessions.js";
 import { DiscordMetaSchema, SerializedHistorySchema } from "$/db/validation.js";
 import { isImageRef, isVideoRef } from "$/engine/content.js";
 import { warning } from "$/output/log.js";
+import { SUPPORTED_IMAGE_TYPES, SUPPORTED_VIDEO_TYPES } from "$/supports.js";
 import { toWebp } from "$/util/image.js";
 import { eq } from "drizzle-orm";
 import type { Client as OceanicClient } from "oceanic.js";
 import { ChannelTypes } from "oceanic.js";
 import * as vb from "valibot";
-
-const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
-const SUPPORTED_VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
 
 interface RepairResult {
   failed: number;
