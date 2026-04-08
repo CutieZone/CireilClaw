@@ -112,18 +112,21 @@ function checkConditionalAccess(
 ): void {
   // Determine which ruleset to apply based on the path prefix
   let rules: Record<string, PathRule> | undefined = undefined;
+  let relativePath = sandboxPath;
 
   if (sandboxPath === "/memories" || sandboxPath.startsWith("/memories/")) {
     rules = conditions.memories;
+    relativePath = sandboxPath === "/memories" ? "/" : sandboxPath.slice("/memories".length);
   } else if (sandboxPath === "/workspace" || sandboxPath.startsWith("/workspace/")) {
     rules = conditions.workspace;
+    relativePath = sandboxPath === "/workspace" ? "/" : sandboxPath.slice("/workspace".length);
   }
 
   if (rules === undefined) {
     return; // No conditional rules for this path
   }
 
-  if (!checkPathAccess(sandboxPath, rules, session)) {
+  if (!checkPathAccess(relativePath, rules, session)) {
     const guildInfo =
       session.channel === "discord" && session.guildId !== undefined
         ? `, guild: ${session.guildId}`

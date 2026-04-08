@@ -108,7 +108,7 @@ function getMatchingBlockNames(
  * 2. Check for allow rules that match - if any match conditions, allow access
  * 3. If no rules match the path, default allow (baseline sandbox handles this)
  *
- * @param sandboxPath The sandbox path (e.g., "/memories/nsfw/secret.md")
+ * @param sandboxPath The area-relative sandbox path (e.g., "/nsfw/secret.md" within memories)
  * @param rules Record of path patterns to rules
  * @param session The current session
  * @returns true if access is allowed, false if denied

@@ -625,5 +625,5 @@ async function exec(cfg: ExecConfig): Promise<ExecResult> {
   return runInSandbox(bwrap.args, commandPath, args ?? [], timeout);
 }
 
-export { buildBwrap, exec, locate };
+export { buildBwrap, exec, locate, parseEnvFile, SHELL_METACHAR_PATTERN };
 export type { ExecConfig, ExecError, ExecOutput, ExecResult };
