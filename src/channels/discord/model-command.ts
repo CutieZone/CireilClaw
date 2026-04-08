@@ -57,9 +57,15 @@ const AnthropicModelListSchema = vb.object({
 async function fetchModelListFor(
   selected: ProviderConfig,
 ): Promise<{ name: string; id: string }[]> {
+  const key = Array.isArray(selected.apiKey) ? selected.apiKey[0] : selected.apiKey;
+
   switch (selected.kind) {
     case "openai": {
-      const modelList = await fetch(`${selected.apiBase}/models`);
+      const modelList = await fetch(`${selected.apiBase}/models`, {
+        headers: {
+          Authorization: `Bearer ${key}`,
+        },
+      });
 
       const json = await modelList.json();
       const list = vb.parse(OpenAIModelListSchema, json);
@@ -67,8 +73,6 @@ async function fetchModelListFor(
       return list.data.map((it) => ({ id: it.id, name: it.name ?? it.id }));
     }
     case "anthropic-oauth": {
-      const key = Array.isArray(selected.apiKey) ? selected.apiKey[0] : selected.apiKey;
-
       const modelList = await fetch(`https://api.anthropic.com/v1/models`, {
         headers: {
           Authorization: `Bearer ${key}`,
