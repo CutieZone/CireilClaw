@@ -17,11 +17,11 @@
 # Paths ending with "/" match as prefixes. Others require exact match.
 # Evaluation order: deny rules → allow rules → default (allow if no rules match).
 #
-# [memories.lock-private]
+# [memories."/private/"]
 # action = "deny"
 # when = ["discord:guild:123456789", "tui"]
 # mode = "and"
 #
-# [workspace.project-x]
+# [workspace."/project-x/"]
 # action = "allow"
 # when = "discord:channel:987654321"
