@@ -1,0 +1,27 @@
+# Per-agent conditions configuration
+# Copy to ~/.cireilclaw/agents/{slug}/config/conditions.toml
+#
+# Controls conditional block loading and path access based on session context.
+# Supported conditions: discord:nsfw, discord:dm, discord:dm:{channelId},
+#   discord:guild:{guildId}, discord:channel:{channelId}, tui, internal
+
+# --- Block loading rules ---
+# Each rule loads a memory block from blocks/conditional/ when conditions match.
+#
+# [blocks.nsfw-personality]
+# action = "load"
+# when = "discord:nsfw"
+# mode = "or"                  # "and" or "or". Default: "or"
+
+# --- Path access rules (memories and workspace) ---
+# Paths ending with "/" match as prefixes. Others require exact match.
+# Evaluation order: deny rules → allow rules → default (allow if no rules match).
+#
+# [memories.lock-private]
+# action = "deny"
+# when = ["discord:guild:123456789", "tui"]
+# mode = "and"
+#
+# [workspace.project-x]
+# action = "allow"
+# when = "discord:channel:987654321"

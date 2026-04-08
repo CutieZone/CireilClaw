@@ -1,0 +1,16 @@
+# Per-agent cron configuration
+# Copy to ~/.cireilclaw/agents/{slug}/config/cron.toml
+
+# [[jobs]]
+# id = "morning-report"
+# prompt = "Read /tasks/HEARTBEAT.md and run through the checklist."
+# schedule = { every = 3600 }                       # Every 3600 seconds (min 60)
+# schedule = { cron = "0 9 * * 1-5" }              # Weekdays at 9am (cron expression)
+# schedule = { at = "2025-06-01T12:00:00Z" }       # One-shot at ISO 8601 timestamp
+# enabled = true                # Default: true
+# execution = "isolated"        # "main" or "isolated". Default: "isolated"
+# delivery = "announce"         # "announce", "webhook", or "none". Default: "announce"
+# target = "last"               # Session target for announce delivery. Default: "last"
+# model = "gpt-4o-mini"        # Override model (optional)
+# provider = "my-provider"     # Override provider (optional)
+# webhookUrl = "https://..."   # Required if delivery = "webhook"

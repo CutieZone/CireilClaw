@@ -1,0 +1,29 @@
+# Per-agent tools configuration
+# Copy to ~/.cireilclaw/agents/{slug}/config/tools.toml
+#
+# Simple tools: set to true/false to enable/disable.
+# The exec tool has its own config object.
+
+# --- Core tools (always enabled, listed for reference) ---
+# respond = true
+# no-response = true
+# read = true
+# open-file = true
+# close-file = true
+# list-dir = true
+# read-skill = true
+# session-info = true
+
+# --- Optional tools ---
+write = true
+str-replace = true
+brave-search = true
+schedule = true
+react = true
+
+# --- Exec tool (sandboxed command execution) ---
+# [exec]
+# enabled = true
+# binaries = ["curl", "jq", "grep"]     # Whitelisted binaries (best-effort)
+# timeout = 60000                        # Kill timeout in ms. Default: 60000
+# hostEnvPassthrough = []                # Host env vars to pass through. Default: []

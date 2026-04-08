@@ -1,0 +1,6 @@
+# Per-agent Matrix channel configuration
+# Copy to ~/.cireilclaw/agents/{slug}/config/channels/matrix.toml
+#
+# NOTE: Matrix support is not yet implemented. This config is a placeholder.
+
+# Matrix channel support is a stub — no fields are defined yet.

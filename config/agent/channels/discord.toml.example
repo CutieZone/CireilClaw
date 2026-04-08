@@ -1,0 +1,13 @@
+# Per-agent Discord channel configuration
+# Copy to ~/.cireilclaw/agents/{slug}/config/channels/discord.toml
+
+token = "" # Bot token from https://discord.com/developers/applications
+ownerId = "" # Your Discord user ID (numeric string)
+
+# [access]
+# mode = "disabled"             # "disabled", "allowlist", or "denylist". Default: "disabled"
+# users = []                    # Array of Discord user IDs
+
+# [directMessages]
+# mode = "owner"                # "owner", "public", "allowlist", or "denylist". Default: "owner"
+# users = []                    # Array of Discord user IDs (for allowlist/denylist)

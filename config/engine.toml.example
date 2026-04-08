@@ -1,0 +1,32 @@
+# Engine configuration
+# Copy this file to engine.toml to use
+#
+# This is a record of provider names to provider configs.
+# One provider must have isGlobalDefault = true.
+
+[my-provider]
+apiBase = "https://api.openai.com/v1"
+apiKey = "sk-..."
+defaultModel = "gpt-4o"
+isGlobalDefault = true
+
+# --- Provider fields ---
+#
+# apiBase               (required)  Valid API base URL
+# apiKey                (optional)  String or array of strings for key pooling. Default: "not-needed"
+# defaultModel          (required)  The default model identifier
+# isGlobalDefault       (optional)  One provider must have this set to true. Default: false
+# kind                  (optional)  "openai" or "anthropic-oauth". Default: "openai"
+# availableModels       (optional)  List of model names, or "analyze" for auto-resolution. Default: "analyze"
+# maxGenerationRetries  (optional)  How many times generation can fail before crashing. Default: 2
+# maxTurns              (optional)  Number of conversation turns sent to the API. Default: 30
+# useJpegForImages      (optional)  Force JPEG over WEBP for images. Default: false
+# useToolChoiceAuto     (optional)  Prefer tool_choice: auto over required. Default: false
+# customHeaders         (optional)  Custom headers for generation requests
+#
+# models                (optional)  Model-specific overrides, keyed by model name:
+#   [my-provider.models.gpt-4o]
+#   reasoning = true            # Enable reasoning. Default: true
+#   reasoningBudget = 16384     # Token budget for reasoning. Default: 16384
+#   supportsVideo = false       # Video support flag. Default: false
+#   toolFailThreshold = 3       # Max tool failures before giving up. Default: 3

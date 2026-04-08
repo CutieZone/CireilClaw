@@ -508,7 +508,9 @@ async function run(flags: Flags): Promise<void> {
   await writeFile(join(agentRoot, "core.md"), baseInstructionStub(), "utf8");
   await writeFile(
     join(agentRoot, "config", "engine.toml"),
-    stringify({ apiBase, apiKey, model }),
+    stringify({
+      default: { apiBase, apiKey, defaultModel: model, isGlobalDefault: true },
+    }),
     "utf8",
   );
   await writeFile(

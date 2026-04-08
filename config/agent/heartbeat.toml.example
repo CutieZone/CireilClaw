@@ -1,0 +1,20 @@
+# Per-agent heartbeat configuration
+# Copy to ~/.cireilclaw/agents/{slug}/config/heartbeat.toml
+
+enabled = false
+# interval = 1800               # Seconds between pulses (min 60). Default: 1800
+# target = "last"               # "last" (most recent session), "none" (skip), or a session ID
+
+# Override model/provider for heartbeat runs:
+# model = "gpt-4o-mini"
+# provider = "my-provider"
+
+# [activeHours]
+# start = "08:00"               # HH:MM format
+# end = "22:00"                 # HH:MM format
+# timezone = "America/New_York" # IANA timezone name
+
+# [visibility]
+# showAlerts = true             # Send non-OK responses to channel. Default: true
+# showOk = false                # Send OK responses to channel. Default: false
+# useIndicator = true           # Show typing indicator while running. Default: true
