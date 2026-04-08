@@ -236,7 +236,7 @@ async function fetchAttachmentImages(msg: DiscordMessage): Promise<ImageContent[
       try {
         const response = await fetch(attachment.url);
         const raw = await response.arrayBuffer();
-        const data = await toWebp(raw);
+        const data = await toWebp(raw, mediaType);
         return {
           data,
           id: attachment.id,

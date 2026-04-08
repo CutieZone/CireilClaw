@@ -41,7 +41,10 @@ export const read: ToolDef = {
     const mediaType = IMAGE_EXT_TO_MEDIA_TYPE[extname(data.path).toLowerCase()];
     if (mediaType !== undefined) {
       const buf = await readFile(realPath);
-      const webp = await toWebp(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+      const webp = await toWebp(
+        buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
+        mediaType,
+      );
       ctx.session.pendingImages.push({
         data: webp,
         mediaType: "image/webp",

@@ -1,3 +1,4 @@
+import decodeHeic from "heic-decode";
 import sharp from "sharp";
 
 // Quality chosen to balance visual fidelity against API payload size.
@@ -19,7 +20,27 @@ async function toJpeg(data: Uint8Array): Promise<Uint8Array> {
 // Re-encode any supported image format to WebP before it is sent to the
 // vision API.  A typical 9 MiB PNG round-trips to a few hundred KiB this way,
 // well within provider limits, with no perceptible quality loss.
-async function toWebp(data: ArrayBuffer): Promise<Uint8Array> {
+//
+// HEIC/HEIF inputs are decoded via heic-decode (WASM libheif) rather than
+// relying on sharp's native libheif — the WASM build is always available
+// regardless of platform.
+async function toWebp(data: ArrayBuffer, mediaType?: string): Promise<Uint8Array> {
+  if (mediaType === "image/heic" || mediaType === "image/heif") {
+    const {
+      width,
+      height,
+      data: raw,
+    } = await decodeHeic({
+      buffer: data,
+    });
+    const result = await sharp(Buffer.from(raw.buffer, raw.byteOffset, raw.byteLength), {
+      raw: { channels: 4, height, width },
+    })
+      .webp({ quality: WEBP_QUALITY })
+      .toBuffer();
+    return result;
+  }
+
   const result = await sharp(Buffer.from(data)).webp({ quality: WEBP_QUALITY }).toBuffer();
   return result;
 }
