@@ -9,7 +9,7 @@ interface KeyFailure {
 
 /**
  * Generate a stable cache key for KeyPool instances using blake3 hash.
- * The keys are never stored directly; only their hash is used.
+ * The keys are never used directly; only their hash is used.
  */
 function poolKeyForKeys(keys: string | string[]): string {
   const normalized = Array.isArray(keys) ? keys : [keys];
