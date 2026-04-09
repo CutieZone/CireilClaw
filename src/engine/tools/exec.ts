@@ -56,7 +56,7 @@ export const exec: ToolDef = {
     const toolsConfig = await loadTools(ctx.agentSlug);
     const execConfig = toolsConfig.exec;
 
-    if (!execConfig.enabled) {
+    if (execConfig === false || !execConfig.enabled) {
       throw new ToolError("Exec tool is disabled in configuration.");
     }
 

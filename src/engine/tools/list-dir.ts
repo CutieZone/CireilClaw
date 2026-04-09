@@ -32,7 +32,7 @@ export const listDir: ToolDef = {
       const toolsConfig = await loadTools(ctx.agentSlug);
       const execConfig = toolsConfig.exec;
 
-      if (!execConfig.enabled) {
+      if (execConfig === false || !execConfig.enabled) {
         return { entries: [], path: data.path, success: true };
       }
 

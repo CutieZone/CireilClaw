@@ -28,7 +28,7 @@ const ToolConfigSchema = vb.pipe(vb.boolean(), vb.description("Whether the tool 
 
 const ToolsConfigSchema = vb.objectWithRest(
   {
-    exec: ExecToolConfigSchema,
+    exec: vb.union([ExecToolConfigSchema, vb.literal(false)]),
   },
   ToolConfigSchema,
 );
