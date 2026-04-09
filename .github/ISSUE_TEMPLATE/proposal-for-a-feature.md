@@ -2,11 +2,10 @@
 name: Proposal for a feature
 about: Either an idea or a request-for-comment in advance of development work for
   a feature/enhancement.
-title: ''
+title: ""
 labels: proposal
-assignees: ''
+assignees: ""
 type: Feature
-
 ---
 
 ## What I'm Proposing
