@@ -73,7 +73,7 @@ async function fetchModelListFor(
       return list.data.map((it) => ({ id: it.id, name: it.name ?? it.id }));
     }
     case "anthropic-oauth": {
-      const modelList = await fetch(`https://api.anthropic.com/v1/models`, {
+      const modelList = await fetch(`${selected.apiBase}/models`, {
         headers: {
           Authorization: `Bearer ${key}`,
           "Content-Type": "application/json",
