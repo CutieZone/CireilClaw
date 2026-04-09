@@ -6,6 +6,7 @@ import { basename, join } from "node:path";
 
 import * as clearCommand from "$/channels/discord/clear-command.js";
 import type { HandlerCtx } from "$/channels/discord/handler-ctx.js";
+import * as inviteCommand from "$/channels/discord/invite-command.js";
 import * as modelCommand from "$/channels/discord/model-command.js";
 import * as repairCommand from "$/channels/discord/repair-command.js";
 import { loadChannel, loadEngine } from "$/config/index.js";
@@ -56,14 +57,22 @@ const TYPING_INTERVAL_MS = 5000;
 
 // All registered slash commands. Add new command modules here — the hash
 // check on startup will detect changes and re-register with Discord's API.
-const SLASH_COMMANDS = [clearCommand.definition, repairCommand.definition, modelCommand.definition];
+const SLASH_COMMANDS = [
+  clearCommand.definition,
+  inviteCommand.definition,
+  modelCommand.definition,
+  repairCommand.definition,
+];
 
 type SlashHandler = (interaction: CommandInteraction, ctx: HandlerCtx) => Promise<void>;
 const SLASH_HANDLERS = new Map<string, SlashHandler>([
   ["clear", clearCommand.handle],
-  ["repair", repairCommand.handle],
+  ["invite", inviteCommand.handle],
   ["model", modelCommand.handleCommand],
+  ["repair", repairCommand.handle],
 ]);
+
+const SILENT_COMMANDS = new Set(["model", "invite"]);
 
 type AutocompleteHandler = (interaction: AutocompleteInteraction, ctx: HandlerCtx) => Promise<void>;
 const AUTOCOMPLETE_HANDLERS = new Map<string, AutocompleteHandler>([
@@ -1009,7 +1018,9 @@ async function handleInteractionCreate(
   if (interaction.type === InteractionTypes.APPLICATION_COMMAND) {
     const handler = SLASH_HANDLERS.get(interaction.data.name);
     if (handler !== undefined) {
-      await interaction.defer(interaction.data.name === "model" ? MessageFlags.EPHEMERAL : 0);
+      await interaction.defer(
+        SILENT_COMMANDS.has(interaction.data.name) ? MessageFlags.EPHEMERAL : 0,
+      );
 
       await handler(interaction, ctx);
     }
