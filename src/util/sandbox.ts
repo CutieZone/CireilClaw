@@ -317,7 +317,7 @@ async function queryNixStore(toolPath: string): Promise<NixStoreResult> {
 
     let stdout = "";
     let stderr = "";
-    let resolved = false;
+    let settled = false;
 
     proc.stdout.on("data", (data: Buffer) => {
       stdout += data.toString("utf8");
@@ -328,10 +328,10 @@ async function queryNixStore(toolPath: string): Promise<NixStoreResult> {
     });
 
     proc.on("close", (code) => {
-      if (resolved) {
+      if (settled) {
         return;
       }
-      resolved = true;
+      settled = true;
 
       if (code !== 0) {
         warning({ code, stderr, toolPath }, "Failed to execute nix-store query");
@@ -344,10 +344,10 @@ async function queryNixStore(toolPath: string): Promise<NixStoreResult> {
     });
 
     proc.on("error", (err) => {
-      if (resolved) {
+      if (settled) {
         return;
       }
-      resolved = true;
+      settled = true;
 
       warning({ error: err.message, toolPath }, "Failed to spawn nix-store");
       resolve({ requisites: [], success: false });
@@ -540,7 +540,7 @@ async function runInSandbox(
 
     let stdout = "";
     let stderr = "";
-    let resolved = false;
+    let settled = false;
 
     proc.stdout.on("data", (data: Buffer) => {
       stdout += data.toString("utf8");
@@ -555,10 +555,10 @@ async function runInSandbox(
     }, timeout);
 
     proc.on("close", (code) => {
-      if (resolved) {
+      if (settled) {
         return;
       }
-      resolved = true;
+      settled = true;
       clearTimeout(timeoutId);
 
       if (code === null) {
@@ -580,10 +580,10 @@ async function runInSandbox(
     });
 
     proc.on("error", (err) => {
-      if (resolved) {
+      if (settled) {
         return;
       }
-      resolved = true;
+      settled = true;
       clearTimeout(timeoutId);
 
       resolve({
