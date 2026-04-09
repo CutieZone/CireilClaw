@@ -1,0 +1,10 @@
+query-filters:
+  - exclude:
+      id: js/path-injection
+
+queries:
+  - uses: security-extended
+
+paths-ignore:
+  - "**/*.test.ts"
+  - "src/config/migrations/**"
