@@ -22,8 +22,10 @@ schedule = true
 react = true
 
 # --- Exec tool (sandboxed command execution) ---
+# To simply disable, use `exec = false`,
+# Otherwise,
 # [exec]
 # enabled = true
-# binaries = ["curl", "jq", "grep"]     # Whitelisted binaries (best-effort)
+# binaries = ["curl", "jq", "grep"]     # (required) Whitelisted binaries (best-effort)
 # timeout = 60000                        # Kill timeout in ms. Default: 60000
 # hostEnvPassthrough = []                # Host env vars to pass through. Default: []
