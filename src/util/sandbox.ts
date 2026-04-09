@@ -14,6 +14,7 @@ function locate(command: string, pathEnvOverride?: string[]): string | undefined
 
   const path = parse(command);
 
+  // lgtm[js/path-traversal] - Linux-only (NixOS), forward slashes only
   for (const segment of path.dir.split("/")) {
     if (segment.length === 0) {
       continue;
@@ -174,8 +175,12 @@ function resolveEnvValue(
 
         if (fromFile !== undefined) {
           resolutionStack.add(key);
-          const resolved = resolveEnvValue(fromFile, fileVars, resolutionStack);
-          resolutionStack.delete(key);
+          let resolved: ReturnType<typeof resolveEnvValue> | undefined = undefined;
+          try {
+            resolved = resolveEnvValue(fromFile, fileVars, resolutionStack);
+          } finally {
+            resolutionStack.delete(key);
+          }
 
           if (isEnvParseError(resolved)) {
             throw new EnvResolutionError(resolved.message);
@@ -631,8 +636,14 @@ async function exec(cfg: ExecConfig): Promise<ExecResult> {
   }
 
   const isNixOS = detectNixOS();
-  const commandPath = isNixOS ? `/bin/${command}` : (locate(command) ?? `/usr/bin/${command}`);
+  const commandPath = isNixOS ? `/bin/${command}` : locate(command);
 
+  if (commandPath === undefined || !existsSync(commandPath)) {
+    return {
+      error: `Command '${command}' could not be located on this system.`,
+      type: "error",
+    };
+  }
   return runInSandbox(bwrap.args, commandPath, args ?? [], timeout);
 }
 
