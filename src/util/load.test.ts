@@ -21,6 +21,7 @@ const mockFsPromises = {
 
 vi.mock("node:fs", () => ({
   existsSync: (...args: unknown[]): unknown => mockFs.existsSync(...args),
+  realpathSync: (path: string): string => path,
 }));
 
 vi.mock("node:fs/promises", () => ({

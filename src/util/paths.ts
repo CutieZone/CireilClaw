@@ -13,7 +13,12 @@ function root(): string {
     throw new Error("$HOME variable not available");
   }
 
-  return join(home, ".cireilclaw");
+  if (!isAbsolute(home)) {
+    throw new Error("$HOME is not an absolute path");
+  }
+
+  const realHome = realpathSync(home);
+  return join(realHome, ".cireilclaw");
 }
 
 function agentRoot(agentSlug: string): string {
@@ -152,15 +157,29 @@ function validateSystemPath(path: string): string {
     throw new Error(`Access denied: path '${path}' contains path traversal.`);
   }
 
+  const normalized = normalize(path);
   const isAllowed = EXEC_VISIBLE_PREFIXES.some(
-    (prefix) => path === prefix || path.startsWith(`${prefix}/`),
+    (prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`),
   );
 
   if (!isAllowed) {
     throw new Error(`Access denied: path '${path}' is outside the sandbox.`);
   }
 
-  return normalize(path);
+  if (!existsSync(normalized)) {
+    return normalized;
+  }
+
+  const resolved = realpathSync(normalized);
+  const isResolvedAllowed = EXEC_VISIBLE_PREFIXES.some(
+    (prefix) => resolved === prefix || resolved.startsWith(`${prefix}/`),
+  );
+
+  if (!isResolvedAllowed) {
+    throw new Error(`Access denied: path '${path}' resolves outside the sandbox via symlink.`);
+  }
+
+  return resolved;
 }
 
 export {

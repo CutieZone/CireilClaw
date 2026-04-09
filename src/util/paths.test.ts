@@ -1,3 +1,5 @@
+import { existsSync, realpathSync } from "node:fs";
+
 import type { ConditionsConfig } from "$/config/schemas/conditions.js";
 import { DiscordSession, TuiSession } from "$/harness/session.js";
 import {
@@ -28,6 +30,17 @@ describe("root", () => {
   it("throws when HOME is unset", () => {
     vi.stubEnv("HOME", undefined);
     expect(() => root()).toThrow("$HOME variable not available");
+  });
+
+  it("throws when HOME is not absolute", () => {
+    vi.stubEnv("HOME", "relative/path");
+    expect(() => root()).toThrow("$HOME is not an absolute path");
+  });
+
+  it("resolves symlinks in HOME", () => {
+    vi.stubEnv("HOME", "/home/link");
+    vi.mocked(realpathSync).mockReturnValueOnce("/home/real");
+    expect(root()).toBe("/home/real/.cireilclaw");
   });
 });
 
@@ -134,6 +147,18 @@ describe("validateSystemPath", () => {
 
   it("rejects /home paths", () => {
     expect(() => validateSystemPath("/home/user")).toThrow("outside the sandbox");
+  });
+
+  it("rejects symlinks that escape the allowed prefixes", () => {
+    vi.mocked(realpathSync).mockReturnValueOnce("/etc/passwd");
+    expect(() => validateSystemPath("/usr/bin/sneaky")).toThrow("via symlink");
+  });
+
+  it("skips realpathSync for non-existent paths", () => {
+    vi.mocked(existsSync).mockReturnValueOnce(false);
+    vi.mocked(realpathSync).mockClear();
+    expect(validateSystemPath("/nix/store/pending")).toBe("/nix/store/pending");
+    expect(vi.mocked(realpathSync)).not.toHaveBeenCalled();
   });
 });
 

@@ -477,9 +477,16 @@ async function buildBwrap(
     return { message: "Could not locate $HOME environment variable", type: "error" };
   }
 
+  if (!isAbsolute(home)) {
+    warning("$HOME is not an absolute path");
+    return { message: "$HOME is not an absolute path", type: "error" };
+  }
+
+  const realHome = realpathSync(home);
+
   debug({ binaries }, "Building bwrap sandbox");
 
-  const args = buildCommonArgs(home, agentSlug);
+  const args = buildCommonArgs(realHome, agentSlug);
 
   addEtcBindings(args);
   addSslCertificates(args);
