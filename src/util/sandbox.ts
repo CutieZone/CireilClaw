@@ -1,7 +1,7 @@
 // oxlint-disable promise/no-multiple-resolved
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
-import { parse, isAbsolute, join, resolve as resolvePath } from "node:path";
+import { parse, isAbsolute, join, resolve as resolvePath, delimiter } from "node:path";
 
 import { debug, warning } from "$/output/log.js";
 
@@ -24,7 +24,7 @@ function locate(command: string, pathEnvOverride?: string[]): string | undefined
     }
   }
 
-  const pathEnv = pathEnvOverride ?? (process.env["PATH"] ?? "").split(":");
+  const pathEnv = pathEnvOverride ?? (process.env["PATH"] ?? "").split(delimiter);
 
   for (const pathEntry of pathEnv) {
     const joined = resolvePath(join(pathEntry, command));
@@ -60,6 +60,10 @@ interface ExecError {
 
 type ExecResult = ExecOutput | ExecError;
 
+// Keeps `/tmp` small inside the sandbox; 64MiB should be enough for anything
+// that occurs in a one-shot command.
+const TMPFS_SIZE_BYTES = 64 * 1024 * 1024;
+
 function buildCommonArgs(home: string, agentSlug: string): string[] {
   return [
     "bwrap",
@@ -83,7 +87,7 @@ function buildCommonArgs(home: string, agentSlug: string): string[] {
     join(home, ".cireilclaw", "agents", agentSlug, "tasks"),
     "/tasks",
     "--size",
-    String(64 * 1024 * 1024),
+    String(TMPFS_SIZE_BYTES),
     "--tmpfs",
     "/tmp",
     "--proc",
