@@ -24,7 +24,7 @@ export const openFile: ToolDef = {
     "Note that paths used here *must* be absolute.",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     const data = vb.parse(Schema, input);
-    const realPath = sandboxToReal(data.path, ctx.agentSlug);
+    const realPath = sandboxToReal(data.path, ctx.agentSlug, ctx.mounts);
 
     // Check conditional access rules if conditions are available
     if (ctx.conditions !== undefined) {

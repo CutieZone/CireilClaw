@@ -45,7 +45,7 @@ export const listDir: ToolDef = {
     );
 
     const realPath: string = isAgentPath
-      ? sandboxToReal(data.path, ctx.agentSlug)
+      ? sandboxToReal(data.path, ctx.agentSlug, ctx.mounts)
       : validateSystemPath(data.path);
 
     // Check conditional access rules for agent sandbox paths only
