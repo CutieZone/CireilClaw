@@ -1,4 +1,5 @@
 import type { ConditionsConfig } from "$/config/schemas/conditions.js";
+import type { Mount } from "$/config/schemas/sandbox.js";
 import type { Database } from "$/db/index.js";
 import type { Tool } from "$/engine/tool.js";
 import type {
@@ -23,6 +24,7 @@ interface ToolContext {
     limit?: number,
   ) => Promise<HistoryMessage[]>;
   resolveChannel: (spec: string) => Promise<ChannelResolution>;
+  mounts?: readonly Mount[];
 }
 
 interface ToolDef extends Tool {

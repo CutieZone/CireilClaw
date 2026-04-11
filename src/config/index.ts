@@ -13,6 +13,8 @@ import type { DiscordConfig } from "$/config/schemas/discord.js";
 import { ProvidersConfigSchema } from "$/config/schemas/engine.js";
 import type { ProvidersConfig } from "$/config/schemas/engine.js";
 import { IntegrationsConfigSchema } from "$/config/schemas/integrations.js";
+import { SandboxConfigSchema } from "$/config/schemas/sandbox.js";
+import type { SandboxConfig } from "$/config/schemas/sandbox.js";
 import { SystemConfigSchema } from "$/config/schemas/system.js";
 import { ToolsConfigSchema } from "$/config/schemas/tools.js";
 import type { ToolsConfig } from "$/config/schemas/tools.js";
@@ -214,6 +216,43 @@ async function loadSystem(): Promise<SystemConfig> {
   return vb.parse(SystemConfigSchema, obj);
 }
 
+function expandTilde(path: string): string {
+  if (path.startsWith("~/")) {
+    const home = process.env["HOME"];
+    if (home === undefined) {
+      throw new Error("Cannot expand ~ in path: $HOME is not set");
+    }
+    return home + path.slice(1);
+  }
+  return path;
+}
+
+async function loadSandboxConfig(agentSlug: string): Promise<SandboxConfig> {
+  const file = join(root(), "agents", agentSlug, "config", "sandbox.toml");
+
+  if (!existsSync(file)) {
+    return { mounts: [] };
+  }
+
+  const data = await readFile(file, { encoding: "utf8" });
+  const obj = parse(data);
+  const config = vb.parse(SandboxConfigSchema, obj);
+
+  const targets = new Set<string>();
+  for (const mount of config.mounts) {
+    if (targets.has(mount.target)) {
+      throw new Error(
+        `Duplicate mount target '${mount.target}' in sandbox.toml for agent '${agentSlug}'`,
+      );
+    }
+    targets.add(mount.target);
+
+    mount.source = expandTilde(mount.source);
+  }
+
+  return config;
+}
+
 export {
   loadAgents,
   loadChannel,
@@ -222,6 +261,7 @@ export {
   loadEngine,
   loadHeartbeat,
   loadIntegrations,
+  loadSandboxConfig,
   loadSystem,
   loadTools,
 };

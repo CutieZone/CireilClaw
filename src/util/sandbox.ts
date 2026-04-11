@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { parse, isAbsolute, join, resolve as resolvePath, delimiter } from "node:path";
 
+import type { Mount } from "$/config/schemas/sandbox.js";
 import { debug, warning } from "$/output/log.js";
 
 import { root } from "./paths.js";
@@ -45,6 +46,7 @@ interface ExecConfig {
   hostEnvPassthrough: string[];
   timeout: number;
   agentSlug: string;
+  mounts?: readonly Mount[];
 }
 
 interface ExecOutput {
@@ -478,6 +480,7 @@ async function buildBwrap(
   binaries: string[],
   hostEnvPassthrough: string[],
   agentSlug: string,
+  mounts?: readonly Mount[],
 ): Promise<BwrapResult> {
   const home = process.env["HOME"];
 
@@ -496,6 +499,17 @@ async function buildBwrap(
   debug({ binaries }, "Building bwrap sandbox");
 
   const args = buildCommonArgs(realHome, agentSlug);
+
+  if (mounts !== undefined && mounts.length > 0) {
+    for (const mount of mounts) {
+      const sandboxTarget = `/workspace/${mount.target}`;
+      if (mount.mode === "ro") {
+        args.push("--ro-bind", mount.source, sandboxTarget);
+      } else {
+        args.push("--bind", mount.source, sandboxTarget);
+      }
+    }
+  }
 
   addEtcBindings(args);
   addSslCertificates(args);
@@ -608,7 +622,7 @@ async function runInSandbox(
 const SHELL_METACHAR_PATTERN = /[\s"'|&;$`\\]/;
 
 async function exec(cfg: ExecConfig): Promise<ExecResult> {
-  const { binaries, command, args, hostEnvPassthrough, timeout, agentSlug } = cfg;
+  const { binaries, command, args, hostEnvPassthrough, timeout, agentSlug, mounts } = cfg;
 
   // Reject any command with shell metacharacters or spaces
   if (SHELL_METACHAR_PATTERN.test(command)) {
@@ -625,7 +639,7 @@ async function exec(cfg: ExecConfig): Promise<ExecResult> {
     };
   }
 
-  const bwrap = await buildBwrap(binaries, hostEnvPassthrough, agentSlug);
+  const bwrap = await buildBwrap(binaries, hostEnvPassthrough, agentSlug, mounts);
 
   if (bwrap.type === "error") {
     const error =

@@ -57,6 +57,8 @@ async function handleConfigChange(event: ConfigChangeEvent): Promise<void> {
     } catch (error) {
       info("Failed to reload conditions config for", colors.keyword(slug), "-", error);
     }
+  } else if (filename === "sandbox.toml") {
+    info("sandbox.toml changed - mounts will be picked up on next turn");
   }
 }
 

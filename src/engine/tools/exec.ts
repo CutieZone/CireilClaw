@@ -1,4 +1,4 @@
-import { loadTools } from "$/config/index.js";
+import { loadSandboxConfig, loadTools } from "$/config/index.js";
 import { ToolError } from "$/engine/errors.js";
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import { exec as sandboxExec } from "$/util/sandbox.js";
@@ -54,6 +54,7 @@ export const exec: ToolDef = {
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     const data = vb.parse(Schema, input);
     const toolsConfig = await loadTools(ctx.agentSlug);
+    const sandboxConfig = await loadSandboxConfig(ctx.agentSlug);
     const execConfig = toolsConfig.exec;
 
     if (execConfig === false || !execConfig.enabled) {
@@ -76,6 +77,7 @@ export const exec: ToolDef = {
       binaries: execConfig.binaries,
       command: data.command,
       hostEnvPassthrough: execConfig.hostEnvPassthrough,
+      mounts: sandboxConfig.mounts,
       timeout: execConfig.timeout,
     });
 

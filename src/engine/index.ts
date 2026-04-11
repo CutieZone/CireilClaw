@@ -1,6 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
 
-import { loadEngine, loadTools } from "$/config/index.js";
+import { loadEngine, loadSandboxConfig, loadTools } from "$/config/index.js";
 import type { ConditionsConfig } from "$/config/schemas/conditions.js";
 import { DefaultReasoningBudget, DefaultToolFailThreshold } from "$/config/schemas/engine.js";
 import { getDb } from "$/db/index.js";
@@ -288,12 +288,14 @@ export async function runTurn(
   const engineCfg = await loadEngine(agentSlug);
   const engineDefaults = getDefaultProviderAndModel(engineCfg);
   const tools = await buildTools(agentSlug, session);
+  const sandboxConfig = await loadSandboxConfig(agentSlug);
   const ctx: ToolContext = {
     agentSlug,
     conditions,
     db: getDb(agentSlug),
     downloadAttachments,
     fetchHistory,
+    mounts: sandboxConfig.mounts,
     react,
     resolveChannel:
       resolveChannel ??

@@ -2,7 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
-import { checkConditionalAccess, sandboxToReal } from "$/util/paths.js";
+import { checkConditionalAccess, checkMountWriteAccess, sandboxToReal } from "$/util/paths.js";
 import * as vb from "valibot";
 
 // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment -- valibot custom validation
@@ -46,6 +46,10 @@ export const write: ToolDef = {
     // Check conditional access rules if conditions are available
     if (ctx.conditions !== undefined) {
       checkConditionalAccess(data.path, ctx.agentSlug, ctx.conditions, ctx.session);
+    }
+
+    if (ctx.mounts !== undefined && ctx.mounts.length > 0) {
+      checkMountWriteAccess(data.path, ctx.mounts);
     }
 
     await mkdir(dirname(realPath), { recursive: true });

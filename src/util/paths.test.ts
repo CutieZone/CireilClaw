@@ -1,10 +1,12 @@
 import { existsSync, realpathSync } from "node:fs";
 
 import type { ConditionsConfig } from "$/config/schemas/conditions.js";
+import type { Mount } from "$/config/schemas/sandbox.js";
 import { DiscordSession, TuiSession } from "$/harness/session.js";
 import {
   agentRoot,
   checkConditionalAccess,
+  checkMountWriteAccess,
   root,
   sanitizeError,
   sandboxToReal,
@@ -104,6 +106,78 @@ describe("sandboxToReal", () => {
     expect(sandboxToReal("/workspace/a/b/c/d.txt", "bot")).toBe(
       "/home/test/.cireilclaw/agents/bot/workspace/a/b/c/d.txt",
     );
+  });
+});
+
+describe("sandboxToReal with mounts", () => {
+  beforeEach(() => {
+    vi.stubEnv("HOME", "/home/test");
+  });
+
+  const mounts: Mount[] = [
+    { mode: "rw", source: "/home/test/projects/my-app", target: "project" },
+    { mode: "ro", source: "/data/libs", target: "libs/data" },
+  ];
+
+  it("resolves /workspace/project/file.ts to mount source", () => {
+    expect(sandboxToReal("/workspace/project/src/file.ts", "bot", mounts)).toBe(
+      "/home/test/projects/my-app/src/file.ts",
+    );
+  });
+
+  it("resolves /workspace/project (exact target) to mount source", () => {
+    expect(sandboxToReal("/workspace/project", "bot", mounts)).toBe("/home/test/projects/my-app");
+  });
+
+  it("falls through to default workspace for non-mount paths", () => {
+    expect(sandboxToReal("/workspace/regular/file.txt", "bot", mounts)).toBe(
+      "/home/test/.cireilclaw/agents/bot/workspace/regular/file.txt",
+    );
+  });
+
+  it("resolves nested mount target /workspace/libs/data/x", () => {
+    expect(sandboxToReal("/workspace/libs/data/pkg.json", "bot", mounts)).toBe(
+      "/data/libs/pkg.json",
+    );
+  });
+
+  it("rejects path traversal via mount target", () => {
+    expect(() => sandboxToReal("/workspace/project/../../etc/passwd", "bot", mounts)).toThrow();
+  });
+
+  it("works without mounts (backward compatible)", () => {
+    expect(sandboxToReal("/workspace/file.txt", "bot")).toBe(
+      "/home/test/.cireilclaw/agents/bot/workspace/file.txt",
+    );
+  });
+});
+
+describe("checkMountWriteAccess", () => {
+  const roMounts: Mount[] = [{ mode: "ro", source: "/data/read-only", target: "readonly" }];
+  const rwMounts: Mount[] = [{ mode: "rw", source: "/home/user/project", target: "project" }];
+
+  it("throws for write to ro mount", () => {
+    expect(() => {
+      checkMountWriteAccess("/workspace/readonly/file.txt", roMounts);
+    }).toThrow("read-only");
+  });
+
+  it("does not throw for write to rw mount", () => {
+    expect(() => {
+      checkMountWriteAccess("/workspace/project/file.txt", rwMounts);
+    }).not.toThrow();
+  });
+
+  it("does not throw for write to non-mount path", () => {
+    expect(() => {
+      checkMountWriteAccess("/workspace/regular/file.txt", roMounts);
+    }).not.toThrow();
+  });
+
+  it("does not throw for empty mounts", () => {
+    expect(() => {
+      checkMountWriteAccess("/workspace/file.txt", []);
+    }).not.toThrow();
   });
 });
 

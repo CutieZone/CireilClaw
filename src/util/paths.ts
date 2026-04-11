@@ -3,6 +3,7 @@ import { basename, dirname, isAbsolute, join, normalize, relative } from "node:p
 import { env } from "node:process";
 
 import type { ConditionsConfig, PathRule } from "$/config/schemas/conditions.js";
+import type { Mount } from "$/config/schemas/sandbox.js";
 import type { Session } from "$/harness/session.js";
 import { checkPathAccess } from "$/util/conditions.js";
 
@@ -25,7 +26,64 @@ function agentRoot(agentSlug: string): string {
   return join(root(), "agents", agentSlug);
 }
 
-function sandboxToReal(path: string, agentSlug: string): string {
+function resolveMount(
+  sandboxPath: string,
+  mounts: readonly Mount[],
+): { mount: Mount; innerPath: string } | undefined {
+  if (!sandboxPath.startsWith("/workspace/")) {
+    return undefined;
+  }
+
+  const rest = sandboxPath.slice("/workspace/".length);
+
+  for (const mount of mounts) {
+    if (rest === mount.target) {
+      return { innerPath: "", mount };
+    }
+    if (rest.startsWith(`${mount.target}/`)) {
+      return { innerPath: rest.slice(mount.target.length), mount };
+    }
+  }
+
+  return undefined;
+}
+
+function sandboxToReal(path: string, agentSlug: string, mounts?: readonly Mount[]): string {
+  const resolved =
+    mounts !== undefined && mounts.length > 0 ? resolveMount(path, mounts) : undefined;
+
+  if (resolved !== undefined) {
+    const { mount, innerPath } = resolved;
+    const realPath = normalize(join(mount.source, innerPath));
+    const relativeToSource = relative(mount.source, realPath);
+
+    if (relativeToSource.startsWith("..") || isAbsolute(relativeToSource)) {
+      throw new Error(`Access denied: path '${path}' attempts to escape the mount boundary.`);
+    }
+
+    const segments: string[] = [];
+    let current = realPath;
+
+    while (!existsSync(current)) {
+      segments.unshift(basename(current));
+      const parent = dirname(current);
+      if (parent === current) {
+        throw new Error(`Access denied: no resolvable ancestor for '${path}'`);
+      }
+      current = parent;
+    }
+
+    const resolvedBase = realpathSync(current);
+    const fullResolved = join(resolvedBase, ...segments);
+    const realRelative = relative(mount.source, fullResolved);
+
+    if (realRelative.startsWith("..") || isAbsolute(realRelative)) {
+      throw new Error(`Access denied: path '${path}' resolves outside the mount via symlink.`);
+    }
+
+    return fullResolved;
+  }
+
   const origin = agentRoot(agentSlug);
 
   let sandboxPath = "";
@@ -92,6 +150,15 @@ function sandboxToReal(path: string, agentSlug: string): string {
   }
 
   return fullResolved;
+}
+
+function checkMountWriteAccess(sandboxPath: string, mounts: readonly Mount[]): void {
+  const resolved = resolveMount(sandboxPath, mounts);
+  if (resolved?.mount.mode === "ro") {
+    throw new Error(
+      `Access denied: path '${sandboxPath}' is on a read-only mount (${resolved.mount.target}).`,
+    );
+  }
 }
 
 function sanitizeError(err: unknown, agentSlug: string): string {
@@ -183,6 +250,7 @@ function validateSystemPath(path: string): string {
 }
 
 export {
+  checkMountWriteAccess,
   sandboxToReal,
   sanitizeError,
   agentRoot,

@@ -1,0 +1,22 @@
+# Sandbox configuration
+# Copy to ~/.cireilclaw/agents/{slug}/config/sandbox.toml
+#
+# Defines custom bind mounts that appear under /workspace/ in the sandbox.
+# Mounts override the default workspace directory for their target path.
+# Changes are picked up on the next agent turn (no restart required).
+
+# --- Mount entries ---
+# Each mount maps a host directory into the sandbox.
+# source: Absolute path on the host, or ~/ for home-relative paths.
+# target: Relative path under /workspace/ where the mount appears.
+# mode: "ro" (read-only) or "rw" (read-write).
+#
+# [[mounts]]
+# source = "/home/user/projects/my-app"
+# target = "project"
+# mode = "rw"
+#
+# [[mounts]]
+# source = "~/data/reference-docs"
+# target = "docs/reference"
+# mode = "ro"

@@ -3,7 +3,7 @@ import { readFile, writeFile } from "node:fs/promises";
 
 import { ToolError } from "$/engine/errors.js";
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
-import { checkConditionalAccess, sandboxToReal } from "$/util/paths.js";
+import { checkConditionalAccess, checkMountWriteAccess, sandboxToReal } from "$/util/paths.js";
 import * as vb from "valibot";
 
 const Schema = vb.strictObject({
@@ -48,6 +48,10 @@ export const strReplace: ToolDef = {
     // Check conditional access rules if conditions are available
     if (ctx.conditions !== undefined) {
       checkConditionalAccess(data.path, ctx.agentSlug, ctx.conditions, ctx.session);
+    }
+
+    if (ctx.mounts !== undefined && ctx.mounts.length > 0) {
+      checkMountWriteAccess(data.path, ctx.mounts);
     }
 
     if (!existsSync(path)) {
