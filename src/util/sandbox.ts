@@ -636,7 +636,9 @@ async function exec(cfg: ExecConfig): Promise<ExecResult> {
   }
 
   const isNixOS = detectNixOS();
-  const commandPath = isNixOS ? `/bin/${command}` : locate(command);
+  const commandPath = isNixOS
+    ? (locate(command, ["/run/current-system/sw/bin"]) ?? `/bin/${command}`)
+    : locate(command);
 
   if (commandPath === undefined || !existsSync(commandPath)) {
     return {
@@ -644,7 +646,7 @@ async function exec(cfg: ExecConfig): Promise<ExecResult> {
       type: "error",
     };
   }
-  return runInSandbox(bwrap.args, commandPath, args ?? [], timeout);
+  return runInSandbox(bwrap.args, `/bin/${command}`, args ?? [], timeout);
 }
 
 export { buildBwrap, exec, locate, parseEnvFile, SHELL_METACHAR_PATTERN };
