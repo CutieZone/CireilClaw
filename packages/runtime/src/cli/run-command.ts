@@ -10,7 +10,7 @@ import { flushAllSessions, loadSessions } from "$/db/sessions.js";
 import { Harness } from "$/harness/index.js";
 import colors from "$/output/colors.js";
 import { config, debug, info, setLogFile, warning } from "$/output/log.js";
-import { initializePlugins } from "$/plugin/loader.js";
+import { destroyPlugins, initializePlugins } from "$/plugin/loader.js";
 import { root } from "$/util/paths.js";
 import { onShutdown, registerSigint } from "$/util/shutdown.js";
 import { buildCommand } from "@stricli/core";
@@ -113,6 +113,9 @@ async function run(flags: Flags): Promise<void> {
     info("Shutting down...");
     flushAllSessions();
     sc.abort("SIGINT");
+    // Fire-and-forget: process.exit will kill workers anyway; this just rejects pending RPCs first.
+    // oxlint-disable-next-line eslint-plugin-promise/prefer-await-to-then -- shutdown hook is sync
+    destroyPlugins().catch(() => undefined);
   });
 
   const slugs = await loadAgents();

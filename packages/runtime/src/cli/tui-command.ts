@@ -8,7 +8,7 @@ import { initDb } from "$/db/index.js";
 import { flushAllSessions, loadSessions } from "$/db/sessions.js";
 import colors from "$/output/colors.js";
 import { error, config, setLogFile } from "$/output/log.js";
-import { initializePlugins } from "$/plugin/loader.js";
+import { destroyPlugins, initializePlugins } from "$/plugin/loader.js";
 import { root } from "$/util/paths.js";
 import { onShutdown, registerSigint } from "$/util/shutdown.js";
 import { input, select } from "@inquirer/prompts";
@@ -25,6 +25,8 @@ async function run(_noFlags: {}, agentSlug: string): Promise<void> {
   registerSigint();
   onShutdown(() => {
     flushAllSessions();
+    // oxlint-disable-next-line eslint-plugin-promise/prefer-await-to-then -- shutdown hook is sync
+    destroyPlugins().catch(() => undefined);
   });
 
   const slugs = await loadAgents();

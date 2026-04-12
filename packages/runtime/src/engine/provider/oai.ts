@@ -195,13 +195,13 @@ function translateMsg(message: Message): ChatCompletionMessageParam {
 }
 
 function translateTool(tool: Tool): ChatCompletionTool {
-  const parameters = vb.parse(
-    vb.record(vb.string(), vb.unknown()),
+  const schema =
+    tool.jsonSchema ??
     toJsonSchema(tool.parameters, {
       target: "openapi-3.0",
       typeMode: "input",
-    }),
-  );
+    });
+  const parameters = vb.parse(vb.record(vb.string(), vb.unknown()), schema);
 
   return {
     function: {

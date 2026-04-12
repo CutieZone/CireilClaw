@@ -1,22 +1,29 @@
+/* oxlint-disable typescript/no-unsafe-type-assertion, typescript/promise-function-async
+   -- RPC boundary: args arrive as unknown[] and are coerced via trust contract with worker.ts */
+
 import { existsSync, realpathSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { Worker } from "node:worker_threads";
 
 import type { PluginEntry } from "$/config/schemas/plugins.js";
 import { PluginsConfigSchema } from "$/config/schemas/plugins.js";
 import { builtinToolRegistry, setToolRegistry } from "$/engine/tools/index.js";
-import type { ToolDef } from "$/engine/tools/tool-def.js";
+import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import colors from "$/output/colors.js";
-import { info } from "$/output/log.js";
+import { info, warning } from "$/output/log.js";
 import { root } from "$/util/paths.js";
-import type { Plugin, PluginFactory } from "@cireilclaw/sdk";
 import { parse } from "smol-toml";
 import * as vb from "valibot";
 
+import { RpcChannel } from "./rpc.js";
+import type { CtxData, InvokeArgs, ManifestPayload } from "./worker.js";
+
 const runtimeRequire = createRequire(import.meta.url);
 const RUNTIME_SDK_PKG = realpathSync(runtimeRequire.resolve("@cireilclaw/sdk/package.json"));
+const WORKER_URL = new URL("worker.js", import.meta.url);
 
 const SdkPackageJsonSchema = vb.looseObject({
   version: vb.pipe(vb.string(), vb.nonEmpty()),
@@ -29,16 +36,11 @@ function readSdkVersion(pkgPath: string): string {
 
 const RUNTIME_SDK_VERSION = readSdkVersion(RUNTIME_SDK_PKG);
 
-interface PluginModule {
-  default?: PluginFactory;
-}
-
 async function loadPluginsConfig(): Promise<vb.InferOutput<typeof PluginsConfigSchema>> {
   const file = join(root(), "config", "plugins.toml");
   if (!existsSync(file)) {
     return { plugins: [] };
   }
-
   const content = await readFile(file, "utf8");
   const parsed = parse(content);
   return vb.parse(PluginsConfigSchema, parsed);
@@ -72,11 +74,9 @@ function resolvePluginSdkPkg(id: string, pluginPkgPath: string): string {
 
 function assertSdkMatches(id: string, pluginPkgPath: string): void {
   const pluginSdkPkg = resolvePluginSdkPkg(id, pluginPkgPath);
-
   if (pluginSdkPkg === RUNTIME_SDK_PKG) {
     return;
   }
-
   const pluginSdkVersion = readSdkVersion(pluginSdkPkg);
   throw new Error(
     `Plugin ${colors.keyword(id)} resolved a different ${colors.keyword("@cireilclaw/sdk")} copy ` +
@@ -116,11 +116,7 @@ async function resolveEntryUrl(
     throw new Error("Plugin entry has neither name nor package");
   }
   try {
-    return {
-      id: pkgName,
-      pluginPkgPath: pkgPath,
-      url: pathToFileURL(req.resolve(pkgName)),
-    };
+    return { id: pkgName, pluginPkgPath: pkgPath, url: pathToFileURL(req.resolve(pkgName)) };
   } catch {
     throw new Error(
       `Plugin package ${colors.keyword(pkgName)} is not installed. ` +
@@ -129,85 +125,222 @@ async function resolveEntryUrl(
   }
 }
 
-function isPluginModule(value: unknown): value is PluginModule {
-  return typeof value === "object" && value !== null && "default" in value;
+interface PluginLoadResult {
+  allowOverride: boolean;
+  name: string;
+  tools: Record<string, ToolDef>;
 }
 
-async function loadSinglePlugin(entry: PluginEntry): Promise<Plugin> {
-  const { id, pluginPkgPath, url } = await resolveEntryUrl(entry);
-  assertSdkMatches(id, pluginPkgPath);
-  const mod: unknown = await import(url.href);
+class PluginProcess {
+  readonly id: string;
+  readonly ready: Promise<ManifestPayload>;
+  private readonly worker: Worker;
+  private readonly rpc: RpcChannel;
+  private readonly pending = new Map<string, ToolContext>();
+  private nextInvocation = 1;
 
-  if (!isPluginModule(mod)) {
-    throw new Error(`Plugin ${colors.keyword(id)} does not have a default export`);
-  }
+  constructor(id: string, worker: Worker, rpc: RpcChannel) {
+    this.id = id;
+    this.worker = worker;
+    this.rpc = rpc;
 
-  const factory = mod.default;
-  if (typeof factory !== "function") {
-    throw new TypeError(`Plugin ${colors.keyword(id)} default export is not a function`);
-  }
-
-  const plugin = await factory();
-  if (typeof plugin.name !== "string") {
-    throw new TypeError(`Plugin ${colors.keyword(id)} did not return a valid Plugin object`);
-  }
-
-  return plugin;
-}
-
-async function loadPlugins(): Promise<
-  { allowOverride: boolean; name: string; tools: Record<string, ToolDef> }[]
-> {
-  const config = await loadPluginsConfig();
-  const results: { allowOverride: boolean; name: string; tools: Record<string, ToolDef> }[] = [];
-
-  for (const entry of config.plugins) {
-    const plugin = await loadSinglePlugin(entry);
-    const tools: Record<string, ToolDef> = {};
-
-    if (plugin.tools !== undefined) {
-      for (const [toolName, toolDef] of Object.entries(plugin.tools)) {
-        if (typeof toolDef.execute !== "function") {
-          throw new TypeError(
-            `Plugin ${colors.keyword(plugin.name)} tool ${colors.keyword(toolName)} has no execute function`,
-          );
+    this.ready = new Promise<ManifestPayload>((resolve, reject) => {
+      this.rpc.handle("manifest", (args) => {
+        const [raw] = args;
+        // Shape is the worker's ManifestPayload; trust the channel contract.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- internal RPC contract
+        resolve(raw as ManifestPayload);
+        return Promise.resolve(undefined);
+      });
+      this.rpc.handle("fatal", (args) => {
+        const [message] = args;
+        reject(new Error(`Plugin ${id} worker fatal: ${String(message)}`));
+        return Promise.resolve(undefined);
+      });
+      worker.once("error", reject);
+      worker.once("exit", (code) => {
+        if (code !== 0) {
+          reject(new Error(`Plugin ${id} worker exited with code ${code}`));
         }
+      });
+    });
 
-        // Plugin tools accept PluginToolContext; runtime passes InternalToolContext
-        // which extends it. Safe by Liskov: the assertion is structural.
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-        tools[toolName] = toolDef as unknown as ToolDef;
-      }
+    this.registerCallbackHandlers();
+  }
+
+  buildStubs(manifest: ManifestPayload, allowOverride: boolean): PluginLoadResult {
+    const tools: Record<string, ToolDef> = {};
+    for (const entry of manifest.tools) {
+      const toolName = entry.name;
+      tools[toolName] = {
+        description: entry.description,
+        execute: async (input, ctx): Promise<Record<string, unknown>> => {
+          const invocationId = `${this.id}#${this.nextInvocation++}`;
+          this.pending.set(invocationId, ctx);
+          try {
+            const ctxData: CtxData = {
+              agentSlug: ctx.agentSlug,
+              mounts: ctx.mounts,
+              session: { channel: ctx.session.channel, id: ctx.session.id() },
+            };
+            const args: InvokeArgs = { ctx: ctxData, input, invocationId, toolName };
+            return await this.rpc.call<Record<string, unknown>>("invoke-tool", [args]);
+          } finally {
+            this.pending.delete(invocationId);
+          }
+        },
+        jsonSchema: entry.jsonSchema,
+        name: toolName,
+        parameters: vb.unknown(),
+      };
     }
+    return { allowOverride, name: manifest.pluginName, tools };
+  }
 
-    results.push({
-      allowOverride: entry.allowOverride,
-      name: plugin.name,
-      tools,
+  async terminate(): Promise<void> {
+    this.rpc.close();
+    await this.worker.terminate();
+  }
+
+  private requireCtx(invocationId: unknown): ToolContext {
+    if (typeof invocationId !== "string") {
+      throw new TypeError("invocationId must be a string");
+    }
+    const ctx = this.pending.get(invocationId);
+    if (ctx === undefined) {
+      throw new Error(`Unknown invocationId: ${invocationId}`);
+    }
+    return ctx;
+  }
+
+  private registerCallbackHandlers(): void {
+    this.rpc.handle("reply.send", async (args) => {
+      const [invocationId, content, attachments] = args;
+      await this.requireCtx(invocationId).reply.send(
+        content as string,
+        attachments as string[] | undefined,
+      );
+      return undefined;
+    });
+    this.rpc.handle("reply.react", async (args) => {
+      const [invocationId, emoji, messageId] = args;
+      const { react } = this.requireCtx(invocationId).reply;
+      if (react === undefined) {
+        throw new Error("react not supported on this channel");
+      }
+      await react(emoji as string, messageId as string | undefined);
+      return undefined;
+    });
+    this.rpc.handle("reply.sendTo", async (args) => {
+      const [invocationId, target, content, attachments] = args;
+      const ctx = this.requireCtx(invocationId);
+      const { channel, id } = target as { channel: string; id: string };
+      // Tier-1 limitation: we only support sendTo to the invocation's own session.
+      // Cross-session sendTo requires harness-level session lookup, deferred.
+      if (ctx.session.channel !== channel || ctx.session.id() !== id) {
+        throw new Error("sendTo across sessions not supported from plugin workers (tier-1)");
+      }
+      await ctx.reply.send(content as string, attachments as string[] | undefined);
+      return undefined;
+    });
+    this.rpc.handle("channel.downloadAttachments", async (args) => {
+      const [invocationId, messageId] = args;
+      const { downloadAttachments } = this.requireCtx(invocationId).channel;
+      if (downloadAttachments === undefined) {
+        throw new Error("downloadAttachments not supported on this channel");
+      }
+      return await downloadAttachments(messageId as string);
+    });
+    this.rpc.handle("channel.fetchHistory", async (args) => {
+      const [invocationId, messageId, direction, limit] = args;
+      const { fetchHistory } = this.requireCtx(invocationId).channel;
+      if (fetchHistory === undefined) {
+        throw new Error("fetchHistory not supported on this channel");
+      }
+      return await fetchHistory(
+        messageId as string,
+        direction as "after" | "around" | "before",
+        limit as number | undefined,
+      );
+    });
+    this.rpc.handle("channel.resolveChannel", async (args) => {
+      const [invocationId, spec] = args;
+      const resolved = await this.requireCtx(invocationId).channel.resolveChannel(spec as string);
+      if ("error" in resolved) {
+        return { error: resolved.error };
+      }
+      return { channel: resolved.channel, id: resolved.id() };
+    });
+    this.rpc.handle("cfg.globalPlugin", async (args) => {
+      const [invocationId, name] = args;
+      return await this.requireCtx(invocationId).cfg.globalPlugin(name as string);
+    });
+    this.rpc.handle("cfg.agentPlugin", async (args) => {
+      const [invocationId, name] = args;
+      return await this.requireCtx(invocationId).cfg.agentPlugin(name as string);
+    });
+    this.rpc.handle("addImage", (args) => {
+      const [invocationId, data, mediaType] = args;
+      this.requireCtx(invocationId).addImage(data as Uint8Array, mediaType as string);
+      return Promise.resolve(undefined);
+    });
+    this.rpc.handle("addVideo", (args) => {
+      const [invocationId, data, mediaType] = args;
+      this.requireCtx(invocationId).addVideo(data as Uint8Array, mediaType as string);
+      return Promise.resolve(undefined);
+    });
+    this.rpc.handle("addToolMessage", (args) => {
+      const [invocationId, content] = args;
+      this.requireCtx(invocationId).addToolMessage(content as string);
+      return Promise.resolve(undefined);
     });
   }
+}
 
+const activePlugins: PluginProcess[] = [];
+
+async function spawnPluginProcess(entry: PluginEntry): Promise<PluginProcess> {
+  const { id, pluginPkgPath, url } = await resolveEntryUrl(entry);
+  assertSdkMatches(id, pluginPkgPath);
+  const worker = new Worker(WORKER_URL, {
+    workerData: { entryUrl: url.href, pluginId: id },
+  });
+  const rpc = new RpcChannel(worker);
+  return new PluginProcess(id, worker, rpc);
+}
+
+async function loadPlugins(): Promise<PluginLoadResult[]> {
+  const config = await loadPluginsConfig();
+  const results: PluginLoadResult[] = [];
+  for (const entry of config.plugins) {
+    const proc = await spawnPluginProcess(entry);
+    try {
+      const manifest = await proc.ready;
+      activePlugins.push(proc);
+      results.push(proc.buildStubs(manifest, entry.allowOverride));
+    } catch (error) {
+      await proc.terminate().catch(() => undefined);
+      throw error;
+    }
+  }
   return results;
 }
 
 function mergeToolRegistries(
   builtinRegistry: Record<string, ToolDef>,
-  pluginResults: { allowOverride: boolean; name: string; tools: Record<string, ToolDef> }[],
+  pluginResults: PluginLoadResult[],
 ): Record<string, ToolDef> {
-  // Registry merge is single-process / single-harness by design. See docs/plugin-system.md.
+  // Registry merge is single-process / single-harness by design.
   const merged: Record<string, ToolDef> = { ...builtinRegistry };
-
   for (const { allowOverride, name: pluginName, tools } of pluginResults) {
     for (const [toolName, toolDef] of Object.entries(tools)) {
       const existingBuiltin = builtinRegistry[toolName];
-
       if (existingBuiltin !== undefined && !allowOverride) {
         throw new Error(
           `Plugin ${colors.keyword(pluginName)} tool ${colors.keyword(toolName)} collides with builtin. ` +
             `Set allowOverride = true in plugins.toml to permit this.`,
         );
       }
-
       const existingPlugin = merged[toolName];
       if (existingPlugin !== undefined && existingBuiltin === undefined) {
         throw new Error(
@@ -215,11 +348,9 @@ function mergeToolRegistries(
             `Tool name collisions between plugins are not allowed.`,
         );
       }
-
       merged[toolName] = toolDef;
     }
   }
-
   return merged;
 }
 
@@ -240,4 +371,17 @@ async function initializePlugins(): Promise<void> {
   }
 }
 
-export { initializePlugins, loadPlugins, mergeToolRegistries };
+async function destroyPlugins(): Promise<void> {
+  const procs = activePlugins.splice(0);
+  await Promise.all(
+    procs.map(async (proc) => {
+      try {
+        await proc.terminate();
+      } catch (error) {
+        warning(`Plugin ${proc.id} terminate failed:`, String(error));
+      }
+    }),
+  );
+}
+
+export { destroyPlugins, initializePlugins, loadPlugins, mergeToolRegistries };
