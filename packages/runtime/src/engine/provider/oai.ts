@@ -6,8 +6,8 @@ import type { Tool } from "$/engine/tool.js";
 import { debug, warning } from "$/output/log.js";
 import { encode } from "$/util/base64.js";
 import { toJpeg } from "$/util/image.js";
-import type { KeyPool } from "cireilclaw-sdk";
 import { toJsonSchema } from "@valibot/to-json-schema";
+import type { KeyPool } from "cireilclaw-sdk";
 import { OpenAI } from "openai/client.js";
 import { APIError } from "openai/error.js";
 import type {

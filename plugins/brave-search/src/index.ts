@@ -1,4 +1,5 @@
 import { definePlugin, ToolError, vb } from "cireilclaw-sdk";
+import type { PluginToolContext, ToolResult } from "cireilclaw-sdk";
 
 const ConfigSchema = vb.strictObject({
   apiKey: vb.union([
@@ -7,18 +8,27 @@ const ConfigSchema = vb.strictObject({
   ]),
 });
 
+const ResponseSchema = vb.looseObject({
+  web: vb.exactOptional(
+    vb.looseObject({
+      results: vb.exactOptional(
+        vb.array(
+          vb.looseObject({
+            description: vb.exactOptional(vb.string()),
+            title: vb.exactOptional(vb.string()),
+            url: vb.exactOptional(vb.string()),
+          }),
+        ),
+        [],
+      ),
+    }),
+  ),
+});
+
 const braveSearch = {
   description:
     "Search the web using Brave Search. Returns a list of results with titles, descriptions, and URLs.",
-  name: "brave-search",
-  parameters: vb.strictObject({
-    count: vb.pipe(
-      vb.exactOptional(vb.number(), 5),
-      vb.description("Number of results to return (1-20, default 5)"),
-    ),
-    query: vb.pipe(vb.string(), vb.nonEmpty(), vb.description("The search query")),
-  }),
-  async execute(input: unknown, ctx: import("cireilclaw-sdk").PluginToolContext) {
+  async execute(input: unknown, ctx: PluginToolContext): Promise<ToolResult> {
     const { count, query } = vb.parse(this.parameters, input);
 
     const rawConfig = await ctx.cfg.globalPlugin("brave-search");
@@ -49,18 +59,28 @@ const braveSearch = {
       throw new ToolError(`Brave Search API error: ${response.status} ${response.statusText}`);
     }
 
-    const data = (await response.json()) as {
-      web?: { results?: { description?: string; title?: string; url?: string }[] };
-    };
+    const data = vb.parse(ResponseSchema, await response.json());
 
-    const results = (data.web?.results ?? []).map((r) => ({
-      description: r.description ?? "",
-      title: r.title ?? "",
-      url: r.url ?? "",
+    const results = (data.web?.results ?? []).map((res) => ({
+      description: res.description ?? "",
+      title: res.title ?? "",
+      url: res.url ?? "",
     }));
 
     return { query, results, success: true as const };
   },
+  name: "brave-search",
+  parameters: vb.strictObject({
+    count: vb.pipe(
+      vb.exactOptional(vb.number(), 5),
+      vb.description("Number of results to return (1-20, default 5)"),
+    ),
+    query: vb.pipe(vb.string(), vb.nonEmpty(), vb.description("The search query")),
+  }),
 };
 
-export default definePlugin(() => ({ name: "brave-search", tools: { "brave-search": braveSearch } }));
+// oxlint-disable-next-line import/no-default-export
+export default definePlugin(() => ({
+  name: "brave-search",
+  tools: { "brave-search": braveSearch },
+}));

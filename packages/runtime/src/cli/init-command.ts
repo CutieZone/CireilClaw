@@ -4,7 +4,7 @@ import { mkdir, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { loadGlobalPluginConfig } from "$/config/index.js";
-import { toolRegistry } from "$/engine/tools/index.js";
+import { getToolRegistry } from "$/engine/tools/index.js";
 import colors from "$/output/colors.js";
 import { info, warning } from "$/output/log.js";
 import type { BlockLabel } from "$/util/load.js";
@@ -278,7 +278,7 @@ function buildToolsConfig(
 ): Record<string, unknown> {
   const obj: Record<string, unknown> = {};
 
-  for (const tool of Object.keys(toolRegistry)) {
+  for (const tool of Object.keys(getToolRegistry())) {
     if (tool === "exec") {
       // exec needs its own config object; binaries defaults to empty (no commands whitelisted) until configured.
       obj[tool] =

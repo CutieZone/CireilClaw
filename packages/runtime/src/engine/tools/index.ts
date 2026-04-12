@@ -45,4 +45,8 @@ function setToolRegistry(registry: Record<string, ToolDef>): void {
   toolRegistry = registry;
 }
 
-export { builtinToolRegistry, setToolRegistry, toolRegistry };
+function getToolRegistry(): Record<string, ToolDef> {
+  return toolRegistry;
+}
+
+export { builtinToolRegistry, setToolRegistry, getToolRegistry };

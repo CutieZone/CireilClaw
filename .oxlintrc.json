@@ -14,7 +14,12 @@
     {
       "files": ["**/*.tsx"],
       "rules": {
-        "unicorn/filename-case": ["error", { "case": "pascalCase" }]
+        "unicorn/filename-case": [
+          "error",
+          {
+            "case": "pascalCase"
+          }
+        ]
       },
       "plugins": ["react", "eslint", "import", "promise", "typescript", "unicorn"]
     }
@@ -60,11 +65,17 @@
     "eslint/sort-imports": "off",
     "promise/always-return": "off",
     "promise/avoid-new": "off",
-    "promise/prefer-await-to-callbacks": "off"
+    "promise/prefer-await-to-callbacks": "off",
+    "return-await": "off"
   },
   "env": {
     "builtin": true,
     "es2024": true,
     "node": true
+  },
+  "options": {
+    "typeAware": true,
+    "typeCheck": true,
+    "reportUnusedDisableDirectives": "deny"
   }
 }
