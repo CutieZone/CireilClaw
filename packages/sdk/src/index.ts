@@ -3,4 +3,5 @@ export type { Plugin, PluginFactory } from "$/plugin.js";
 export type { Tool, ToolDef, ToolResult, ToolErrorResult } from "$/tool.js";
 export type { PluginSession } from "$/session.js";
 export { ToolError } from "$/errors.js";
+export { toWebp, toJpeg, scaleForAnthropic } from "$/image.js";
 export * as vb from "valibot";
