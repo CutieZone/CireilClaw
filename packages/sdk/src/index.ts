@@ -1,5 +1,6 @@
 export { definePlugin } from "./plugin.js";
 export type { Plugin, PluginFactory } from "./plugin.js";
+export { KeyPool, KeyPoolManager } from "./key-pool.js";
 export type {
   ChannelResolution,
   HistoryDirection,

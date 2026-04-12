@@ -1,7 +1,7 @@
 import { ToolError } from "$/engine/errors.js";
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import { debug } from "$/output/log.js";
-import { KeyPoolManager } from "$/util/key-pool.js";
+import { KeyPoolManager } from "cireilclaw-sdk";
 import * as vb from "valibot";
 
 const Schema = vb.strictObject({
