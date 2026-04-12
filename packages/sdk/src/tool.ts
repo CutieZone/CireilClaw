@@ -6,6 +6,9 @@ interface Tool<TParameters = GenericSchema> {
   name: string;
   description: string;
   parameters: TParameters;
+  // Pre-computed JSON Schema. Providers prefer this over converting `parameters`.
+  // Used by plugin stubs to carry worker-computed schemas across the worker boundary.
+  jsonSchema?: Record<string, unknown>;
 }
 
 interface ToolResult {

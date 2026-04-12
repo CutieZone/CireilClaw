@@ -235,10 +235,12 @@ async function translateMessages(messages: Message[]): Promise<AnthropicMessage[
 }
 
 function translateTool(tool: Tool): Record<string, unknown> {
-  const inputSchema = toJsonSchema(tool.parameters, {
-    target: "openapi-3.0",
-    typeMode: "input",
-  });
+  const inputSchema =
+    tool.jsonSchema ??
+    toJsonSchema(tool.parameters, {
+      target: "openapi-3.0",
+      typeMode: "input",
+    });
 
   return {
     description: tool.description,
