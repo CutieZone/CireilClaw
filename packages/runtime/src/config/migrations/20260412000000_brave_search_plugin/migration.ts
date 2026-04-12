@@ -23,6 +23,7 @@ export const migration: ConfigMigration = {
       return data;
     }
 
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const apiKey = brave["apiKey"] as string | string[];
 
     const pluginsDir = join(root(), "config", "plugins");
@@ -36,7 +37,7 @@ export const migration: ConfigMigration = {
       const apiKeyToml =
         typeof apiKey === "string"
           ? `apiKey = "${apiKey}"\n`
-          : `apiKey = [${apiKey.map((k) => `"${k}"`).join(", ")}]\n`;
+          : `apiKey = [${apiKey.map((key) => `"${key}"`).join(", ")}]\n`;
       await writeFile(pluginConfigPath, apiKeyToml, "utf8");
     }
 
@@ -46,14 +47,16 @@ export const migration: ConfigMigration = {
     let pluginsToml: Record<string, unknown> = {};
     if (existsSync(pluginsTomlPath)) {
       const content = await readFile(pluginsTomlPath, "utf8");
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       pluginsToml = parse(content) as Record<string, unknown>;
     }
 
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const plugins = (pluginsToml["plugins"] as Record<string, unknown>[] | undefined) ?? [];
     const hasBrave = plugins.some(
+      // oxlint-disable-next-line id-length
       (p) =>
         typeof p === "object" &&
-        p !== null &&
         "path" in p &&
         String(p["path"]).includes("brave-search"),
     );

@@ -321,8 +321,10 @@ export async function runTurn(
     },
     agentSlug,
     cfg: {
+      // oxlint-disable-next-line typescript-eslint/promise-function-async
       agentPlugin: (name) => loadAgentPluginConfig(agentSlug, name),
       exec: toolsConfig.exec,
+      // oxlint-disable-next-line typescript-eslint/promise-function-async
       globalPlugin: (name) => loadGlobalPluginConfig(name),
       sandbox: sandboxConfig,
     },
