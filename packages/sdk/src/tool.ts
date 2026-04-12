@@ -41,7 +41,7 @@ interface Mount {
 interface PluginToolContext {
   session: {
     readonly channel: "discord" | "matrix" | "tui" | "internal";
-    readonly history: ReadonlyArray<unknown>;
+    readonly history: readonly unknown[];
     readonly openedFiles: ReadonlySet<string>;
     id(): string;
   };

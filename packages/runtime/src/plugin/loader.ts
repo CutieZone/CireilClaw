@@ -38,12 +38,14 @@ async function loadSinglePlugin(pluginPath: string): Promise<Plugin> {
 
   const factory = mod.default;
   if (typeof factory !== "function") {
-    throw new Error(`Plugin at ${colors.keyword(pluginPath)} default export is not a function`);
+    throw new TypeError(`Plugin at ${colors.keyword(pluginPath)} default export is not a function`);
   }
 
   const plugin = await factory();
   if (typeof plugin.name !== "string") {
-    throw new Error(`Plugin at ${colors.keyword(pluginPath)} did not return a valid Plugin object`);
+    throw new TypeError(
+      `Plugin at ${colors.keyword(pluginPath)} did not return a valid Plugin object`,
+    );
   }
 
   return plugin;
@@ -62,7 +64,7 @@ export async function loadPlugins(): Promise<
     if (plugin.tools !== undefined) {
       for (const [toolName, toolDef] of Object.entries(plugin.tools)) {
         if (typeof toolDef.execute !== "function") {
-          throw new Error(
+          throw new TypeError(
             `Plugin ${colors.keyword(plugin.name)} tool ${colors.keyword(toolName)} has no execute function`,
           );
         }

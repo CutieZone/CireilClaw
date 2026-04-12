@@ -40,7 +40,7 @@ export const braveSearch: ToolDef = {
     "Use this when the user's request requires up-to-date information, facts, or references you don't have in context.",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     const data = vb.parse(Schema, input);
-    const integrations = ctx.cfg.integrations;
+    const { integrations } = ctx.cfg;
 
     if (integrations.brave?.apiKey === undefined) {
       throw new ToolError("Brave Search is not configured. Add an API key to integrations.toml.");
