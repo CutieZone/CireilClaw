@@ -1,5 +1,4 @@
 import type { ConditionsConfig } from "$/config/schemas/conditions.js";
-import type { IntegrationsConfig } from "$/config/schemas/integrations.js";
 import type { SandboxConfig } from "$/config/schemas/sandbox.js";
 import type { ExecToolConfig } from "$/config/schemas/tools.js";
 import type { Database } from "$/db/index.js";
@@ -13,7 +12,6 @@ interface InternalToolContext extends PluginToolContext {
   conditions?: ConditionsConfig;
   cfg: PluginToolContext["cfg"] & {
     exec: ExecToolConfig | false;
-    integrations: IntegrationsConfig;
     sandbox: SandboxConfig;
   };
   scheduler?: Scheduler;

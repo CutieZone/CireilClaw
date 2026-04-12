@@ -1,5 +1,0 @@
-# Integrations configuration
-# Copy this file to integrations.toml to use
-
-# [brave]
-# apiKey = "BSA..."                # String or array of strings for key pooling
