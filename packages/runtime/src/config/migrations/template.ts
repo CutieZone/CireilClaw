@@ -1,4 +1,3 @@
-// oxlint-disable-next-line import/order
 import type { ConfigMigration } from "$/config/migrations/index.js";
 
 // Guard: This is a template file and should never be executed
@@ -12,7 +11,6 @@ const migration: ConfigMigration = {
   id: "20260305000000_descriptive_name",
   targets: ["tools.toml"], // or ["engine.toml", "heartbeat.toml", etc.]
 
-  // oxlint-disable-next-line arrow-body-style
   transform(_data, _context) {
     // data: parsed TOML object (mutate and return)
     // context: { agentSlug?, configType, configPath, backupFile }

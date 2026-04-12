@@ -32,7 +32,7 @@ function isPluginModule(value: unknown): value is PluginModule {
 }
 
 async function loadSinglePlugin(pluginPath: string): Promise<Plugin> {
-  const mod = await import(pluginPath);
+  const mod = (await import(pluginPath)) as unknown;
 
   if (!isPluginModule(mod)) {
     throw new Error(`Plugin at ${colors.keyword(pluginPath)} does not have a default export`);
@@ -72,8 +72,8 @@ async function loadPlugins(): Promise<
         }
 
         // Plugin tools accept PluginToolContext; runtime passes InternalToolContext
-        // which extends it. Safe by Liskov — the assertion is structural.
-        // oxlint-disable-next-line no-unsafe-type-assertion
+        // which extends it. Safe by Liskov: the assertion is structural.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         tools[toolName] = toolDef as unknown as ToolDef;
       }
     }

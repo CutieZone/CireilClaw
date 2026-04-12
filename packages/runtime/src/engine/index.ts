@@ -11,14 +11,14 @@ import type { ConditionsConfig } from "$/config/schemas/conditions.js";
 import { DefaultReasoningBudget, DefaultToolFailThreshold } from "$/config/schemas/engine.js";
 import type { ToolsConfig } from "$/config/schemas/tools.js";
 import { getDb } from "$/db/index.js";
-import type { ToolCallContent, VideoContent } from "$/engine/content.js";
+import type { ToolCallContent } from "$/engine/content.js";
 import type { Context, UsageInfo } from "$/engine/context.js";
 import { GenerationNoToolCallsError, ToolError, ParseError } from "$/engine/errors.js";
 import type { AssistantMessage, Message, ToolMessage } from "$/engine/message.js";
 import { generate as generateAnthropicOauth } from "$/engine/provider/anthropic-oauth.js";
 import { generate as generateOai } from "$/engine/provider/oai.js";
 import type { Tool } from "$/engine/tool.js";
-import { toolRegistry } from "$/engine/tools/index.js";
+import { getToolRegistry } from "$/engine/tools/index.js";
 import type { ToolContext } from "$/engine/tools/tool-def.js";
 import type {
   ChannelCapabilities,
@@ -33,7 +33,6 @@ import { debug, warning } from "$/output/log.js";
 import type { Scheduler } from "$/scheduler/index.js";
 import { formatDate } from "$/util/date.js";
 import { getDefaultProviderAndModel } from "$/util/default-provider-and-model.js";
-import { KeyPoolManager } from "cireilclaw-sdk";
 import {
   loadBlocks,
   loadBaseInstructions,
@@ -41,6 +40,8 @@ import {
   loadSkills,
 } from "$/util/load.js";
 import { sandboxToReal, sanitizeError } from "$/util/paths.js";
+import { KeyPoolManager } from "cireilclaw-sdk";
+import type { PluginToolContext } from "cireilclaw-sdk";
 import * as vb from "valibot";
 
 function truncateToTurns(messages: Message[], maxTurns: number): Message[] {
@@ -226,7 +227,7 @@ async function buildTools(
   const tools: Tool[] = [];
 
   for (const [tool, setting] of cfg) {
-    const def = toolRegistry[tool];
+    const def = getToolRegistry()[tool];
 
     if (def === undefined) {
       throw new Error(`Tried to enable invalid tool ${colors.keyword(tool)}: does not exist`);
@@ -317,15 +318,13 @@ export async function runTurn(
         mediaType,
         type: "video",
         url: "",
-      } as unknown as VideoContent);
+      });
     },
     agentSlug,
     cfg: {
-      // oxlint-disable-next-line typescript-eslint/promise-function-async
-      agentPlugin: (name) => loadAgentPluginConfig(agentSlug, name),
+      agentPlugin: async (name) => await loadAgentPluginConfig(agentSlug, name),
       exec: toolsConfig.exec,
-      // oxlint-disable-next-line typescript-eslint/promise-function-async
-      globalPlugin: (name) => loadGlobalPluginConfig(name),
+      globalPlugin: async (name) => await loadGlobalPluginConfig(name),
       sandbox: sandboxConfig,
     },
     channel: {
@@ -346,7 +345,8 @@ export async function runTurn(
     reply: {
       react,
       send,
-      sendTo: sendTo as ToolContext["reply"]["sendTo"],
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      sendTo: sendTo as unknown as PluginToolContext["reply"]["sendTo"],
     },
     scheduler,
     session,
@@ -509,7 +509,7 @@ export async function runTurn(
     const disableNotifications: string[] = [];
 
     for (const call of toolCalls) {
-      const def = toolRegistry[call.name];
+      const def = getToolRegistry()[call.name];
       if (def === undefined) {
         throw new Error(`Unknown tool: ${colors.keyword(call.name)}`);
       }

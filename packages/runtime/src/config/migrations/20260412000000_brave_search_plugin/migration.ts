@@ -61,13 +61,13 @@ export const migration: ConfigMigration = {
       pluginsToml = parse(content) as Record<string, unknown>;
     }
 
-    const plugins = (pluginsToml["plugins"] as Record<string, unknown>[] | undefined) ?? [];
+    const plugins = vb.parse(
+      vb.exactOptional(vb.array(vb.record(vb.string(), vb.unknown())), []),
+      pluginsToml["plugins"],
+    );
     const hasBrave = plugins.some(
-      // oxlint-disable-next-line id-length
-      (p) =>
-        typeof p === "object" &&
-        "path" in p &&
-        String(p["path"]).includes("brave-search"),
+      (pth) =>
+        typeof pth === "object" && "path" in pth && String(pth["path"]).includes("brave-search"),
     );
 
     if (!hasBrave) {

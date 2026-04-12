@@ -1,5 +1,6 @@
-import type { KeyPool } from "./key-pool.js";
 import type { GenericSchema } from "valibot";
+
+import type { KeyPool } from "./key-pool.js";
 
 interface Tool<TParameters = GenericSchema> {
   name: string;
@@ -39,21 +40,19 @@ interface Mount {
   target: string;
 }
 
+interface BasicSession {
+  readonly channel: "discord" | "matrix" | "tui" | "internal";
+  readonly history: readonly unknown[];
+  readonly openedFiles: ReadonlySet<string>;
+  id(): string;
+}
+
 interface PluginToolContext {
-  session: {
-    readonly channel: "discord" | "matrix" | "tui" | "internal";
-    readonly history: readonly unknown[];
-    readonly openedFiles: ReadonlySet<string>;
-    id(): string;
-  };
+  session: BasicSession;
   agentSlug: string;
   reply: {
     send: (content: string, attachments?: string[]) => Promise<void>;
-    sendTo: (
-      targetSession: { readonly channel: string; id(): string },
-      content: string,
-      attachments?: string[],
-    ) => Promise<void>;
+    sendTo: (targetSession: BasicSession, content: string, attachments?: string[]) => Promise<void>;
     react?: (emoji: string, messageId?: string) => Promise<void>;
   };
   channel: {
@@ -81,6 +80,7 @@ interface ToolDef extends Tool {
 }
 
 export type {
+  BasicSession,
   ChannelResolution,
   HistoryDirection,
   HistoryMessage,

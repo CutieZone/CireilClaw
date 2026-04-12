@@ -5,7 +5,6 @@ import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import { checkConditionalAccess, checkMountWriteAccess, sandboxToReal } from "$/util/paths.js";
 import * as vb from "valibot";
 
-// oxlint-disable-next-line typescript-eslint/no-unsafe-assignment -- valibot custom validation
 const Schema = vb.strictObject({
   content: vb.pipe(
     vb.string(),
