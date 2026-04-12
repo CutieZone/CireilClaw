@@ -3,8 +3,10 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { PluginsConfigSchema } from "$/config/schemas/plugins.js";
+import { builtinToolRegistry, setToolRegistry } from "$/engine/tools/index.js";
 import type { ToolDef } from "$/engine/tools/tool-def.js";
 import colors from "$/output/colors.js";
+import { info } from "$/output/log.js";
 import { root } from "$/util/paths.js";
 import type { Plugin, PluginFactory } from "cireilclaw-sdk";
 import { parse } from "smol-toml";
@@ -116,4 +118,21 @@ export function mergeToolRegistries(
   }
 
   return merged;
+}
+
+export async function initializePlugins(): Promise<void> {
+  const pluginResults = await loadPlugins();
+  if (pluginResults.length > 0) {
+    const merged = mergeToolRegistries(builtinToolRegistry, pluginResults);
+    setToolRegistry(merged);
+    const toolNames = pluginResults.flatMap((p) => Object.keys(p.tools));
+    info(
+      "Loaded",
+      colors.number(pluginResults.length),
+      "plugins with",
+      colors.number(toolNames.length),
+      "tools:",
+      toolNames.join(", "),
+    );
+  }
 }

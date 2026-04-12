@@ -7,11 +7,10 @@ import { loadAgents, loadConditions } from "$/config/index.js";
 import { runMigrations } from "$/config/migrations/runner.js";
 import { initDb } from "$/db/index.js";
 import { flushAllSessions, loadSessions } from "$/db/sessions.js";
-import { builtinToolRegistry, setToolRegistry } from "$/engine/tools/index.js";
 import { Harness } from "$/harness/index.js";
 import colors from "$/output/colors.js";
 import { config, debug, info, setLogFile, warning } from "$/output/log.js";
-import { loadPlugins, mergeToolRegistries } from "$/plugin/loader.js";
+import { initializePlugins } from "$/plugin/loader.js";
 import { root } from "$/util/paths.js";
 import { onShutdown, registerSigint } from "$/util/shutdown.js";
 import { buildCommand } from "@stricli/core";
@@ -105,20 +104,7 @@ async function run(flags: Flags): Promise<void> {
   await runMigrations();
 
   // LOAD PLUGINS - before agents start
-  const pluginResults = await loadPlugins();
-  if (pluginResults.length > 0) {
-    const merged = mergeToolRegistries(builtinToolRegistry, pluginResults);
-    setToolRegistry(merged);
-    const toolNames = pluginResults.flatMap((p) => Object.keys(p.tools));
-    info(
-      "Loaded",
-      colors.number(pluginResults.length),
-      "plugins with",
-      colors.number(toolNames.length),
-      "tools:",
-      toolNames.join(", "),
-    );
-  }
+  await initializePlugins();
 
   const sc = new AbortController();
 
