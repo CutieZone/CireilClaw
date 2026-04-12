@@ -19,11 +19,11 @@ import { parse } from "smol-toml";
 import * as vb from "valibot";
 
 import { RpcChannel } from "./rpc.js";
-import type { CtxData, InvokeArgs, ManifestPayload } from "./worker.js";
+import type { CtxData, InvokeArgs, ManifestPayload } from "./worker-main.js";
 
 const runtimeRequire = createRequire(import.meta.url);
 const RUNTIME_SDK_PKG = realpathSync(runtimeRequire.resolve("@cireilclaw/sdk/package.json"));
-const WORKER_URL = new URL("worker.js", import.meta.url);
+const WORKER_URL = new URL("worker.ts", import.meta.url);
 
 const SdkPackageJsonSchema = vb.looseObject({
   version: vb.pipe(vb.string(), vb.nonEmpty()),
@@ -303,6 +303,7 @@ async function spawnPluginProcess(entry: PluginEntry): Promise<PluginProcess> {
   const { id, pluginPkgPath, url } = await resolveEntryUrl(entry);
   assertSdkMatches(id, pluginPkgPath);
   const worker = new Worker(WORKER_URL, {
+    execArgv: process.execArgv,
     workerData: { entryUrl: url.href, pluginId: id },
   });
   const rpc = new RpcChannel(worker);
