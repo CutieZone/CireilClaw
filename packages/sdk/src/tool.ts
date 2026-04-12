@@ -1,3 +1,4 @@
+import type { KeyPool } from "./key-pool.js";
 import type { GenericSchema } from "valibot";
 
 interface Tool<TParameters = GenericSchema> {
@@ -68,6 +69,7 @@ interface PluginToolContext {
     globalPlugin: (name: string) => Promise<Record<string, unknown> | undefined>;
     agentPlugin: (name: string) => Promise<Record<string, unknown> | undefined>;
   };
+  createKeyPool: (keys: string | string[], cooldownMs?: number) => KeyPool;
   mounts?: readonly Mount[];
   addImage: (data: Uint8Array, mediaType: string) => void;
   addVideo: (data: Uint8Array, mediaType: string) => void;

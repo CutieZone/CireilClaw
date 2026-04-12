@@ -334,6 +334,7 @@ export async function runTurn(
         }),
     },
     conditions,
+    createKeyPool: (keys, cooldownMs) => KeyPoolManager.getPool(keys, cooldownMs),
     db: getDb(agentSlug),
     mounts: sandboxConfig.mounts,
     reply: {
