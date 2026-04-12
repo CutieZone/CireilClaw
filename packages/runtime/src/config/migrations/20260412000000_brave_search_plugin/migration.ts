@@ -6,6 +6,18 @@ import type { ConfigMigration, MigrationContext } from "$/config/migrations/inde
 import { root } from "$/util/paths.js";
 import { parse, stringify } from "smol-toml";
 import type { TomlTable } from "smol-toml";
+import * as vb from "valibot";
+
+const OldIntegrationsSchema = vb.partial(
+  vb.strictObject({
+    brave: vb.strictObject({
+      apiKey: vb.union([
+        vb.pipe(vb.string(), vb.nonEmpty()),
+        vb.pipe(vb.array(vb.pipe(vb.string(), vb.nonEmpty())), vb.minLength(1)),
+      ]),
+    }),
+  }),
+);
 
 export const migration: ConfigMigration = {
   description: "Migrate brave-search from integrations.toml to plugin config",
@@ -18,13 +30,12 @@ export const migration: ConfigMigration = {
       return data;
     }
 
-    const brave = data["brave"] as Record<string, unknown> | undefined;
-    if (brave === undefined || brave["apiKey"] === undefined) {
+    const parsed = vb.safeParse(OldIntegrationsSchema, data);
+    if (!parsed.success || parsed.output.brave === undefined) {
       return data;
     }
 
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const apiKey = brave["apiKey"] as string | string[];
+    const { apiKey } = parsed.output.brave;
 
     const pluginsDir = join(root(), "config", "plugins");
     if (!existsSync(pluginsDir)) {
@@ -47,11 +58,9 @@ export const migration: ConfigMigration = {
     let pluginsToml: Record<string, unknown> = {};
     if (existsSync(pluginsTomlPath)) {
       const content = await readFile(pluginsTomlPath, "utf8");
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       pluginsToml = parse(content) as Record<string, unknown>;
     }
 
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const plugins = (pluginsToml["plugins"] as Record<string, unknown>[] | undefined) ?? [];
     const hasBrave = plugins.some(
       // oxlint-disable-next-line id-length
