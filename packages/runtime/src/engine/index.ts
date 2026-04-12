@@ -27,7 +27,7 @@ import { debug, warning } from "$/output/log.js";
 import type { Scheduler } from "$/scheduler/index.js";
 import { formatDate } from "$/util/date.js";
 import { getDefaultProviderAndModel } from "$/util/default-provider-and-model.js";
-import { KeyPoolManager } from "$/util/key-pool.js";
+import { KeyPoolManager } from "cireilclaw-sdk";
 import {
   loadBlocks,
   loadBaseInstructions,

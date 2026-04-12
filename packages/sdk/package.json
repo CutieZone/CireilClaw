@@ -13,6 +13,7 @@
     "lint:fix": "oxlint --fix ."
   },
   "dependencies": {
+    "@noble/hashes": "^2.0.1",
     "heic-decode": "^2.1.0",
     "sharp": "^0.34.5",
     "valibot": "^1.3.1"

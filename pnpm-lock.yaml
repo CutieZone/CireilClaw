@@ -114,6 +114,9 @@ importers:
 
   packages/sdk:
     dependencies:
+      '@noble/hashes':
+        specifier: ^2.0.1
+        version: 2.0.1
       heic-decode:
         specifier: ^2.1.0
         version: 2.1.0
