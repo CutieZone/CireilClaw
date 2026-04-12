@@ -253,12 +253,43 @@ async function loadSandboxConfig(agentSlug: string): Promise<SandboxConfig> {
   return config;
 }
 
+async function loadGlobalPluginConfig(name: string): Promise<Record<string, unknown> | undefined> {
+  const file = join(root(), "config", "plugins", `${name}.toml`);
+
+  if (!existsSync(file)) {
+    return undefined;
+  }
+
+  const data = await readFile(file, { encoding: "utf8" });
+  const obj = parse(data);
+
+  return obj as Record<string, unknown>;
+}
+
+async function loadAgentPluginConfig(
+  agentSlug: string,
+  name: string,
+): Promise<Record<string, unknown> | undefined> {
+  const file = join(root(), "agents", agentSlug, "config", "plugins", `${name}.toml`);
+
+  if (!existsSync(file)) {
+    return undefined;
+  }
+
+  const data = await readFile(file, { encoding: "utf8" });
+  const obj = parse(data);
+
+  return obj as Record<string, unknown>;
+}
+
 export {
   loadAgents,
   loadChannel,
   loadConditions,
   loadCron,
   loadEngine,
+  loadGlobalPluginConfig,
+  loadAgentPluginConfig,
   loadHeartbeat,
   loadIntegrations,
   loadSandboxConfig,
