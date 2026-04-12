@@ -1,6 +1,13 @@
 import { readFile, stat } from "node:fs/promises";
 
-import { loadEngine, loadIntegrations, loadSandboxConfig, loadTools } from "$/config/index.js";
+import {
+  loadAgentPluginConfig,
+  loadEngine,
+  loadGlobalPluginConfig,
+  loadIntegrations,
+  loadSandboxConfig,
+  loadTools,
+} from "$/config/index.js";
 import type { ConditionsConfig } from "$/config/schemas/conditions.js";
 import { DefaultReasoningBudget, DefaultToolFailThreshold } from "$/config/schemas/engine.js";
 import type { ToolsConfig } from "$/config/schemas/tools.js";
@@ -316,9 +323,9 @@ export async function runTurn(
     },
     agentSlug,
     cfg: {
-      agentPlugin: async () => undefined,
+      agentPlugin: (name) => loadAgentPluginConfig(agentSlug, name),
       exec: toolsConfig.exec,
-      globalPlugin: async () => undefined,
+      globalPlugin: (name) => loadGlobalPluginConfig(name),
       integrations: integrationsConfig,
       sandbox: sandboxConfig,
     },
