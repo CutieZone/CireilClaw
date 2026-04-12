@@ -22,11 +22,13 @@ importers:
         version: 6.0.2
 
   packages/brave-search:
-    dependencies:
+    devDependencies:
       '@cireilclaw/sdk':
         specifier: workspace:*
         version: link:../sdk
-    devDependencies:
+      tsdown:
+        specifier: ^0.21.7
+        version: 0.21.7(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)(typescript@6.0.2)
       typescript:
         specifier: ^6.0.2
         version: 6.0.2
@@ -148,11 +150,13 @@ importers:
         version: 6.0.2
 
   packages/template:
-    dependencies:
+    devDependencies:
       '@cireilclaw/sdk':
         specifier: workspace:*
         version: link:../sdk
-    devDependencies:
+      tsdown:
+        specifier: ^0.21.7
+        version: 0.21.7(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)(typescript@6.0.2)
       typescript:
         specifier: ^6.0.2
         version: 6.0.2
