@@ -238,7 +238,7 @@ async function applyMigration(
   }
 
   // Apply to global configs
-  const globalConfigFiles = ["integrations.toml", "engine.toml"] as const;
+  const globalConfigFiles = ["integrations.toml", "plugins.toml", "engine.toml"] as const;
   for (const filename of globalConfigFiles) {
     if (migration.targets.includes(filename)) {
       const configPath = join(root(), "config", filename);
@@ -258,7 +258,7 @@ async function applyMigration(
 
       if (target === "channels/discord.toml") {
         configPath = join(root(), "agents", slug, "config", "channels", "discord.toml");
-      } else if (target !== "integrations.toml") {
+      } else if (target !== "integrations.toml" && target !== "plugins.toml") {
         // engine.toml, tools.toml, heartbeat.toml, cron.toml
         configPath = join(root(), "agents", slug, "config", target);
       }
@@ -327,9 +327,11 @@ export async function runMigrations(dryRun = false): Promise<number> {
 
       // Show targeted files
       const globalFiles = migration.targets.filter(
-        (tgt) => tgt === "integrations.toml" || tgt === "engine.toml",
+        (tgt) => tgt === "integrations.toml" || tgt === "plugins.toml" || tgt === "engine.toml",
       );
-      const agentFiles = migration.targets.filter((tgt) => tgt !== "integrations.toml");
+      const agentFiles = migration.targets.filter(
+        (tgt) => tgt !== "integrations.toml" && tgt !== "plugins.toml",
+      );
 
       if (globalFiles.length > 0) {
         info(`    ${colors.path("→ Global:")} ${globalFiles.join(", ")}`);

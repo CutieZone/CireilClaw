@@ -6,6 +6,7 @@ type MigrationTargets =
   | "engine.toml"
   | "heartbeat.toml"
   | "integrations.toml"
+  | "plugins.toml"
   | "tools.toml";
 
 interface ConfigMigration {
