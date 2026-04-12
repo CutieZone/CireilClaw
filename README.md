@@ -21,11 +21,15 @@ Core functionality is stable and good for production use.
 
 ### The Plugin System
 
+Plugins are installed either as npm packages (`pnpm add @cireilclaw/plugin-<name>` in `~/.cireilclaw/`) or cloned locally into `~/.cireilclaw/plugins/<name>/`, then listed in `config/plugins.toml`. Each plugin runs in a dedicated Node worker thread; tool invocations are RPC'd across the boundary.
+
 It is explicitly the first pass of implementation, and thus has the following caveats:
 
-1. It is not "secure": untrusted code is untrusted code, plugins run in Workers, not in isolated services
-2. Plugins have to match the runtime's `sdk` otherwise they will cause problems.
-3. Lifecycle hooks are not yet implemented
+1. It is not "secure": worker isolation buys crash isolation and a clean API boundary, not a security boundary. Plugins still have full Node API access. Untrusted code is untrusted code.
+2. Plugins must match the runtime's SDK (same realpath). Two copies — even at the same version — fail loudly at load.
+3. Lifecycle hooks are not yet implemented.
+
+See [docs/plugins.md](docs/plugins.md) for the full guide: writing, publishing, installing, and the SDK surface.
 
 ## Platform Requirements
 
