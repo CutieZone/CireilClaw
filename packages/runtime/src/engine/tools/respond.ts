@@ -53,7 +53,7 @@ const respond: ToolDef = {
       }
     }
 
-    const resolution = await ctx.resolveChannel(channel);
+    const resolution = await ctx.channel.resolveChannel(channel);
 
     if (!isChannelResolution(resolution)) {
       throw new ToolError("invalid channel resolution from handler");
@@ -63,8 +63,7 @@ const respond: ToolDef = {
       throw new ToolError(resolution.error);
     }
 
-    // Send to the resolved session using sendTo for cross-channel messaging
-    await ctx.sendTo(resolution, content, attachments);
+    await ctx.reply.sendTo(resolution, content, attachments);
     // Cross-channel sends never end the turn — the agent still needs to respond to the current channel.
     const isCrossChannel = channel !== "current" && resolution !== ctx.session;
     return { final: isCrossChannel ? false : final, sent: true };

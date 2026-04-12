@@ -1,10 +1,11 @@
 import { readFile, stat } from "node:fs/promises";
 
-import { loadEngine, loadSandboxConfig, loadTools } from "$/config/index.js";
+import { loadEngine, loadIntegrations, loadSandboxConfig, loadTools } from "$/config/index.js";
 import type { ConditionsConfig } from "$/config/schemas/conditions.js";
 import { DefaultReasoningBudget, DefaultToolFailThreshold } from "$/config/schemas/engine.js";
+import type { ToolsConfig } from "$/config/schemas/tools.js";
 import { getDb } from "$/db/index.js";
-import type { ToolCallContent } from "$/engine/content.js";
+import type { ToolCallContent, VideoContent } from "$/engine/content.js";
 import type { Context, UsageInfo } from "$/engine/context.js";
 import { GenerationNoToolCallsError, ToolError, ParseError } from "$/engine/errors.js";
 import type { AssistantMessage, Message, ToolMessage } from "$/engine/message.js";
@@ -23,6 +24,7 @@ import { InternalSession } from "$/harness/session.js";
 import type { Session } from "$/harness/session.js";
 import colors from "$/output/colors.js";
 import { debug, warning } from "$/output/log.js";
+import type { Scheduler } from "$/scheduler/index.js";
 import { formatDate } from "$/util/date.js";
 import { getDefaultProviderAndModel } from "$/util/default-provider-and-model.js";
 import { KeyPoolManager } from "$/util/key-pool.js";
@@ -208,8 +210,12 @@ async function buildSystemPrompt(
   return lines.join("\n");
 }
 
-async function buildTools(agentSlug: string, _session: Session): Promise<Tool[]> {
-  const cfg = Object.entries(await loadTools(agentSlug));
+async function buildTools(
+  agentSlug: string,
+  _session: Session,
+  toolsConfig?: ToolsConfig,
+): Promise<Tool[]> {
+  const cfg = Object.entries(toolsConfig ?? (await loadTools(agentSlug)));
 
   const tools: Tool[] = [];
 
@@ -284,28 +290,58 @@ export async function runTurn(
   resolveChannel?: (spec: string) => Promise<ChannelResolution>,
   capabilities: ChannelCapabilities = NO_CAPABILITIES,
   conditions?: ConditionsConfig,
+  scheduler?: Scheduler,
 ): Promise<void> {
   const engineCfg = await loadEngine(agentSlug);
   const engineDefaults = getDefaultProviderAndModel(engineCfg);
-  const tools = await buildTools(agentSlug, session);
+  const toolsConfig = await loadTools(agentSlug);
+  const tools = await buildTools(agentSlug, session, toolsConfig);
   const sandboxConfig = await loadSandboxConfig(agentSlug);
+  const integrationsConfig = await loadIntegrations();
   const ctx: ToolContext = {
+    addImage: (data: Uint8Array, mediaType: string): void => {
+      session.pendingImages.push({ data, mediaType, type: "image" });
+    },
+    addToolMessage: (content: string): void => {
+      session.pendingToolMessages.push({ content: { content, type: "text" }, role: "user" });
+    },
+    addVideo: (data: Uint8Array, mediaType: string): void => {
+      session.pendingVideos.push({
+        attachmentId: "",
+        data,
+        mediaType,
+        type: "video",
+        url: "",
+      } as unknown as VideoContent);
+    },
     agentSlug,
+    cfg: {
+      agentPlugin: async () => undefined,
+      exec: toolsConfig.exec,
+      globalPlugin: async () => undefined,
+      integrations: integrationsConfig,
+      sandbox: sandboxConfig,
+    },
+    channel: {
+      downloadAttachments,
+      fetchHistory,
+      resolveChannel:
+        resolveChannel ??
+        // oxlint-disable-next-line typescript/require-await
+        (async () => {
+          const error = { error: "channel resolution not supported" };
+          return error;
+        }),
+    },
     conditions,
     db: getDb(agentSlug),
-    downloadAttachments,
-    fetchHistory,
     mounts: sandboxConfig.mounts,
-    react,
-    resolveChannel:
-      resolveChannel ??
-      // oxlint-disable-next-line typescript/require-await
-      (async () => {
-        const error = { error: "channel resolution not supported" };
-        return error;
-      }),
-    send,
-    sendTo,
+    reply: {
+      react,
+      send,
+      sendTo: sendTo as ToolContext["reply"]["sendTo"],
+    },
+    scheduler,
     session,
   };
 

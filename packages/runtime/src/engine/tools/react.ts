@@ -27,11 +27,11 @@ const react: ToolDef = {
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     const { emoji, message_id } = vb.parse(ReactSchema, input);
 
-    if (ctx.react === undefined) {
+    if (ctx.reply.react === undefined) {
       throw new ToolError("Reactions are not supported on this channel");
     }
 
-    await ctx.react(emoji, message_id);
+    await ctx.reply.react(emoji, message_id);
     return { reacted: true, success: true };
   },
   name: "react",

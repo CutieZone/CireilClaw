@@ -1,4 +1,4 @@
-import type { PluginToolContext } from "$/tool.js";
+import type { PluginToolContext } from "./tool.js";
 
 type PluginSession = PluginToolContext["session"];
 

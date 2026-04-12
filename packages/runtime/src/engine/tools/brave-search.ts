@@ -1,4 +1,3 @@
-import { loadIntegrations } from "$/config/index.js";
 import { ToolError } from "$/engine/errors.js";
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import { debug } from "$/output/log.js";
@@ -39,9 +38,9 @@ export const braveSearch: ToolDef = {
     "Search the web via Brave Search and return a list of results. Each result contains a title, short description snippet, and URL.\n\n" +
     "This returns search result metadata only — not full page content. If you need to fetch the content of a page, you must use available binaries in the sandbox (like `curl` or `wget`) via the `exec` tool.\n\n" +
     "Use this when the user's request requires up-to-date information, facts, or references you don't have in context.",
-  async execute(input: unknown, _ctx: ToolContext): Promise<Record<string, unknown>> {
+  async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     const data = vb.parse(Schema, input);
-    const integrations = await loadIntegrations();
+    const integrations = ctx.cfg.integrations;
 
     if (integrations.brave?.apiKey === undefined) {
       throw new ToolError("Brave Search is not configured. Add an API key to integrations.toml.");

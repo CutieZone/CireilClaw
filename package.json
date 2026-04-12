@@ -8,10 +8,11 @@
     "test:watch": "pnpm --filter cireilclaw-runtime test:watch",
     "lint": "pnpm -r lint",
     "lint:fix": "pnpm -r lint:fix",
-    "format": "pnpm -r format",
-    "format:check": "pnpm -r format:check"
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check ."
   },
   "devDependencies": {
+    "oxfmt": "^0.43.0",
     "typescript": "^6.0.2"
   }
 }

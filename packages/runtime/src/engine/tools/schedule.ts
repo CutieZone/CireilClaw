@@ -1,7 +1,6 @@
 import { upsertCronJob } from "$/db/cron.js";
 import { ToolError } from "$/engine/errors.js";
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
-import { Harness } from "$/harness/index.js";
 import * as vb from "valibot";
 
 const Schema = vb.strictObject({
@@ -76,10 +75,8 @@ const schedule: ToolDef = {
       type: "one-shot",
     });
 
-    // Register with the live scheduler.
-    const scheduler = Harness.get().agents.get(ctx.agentSlug)?.scheduler;
-    if (scheduler !== undefined) {
-      scheduler.scheduleDynamic(job);
+    if (ctx.scheduler !== undefined) {
+      ctx.scheduler.scheduleDynamic(job);
     }
 
     return { at: data.at, id: data.id, scheduled: true };

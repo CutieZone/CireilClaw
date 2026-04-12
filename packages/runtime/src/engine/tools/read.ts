@@ -45,11 +45,7 @@ export const read: ToolDef = {
         buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
         mediaType,
       );
-      ctx.session.pendingImages.push({
-        data: webp,
-        mediaType: "image/webp",
-        type: "image",
-      });
+      ctx.addImage(webp, "image/webp");
       return {
         mediaType,
         path: data.path,
