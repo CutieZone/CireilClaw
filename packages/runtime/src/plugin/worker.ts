@@ -4,7 +4,6 @@
 
 import { parentPort, workerData } from "node:worker_threads";
 
-import { toJsonSchema } from "@valibot/to-json-schema";
 import { KeyPoolManager } from "@cireilclaw/sdk";
 import type {
   BasicSession,
@@ -17,6 +16,7 @@ import type {
   PluginFactory,
   PluginToolContext,
 } from "@cireilclaw/sdk";
+import { toJsonSchema } from "@valibot/to-json-schema";
 
 import { RpcChannel } from "./rpc.js";
 
