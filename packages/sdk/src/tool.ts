@@ -46,25 +46,31 @@ interface PluginToolContext {
     id(): string;
   };
   agentSlug: string;
-  send: (content: string, attachments?: string[]) => Promise<void>;
-  sendTo: (
-    targetSession: { readonly channel: string; id(): string },
-    content: string,
-    attachments?: string[],
-  ) => Promise<void>;
-  react?: (emoji: string, messageId?: string) => Promise<void>;
-  downloadAttachments?: (
-    messageId: string,
-  ) => Promise<{ filename: string; data: Buffer }[]>;
-  fetchHistory?: (
-    messageId: string,
-    direction: HistoryDirection,
-    limit?: number,
-  ) => Promise<HistoryMessage[]>;
-  resolveChannel: (spec: string) => Promise<ChannelResolution>;
+  reply: {
+    send: (content: string, attachments?: string[]) => Promise<void>;
+    sendTo: (
+      targetSession: { readonly channel: string; id(): string },
+      content: string,
+      attachments?: string[],
+    ) => Promise<void>;
+    react?: (emoji: string, messageId?: string) => Promise<void>;
+  };
+  channel: {
+    downloadAttachments?: (messageId: string) => Promise<{ filename: string; data: Buffer }[]>;
+    fetchHistory?: (
+      messageId: string,
+      direction: HistoryDirection,
+      limit?: number,
+    ) => Promise<HistoryMessage[]>;
+    resolveChannel: (spec: string) => Promise<ChannelResolution>;
+  };
+  cfg: {
+    globalPlugin: (name: string) => Promise<Record<string, unknown> | undefined>;
+    agentPlugin: (name: string) => Promise<Record<string, unknown> | undefined>;
+  };
   mounts?: readonly Mount[];
-  addImage: (data: Buffer, mediaType: string) => void;
-  addVideo: (data: Buffer, mediaType: string) => void;
+  addImage: (data: Uint8Array, mediaType: string) => void;
+  addVideo: (data: Uint8Array, mediaType: string) => void;
   addToolMessage: (content: string) => void;
 }
 

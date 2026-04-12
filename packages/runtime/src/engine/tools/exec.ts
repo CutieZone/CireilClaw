@@ -1,4 +1,3 @@
-import { loadSandboxConfig, loadTools } from "$/config/index.js";
 import { ToolError } from "$/engine/errors.js";
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import { exec as sandboxExec } from "$/util/sandbox.js";
@@ -53,9 +52,7 @@ export const exec: ToolDef = {
     "Tip: The `/workspace/.env` file *is* sourced and can affect your $PATH and other environment variables.",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     const data = vb.parse(Schema, input);
-    const toolsConfig = await loadTools(ctx.agentSlug);
-    const sandboxConfig = await loadSandboxConfig(ctx.agentSlug);
-    const execConfig = toolsConfig.exec;
+    const execConfig = ctx.cfg.exec;
 
     if (execConfig === false || !execConfig.enabled) {
       throw new ToolError("Exec tool is disabled in configuration.");
@@ -77,7 +74,7 @@ export const exec: ToolDef = {
       binaries: execConfig.binaries,
       command: data.command,
       hostEnvPassthrough: execConfig.hostEnvPassthrough,
-      mounts: sandboxConfig.mounts,
+      mounts: ctx.cfg.sandbox.mounts,
       timeout: execConfig.timeout,
     });
 

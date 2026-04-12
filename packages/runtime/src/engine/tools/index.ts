@@ -19,7 +19,7 @@ import { strReplace } from "$/engine/tools/str-replace.js";
 import type { ToolDef } from "$/engine/tools/tool-def.js";
 import { write } from "$/engine/tools/write.js";
 
-const toolRegistry: Record<string, ToolDef> = {
+const builtinToolRegistry: Record<string, ToolDef> = {
   "brave-search": braveSearch,
   "close-file": closeFile,
   "download-attachments": downloadAttachments,
@@ -41,4 +41,10 @@ const toolRegistry: Record<string, ToolDef> = {
   write,
 };
 
-export { toolRegistry };
+let toolRegistry: Record<string, ToolDef> = builtinToolRegistry;
+
+function setToolRegistry(registry: Record<string, ToolDef>): void {
+  toolRegistry = registry;
+}
+
+export { builtinToolRegistry, setToolRegistry, toolRegistry };

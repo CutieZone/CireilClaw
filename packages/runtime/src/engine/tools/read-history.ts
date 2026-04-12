@@ -33,13 +33,13 @@ const readHistory: ToolDef = {
     "Use this to read older or newer messages around a specific message ID. " +
     "Only works on platforms that support history fetching (check capabilities in system prompt).",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
-    if (ctx.fetchHistory === undefined) {
+    if (ctx.channel.fetchHistory === undefined) {
       throw new ToolError("This channel does not support history fetching");
     }
 
     const { direction, limit, message_id } = vb.parse(Schema, input);
 
-    const messages = await ctx.fetchHistory(message_id, direction, limit);
+    const messages = await ctx.channel.fetchHistory(message_id, direction, limit);
 
     if (messages.length === 0) {
       return { messages: [], success: true };

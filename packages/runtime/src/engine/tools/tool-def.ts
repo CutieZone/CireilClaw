@@ -1,34 +1,26 @@
 import type { ConditionsConfig } from "$/config/schemas/conditions.js";
-import type { Mount } from "$/config/schemas/sandbox.js";
+import type { IntegrationsConfig } from "$/config/schemas/integrations.js";
+import type { SandboxConfig } from "$/config/schemas/sandbox.js";
+import type { ExecToolConfig } from "$/config/schemas/tools.js";
 import type { Database } from "$/db/index.js";
-import type { Tool } from "$/engine/tool.js";
-import type {
-  ChannelResolution,
-  HistoryDirection,
-  HistoryMessage,
-} from "$/harness/channel-handler.js";
 import type { Session } from "$/harness/session.js";
+import type { Scheduler } from "$/scheduler/index.js";
+import type { PluginToolContext, Tool } from "cireilclaw-sdk";
 
-interface ToolContext {
+interface InternalToolContext extends PluginToolContext {
   db: Database;
   session: Session;
-  agentSlug: string;
   conditions?: ConditionsConfig;
-  send: (content: string, attachments?: string[]) => Promise<void>;
-  sendTo: (targetSession: Session, content: string, attachments?: string[]) => Promise<void>;
-  react?: (emoji: string, messageId?: string) => Promise<void>;
-  downloadAttachments?: (messageId: string) => Promise<{ filename: string; data: Buffer }[]>;
-  fetchHistory?: (
-    messageId: string,
-    direction: HistoryDirection,
-    limit?: number,
-  ) => Promise<HistoryMessage[]>;
-  resolveChannel: (spec: string) => Promise<ChannelResolution>;
-  mounts?: readonly Mount[];
+  cfg: PluginToolContext["cfg"] & {
+    exec: ExecToolConfig | false;
+    integrations: IntegrationsConfig;
+    sandbox: SandboxConfig;
+  };
+  scheduler?: Scheduler;
 }
 
 interface ToolDef extends Tool {
-  execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>>;
+  execute(input: unknown, ctx: InternalToolContext): Promise<Record<string, unknown>>;
 }
 
-export type { ToolContext, ToolDef };
+export type { InternalToolContext as ToolContext, ToolDef };

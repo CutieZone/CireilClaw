@@ -1,4 +1,4 @@
-import type { ToolDef } from "$/tool.js";
+import type { ToolDef } from "./tool.js";
 
 interface Plugin {
   name: string;
