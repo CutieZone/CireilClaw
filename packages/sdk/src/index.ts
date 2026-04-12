@@ -1,6 +1,16 @@
 export { definePlugin } from "$/plugin.js";
 export type { Plugin, PluginFactory } from "$/plugin.js";
-export type { Tool, ToolDef, ToolResult, ToolErrorResult } from "$/tool.js";
+export type {
+  ChannelResolution,
+  HistoryDirection,
+  HistoryMessage,
+  Mount,
+  PluginToolContext,
+  Tool,
+  ToolDef,
+  ToolErrorResult,
+  ToolResult,
+} from "$/tool.js";
 export type { PluginSession } from "$/session.js";
 export { ToolError } from "$/errors.js";
 export { toWebp, toJpeg, scaleForAnthropic } from "$/image.js";
