@@ -4,7 +4,7 @@ import type { ExecToolConfig } from "$/config/schemas/tools.js";
 import type { Database } from "$/db/index.js";
 import type { Session } from "$/harness/session.js";
 import type { Scheduler } from "$/scheduler/index.js";
-import type { PluginToolContext, Tool } from "cireilclaw-sdk";
+import type { PluginToolContext, Tool } from "@cireilclaw/sdk";
 
 interface InternalToolContext extends PluginToolContext {
   db: Database;

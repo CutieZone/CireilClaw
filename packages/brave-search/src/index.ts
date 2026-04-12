@@ -1,5 +1,5 @@
-import { definePlugin, ToolError, vb } from "cireilclaw-sdk";
-import type { PluginToolContext, ToolResult } from "cireilclaw-sdk";
+import { definePlugin, ToolError, vb } from "@cireilclaw/sdk";
+import type { PluginToolContext, ToolResult } from "@cireilclaw/sdk";
 
 const ConfigSchema = vb.strictObject({
   apiKey: vb.union([
@@ -46,7 +46,7 @@ const braveSearch = {
     url.searchParams.set("count", String(count));
     url.searchParams.set("q", query);
 
-    const response = await fetch(url, {
+    const response = await ctx.net.fetch(url, {
       headers: { Accept: "application/json", "X-Subscription-Token": apiKey },
     });
 

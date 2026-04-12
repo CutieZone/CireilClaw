@@ -40,8 +40,8 @@ import {
   loadSkills,
 } from "$/util/load.js";
 import { sandboxToReal, sanitizeError } from "$/util/paths.js";
-import { KeyPoolManager } from "cireilclaw-sdk";
-import type { PluginToolContext } from "cireilclaw-sdk";
+import { KeyPoolManager } from "@cireilclaw/sdk";
+import type { PluginToolContext } from "@cireilclaw/sdk";
 import * as vb from "valibot";
 
 function truncateToTurns(messages: Message[], maxTurns: number): Message[] {
@@ -342,6 +342,9 @@ export async function runTurn(
     createKeyPool: (keys, cooldownMs) => KeyPoolManager.getPool(keys, cooldownMs),
     db: getDb(agentSlug),
     mounts: sandboxConfig.mounts,
+    net: {
+      fetch: globalThis.fetch.bind(globalThis),
+    },
     reply: {
       react,
       send,

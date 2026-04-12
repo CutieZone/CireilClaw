@@ -1,5 +1,5 @@
-import { definePlugin, vb } from "cireilclaw-sdk";
-import type { ToolResult } from "cireilclaw-sdk";
+import { definePlugin, vb } from "@cireilclaw/sdk";
+import type { ToolResult } from "@cireilclaw/sdk";
 
 const echo = {
   description: "Echoes back the input message. Template plugin for demonstration.",

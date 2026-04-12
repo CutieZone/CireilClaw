@@ -14,8 +14,8 @@ import type { Tool } from "$/engine/tool.js";
 import { debug } from "$/output/log.js";
 import { encode } from "$/util/base64.js";
 import { scaleForAnthropic } from "$/util/image.js";
+import type { KeyPool } from "@cireilclaw/sdk";
 import { toJsonSchema } from "@valibot/to-json-schema";
-import type { KeyPool } from "cireilclaw-sdk";
 import * as vb from "valibot";
 
 interface AnthropicTextBlock {
