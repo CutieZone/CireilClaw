@@ -53,7 +53,7 @@ async function loadSinglePlugin(pluginPath: string): Promise<Plugin> {
   return plugin;
 }
 
-export async function loadPlugins(): Promise<
+async function loadPlugins(): Promise<
   { allowOverride: boolean; name: string; tools: Record<string, ToolDef> }[]
 > {
   const config = await loadPluginsConfig();
@@ -88,7 +88,7 @@ export async function loadPlugins(): Promise<
   return results;
 }
 
-export function mergeToolRegistries(
+function mergeToolRegistries(
   builtinRegistry: Record<string, ToolDef>,
   pluginResults: { allowOverride: boolean; name: string; tools: Record<string, ToolDef> }[],
 ): Record<string, ToolDef> {
@@ -120,12 +120,12 @@ export function mergeToolRegistries(
   return merged;
 }
 
-export async function initializePlugins(): Promise<void> {
+async function initializePlugins(): Promise<void> {
   const pluginResults = await loadPlugins();
   if (pluginResults.length > 0) {
     const merged = mergeToolRegistries(builtinToolRegistry, pluginResults);
     setToolRegistry(merged);
-    const toolNames = pluginResults.flatMap((p) => Object.keys(p.tools));
+    const toolNames = pluginResults.flatMap((plugin) => Object.keys(plugin.tools));
     info(
       "Loaded",
       colors.number(pluginResults.length),
@@ -136,3 +136,5 @@ export async function initializePlugins(): Promise<void> {
     );
   }
 }
+
+export { initializePlugins, loadPlugins, mergeToolRegistries };
