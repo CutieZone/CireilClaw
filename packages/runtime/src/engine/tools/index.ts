@@ -1,4 +1,3 @@
-import { braveSearch } from "$/engine/tools/brave-search.js";
 import { closeFile } from "$/engine/tools/close-file.js";
 import { downloadAttachments } from "$/engine/tools/download-attachments.js";
 import { exec } from "$/engine/tools/exec.js";
@@ -20,7 +19,6 @@ import type { ToolDef } from "$/engine/tools/tool-def.js";
 import { write } from "$/engine/tools/write.js";
 
 const builtinToolRegistry: Record<string, ToolDef> = {
-  "brave-search": braveSearch,
   "close-file": closeFile,
   "download-attachments": downloadAttachments,
   exec,

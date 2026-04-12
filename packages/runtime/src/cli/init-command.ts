@@ -286,7 +286,7 @@ function buildToolsConfig(
     } else if (CORE_TOOLS.has(tool)) {
       obj[tool] = true;
     } else {
-      // Non-core tools (write, str-replace, brave-search, schedule, react) are on for standard/full.
+      // Non-core tools (write, str-replace, schedule, react) are on for standard/full.
       obj[tool] = preset !== "minimal";
     }
   }

@@ -17,7 +17,6 @@
 # --- Optional tools ---
 write = true
 str-replace = true
-brave-search = true
 schedule = true
 react = true
 
