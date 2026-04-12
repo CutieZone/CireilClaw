@@ -42,8 +42,6 @@ interface Mount {
 
 interface BasicSession {
   readonly channel: "discord" | "matrix" | "tui" | "internal";
-  readonly history: readonly unknown[];
-  readonly openedFiles: ReadonlySet<string>;
   id(): string;
 }
 
@@ -69,6 +67,11 @@ interface PluginToolContext {
     agentPlugin: (name: string) => Promise<Record<string, unknown> | undefined>;
   };
   createKeyPool: (keys: string | string[], cooldownMs?: number) => KeyPool;
+  // Plugins should use ctx.net.fetch instead of the global fetch. This is the mediation point
+  // for future isolation (worker/subprocess); today it's a passthrough.
+  net: {
+    fetch: typeof fetch;
+  };
   mounts?: readonly Mount[];
   addImage: (data: Uint8Array, mediaType: string) => void;
   addVideo: (data: Uint8Array, mediaType: string) => void;

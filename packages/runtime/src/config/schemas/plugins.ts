@@ -1,16 +1,25 @@
 import * as vb from "valibot";
 
-const PluginEntrySchema = vb.strictObject({
-  allowOverride: vb.pipe(
-    vb.exactOptional(vb.boolean(), false),
-    vb.description("Allow this plugin to override builtin tools"),
+const PluginEntrySchema = vb.pipe(
+  vb.strictObject({
+    allowOverride: vb.pipe(
+      vb.exactOptional(vb.boolean(), false),
+      vb.description("Allow this plugin to override builtin tools"),
+    ),
+    name: vb.pipe(
+      vb.exactOptional(vb.pipe(vb.string(), vb.nonEmpty())),
+      vb.description("Directory name under ~/.cireilclaw/plugins/"),
+    ),
+    package: vb.pipe(
+      vb.exactOptional(vb.pipe(vb.string(), vb.nonEmpty())),
+      vb.description("npm package name, resolved from ~/.cireilclaw/node_modules/"),
+    ),
+  }),
+  vb.check(
+    (entry) => (entry.name === undefined) !== (entry.package === undefined),
+    "Plugin entry must set exactly one of 'name' or 'package'",
   ),
-  path: vb.pipe(
-    vb.string(),
-    vb.nonEmpty(),
-    vb.description("Path to the plugin module. Can be a file path or node_module name."),
-  ),
-});
+);
 
 type PluginEntry = vb.InferOutput<typeof PluginEntrySchema>;
 

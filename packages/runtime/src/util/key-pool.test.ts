@@ -1,4 +1,4 @@
-import { KeyPool, KeyPoolManager } from "cireilclaw-sdk";
+import { KeyPool, KeyPoolManager } from "@cireilclaw/sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 describe("KeyPool", () => {

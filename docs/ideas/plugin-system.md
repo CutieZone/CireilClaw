@@ -2,12 +2,12 @@
 
 A way to add tools (and more) without touching core code.
 
-## Package split: `cireilclaw-sdk` and `cireilclaw-runtime`
+## Package split: `@cireilclaw/sdk` and `cireilclaw-runtime`
 
 To let plugins import types, utilities, and shared logic without depending on the full application, CireilClaw becomes a pnpm workspace monorepo with two packages:
 
-- **`packages/sdk/`** (`cireilclaw-sdk`) — The public surface: type definitions, re-exported Valibot, `definePlugin()` helper, and shared utilities (sandboxing, path resolution, image processing, etc.). Everything a plugin author builds against.
-- **`packages/runtime/`** (`cireilclaw-runtime`) — The application itself (harness, channels, engine, DB, CLI). Depends on `cireilclaw-sdk`. Implements the concrete classes behind the SDK's interfaces.
+- **`packages/sdk/`** (`@cireilclaw/sdk`) — The public surface: type definitions, re-exported Valibot, `definePlugin()` helper, and shared utilities (sandboxing, path resolution, image processing, etc.). Everything a plugin author builds against.
+- **`packages/runtime/`** (`cireilclaw-runtime`) — The application itself (harness, channels, engine, DB, CLI). Depends on `@cireilclaw/sdk`. Implements the concrete classes behind the SDK's interfaces.
 
 ### What lives in `-sdk`
 
@@ -67,7 +67,7 @@ function definePlugin(factory: PluginFactory): PluginFactory {
 Plugin authors write:
 
 ```typescript
-import { definePlugin, v } from "cireilclaw-sdk";
+import { definePlugin, v } from "@cireilclaw/sdk";
 
 export default definePlugin(() => ({
   name: "weather",
@@ -88,7 +88,7 @@ export default definePlugin(() => ({
 Plugin authors reference `-sdk` as a path dependency:
 
 ```json
-{ "dependencies": { "cireilclaw-sdk": "file:../cireilclaw/packages/sdk" } }
+{ "dependencies": { "@cireilclaw/sdk": "file:../cireilclaw/packages/sdk" } }
 ```
 
 Or a git URL for remote plugin authors. No npm publish needed.

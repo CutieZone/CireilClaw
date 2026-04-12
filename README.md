@@ -17,7 +17,15 @@ See [INSTALLATION.md](INSTALLATION.md) for setup instructions, configuration ref
 
 Ready for usage.
 
-Core functionality is stable and good for production use. Discord integration is fully functional; Matrix remains a stub. The scheduler (heartbeat + cron) and all 15 tools work as expected.
+Core functionality is stable and good for production use.
+
+### The Plugin System
+
+It is explicitly the first pass of implementation, and thus has the following caveats:
+
+1. It is not "secure": untrusted code is untrusted code, plugins run in Workers, not in isolated services
+2. Plugins have to match the runtime's `sdk` otherwise they will cause problems.
+3. Lifecycle hooks are not yet implemented
 
 ## Platform Requirements
 

@@ -66,14 +66,16 @@ export const migration: ConfigMigration = {
       pluginsToml["plugins"],
     );
     const hasBrave = plugins.some(
-      (pth) =>
-        typeof pth === "object" && "path" in pth && String(pth["path"]).includes("brave-search"),
+      (entry) =>
+        typeof entry === "object" &&
+        (("package" in entry && String(entry["package"]).includes("brave-search")) ||
+          ("name" in entry && String(entry["name"]) === "brave-search")),
     );
 
     if (!hasBrave) {
       plugins.push({
         allowOverride: false,
-        path: join(root(), "plugins", "brave-search", "src", "index.ts"),
+        package: "@cireilclaw/plugin-brave-search",
       });
       pluginsToml["plugins"] = plugins;
       await writeFile(pluginsTomlPath, stringify(pluginsToml), "utf8");

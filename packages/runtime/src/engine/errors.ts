@@ -1,4 +1,4 @@
-import { ToolError } from "cireilclaw-sdk";
+import { ToolError } from "@cireilclaw/sdk";
 import type * as vb from "valibot";
 
 class GenerationNoToolCallsError extends Error {
