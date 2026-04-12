@@ -4,7 +4,6 @@ import {
   loadAgentPluginConfig,
   loadEngine,
   loadGlobalPluginConfig,
-  loadIntegrations,
   loadSandboxConfig,
   loadTools,
 } from "$/config/index.js";
@@ -304,7 +303,6 @@ export async function runTurn(
   const toolsConfig = await loadTools(agentSlug);
   const tools = await buildTools(agentSlug, session, toolsConfig);
   const sandboxConfig = await loadSandboxConfig(agentSlug);
-  const integrationsConfig = await loadIntegrations();
   const ctx: ToolContext = {
     addImage: (data: Uint8Array, mediaType: string): void => {
       session.pendingImages.push({ data, mediaType, type: "image" });
@@ -326,7 +324,6 @@ export async function runTurn(
       agentPlugin: (name) => loadAgentPluginConfig(agentSlug, name),
       exec: toolsConfig.exec,
       globalPlugin: (name) => loadGlobalPluginConfig(name),
-      integrations: integrationsConfig,
       sandbox: sandboxConfig,
     },
     channel: {

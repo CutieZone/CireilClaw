@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { loadIntegrations } from "$/config/index.js";
+import { loadGlobalPluginConfig } from "$/config/index.js";
 import { toolRegistry } from "$/engine/tools/index.js";
 import colors from "$/output/colors.js";
 import { info, warning } from "$/output/log.js";
@@ -451,8 +451,8 @@ async function run(flags: Flags): Promise<void> {
   // Integrations (only relevant when brave-search is enabled)
   let braveApiKey: string | undefined = undefined;
   if (preset !== "minimal") {
-    const existingIntegrations = await loadIntegrations();
-    if (existingIntegrations.brave === undefined) {
+    const existingBraveConfig = await loadGlobalPluginConfig("brave-search");
+    if (existingBraveConfig === undefined || existingBraveConfig["apiKey"] === undefined) {
       const raw = await password({
         mask: true,
         message: "Brave Search API key (leave blank to skip):",
@@ -520,10 +520,10 @@ async function run(flags: Flags): Promise<void> {
   );
 
   if (braveApiKey !== undefined) {
-    const existingIntegrations = await loadIntegrations();
+    await mkdir(join(base, "config", "plugins"), { recursive: true });
     await writeFile(
-      join(base, "config", "integrations.toml"),
-      stringify({ ...existingIntegrations, brave: { apiKey: braveApiKey } }),
+      join(base, "config", "plugins", "brave-search.toml"),
+      stringify({ apiKey: braveApiKey }),
       "utf8",
     );
   }

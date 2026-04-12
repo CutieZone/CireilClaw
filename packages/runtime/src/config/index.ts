@@ -12,7 +12,6 @@ import { DiscordConfigSchema } from "$/config/schemas/discord.js";
 import type { DiscordConfig } from "$/config/schemas/discord.js";
 import { ProvidersConfigSchema } from "$/config/schemas/engine.js";
 import type { ProvidersConfig } from "$/config/schemas/engine.js";
-import { IntegrationsConfigSchema } from "$/config/schemas/integrations.js";
 import { SandboxConfigSchema } from "$/config/schemas/sandbox.js";
 import type { SandboxConfig } from "$/config/schemas/sandbox.js";
 import { SystemConfigSchema } from "$/config/schemas/system.js";
@@ -96,21 +95,6 @@ async function loadEngine(agentSlug?: string): Promise<ProvidersConfig> {
   }
 
   return cfg;
-}
-
-type IntegrationsConfig = vb.InferOutput<typeof IntegrationsConfigSchema>;
-
-async function loadIntegrations(): Promise<IntegrationsConfig> {
-  const file = join(root(), "config", "integrations.toml");
-
-  if (!existsSync(file)) {
-    return {};
-  }
-
-  const data = await readFile(file, { encoding: "utf8" });
-  const obj = parse(data);
-
-  return vb.parse(IntegrationsConfigSchema, obj);
 }
 
 interface ChannelConfigMap {
@@ -291,7 +275,6 @@ export {
   loadGlobalPluginConfig,
   loadAgentPluginConfig,
   loadHeartbeat,
-  loadIntegrations,
   loadSandboxConfig,
   loadSystem,
   loadTools,
