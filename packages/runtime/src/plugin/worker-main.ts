@@ -131,14 +131,6 @@ function buildCtx(rpc: RpcChannel, invocationId: string, data: CtxData): PluginT
       send: async (content, attachments) => {
         await rpc.call("reply.send", [invocationId, content, attachments]);
       },
-      sendTo: async (target, content, attachments) => {
-        await rpc.call("reply.sendTo", [
-          invocationId,
-          { channel: target.channel, id: target.id() },
-          content,
-          attachments,
-        ]);
-      },
     },
     session,
   };

@@ -15,6 +15,9 @@ interface InternalToolContext extends PluginToolContext {
     exec: ExecToolConfig | false;
     sandbox: SandboxConfig;
   };
+  reply: PluginToolContext["reply"] & {
+    sendTo: (targetSession: Session, content: string, attachments?: string[]) => Promise<void>;
+  };
   channel: PluginToolContext["channel"] & {
     downloadAttachments?: (messageId: string) => Promise<{ filename: string; data: Buffer }[]>;
     fetchHistory?: (

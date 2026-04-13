@@ -110,7 +110,3 @@ You listed `package = "..."` but haven't run `pnpm add <pkg>` in `~/.cireilclaw/
 ### `Plugin <name> cannot resolve @cireilclaw/sdk`
 
 The plugin's peerDep isn't installed. For npm plugins this normally auto-installs; check `auto-install-peers` in your `.npmrc`. For git-cloned plugins, `pnpm install` in the plugin dir.
-
-### `sendTo across sessions not supported from plugin workers (tier-1)`
-
-The plugin tried to `ctx.reply.sendTo` a session other than the one the tool was invoked on. Not supported in tier-1 worker isolation. File an issue if you need this; it requires harness-level session routing.

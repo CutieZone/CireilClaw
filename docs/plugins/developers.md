@@ -1,6 +1,6 @@
 # Plugins: Developer Guide
 
-You are writing a plugin. This document covers the SDK surface, authoring conventions, publishing mechanics, and the caveats of tier-1 worker isolation.
+You are writing a plugin. This document covers the SDK surface, authoring conventions, publishing mechanics, and the caveats of worker isolation.
 
 If you are _installing_ a plugin, see [`operators.md`](operators.md).
 
@@ -96,7 +96,7 @@ Conventions:
 - **Validate input with Valibot inside `execute`.** The runtime does not pre-validate. Parse the raw `input` against your schema; unknown shape → `ToolError`.
 - **Throw `ToolError` for anything the model should see as a failed tool call.** Regular `Error` also works, but `ToolError` is the idiomatic "this is a tool-level failure, tell the model" signal.
 - **Return shape is `{ success: true, ... }` for success.** For failures, either throw `ToolError` or return `{ success: false, error, hint? }`.
-- **Use `ctx.net.fetch`, not global `fetch`.** Same behavior today, but this is the mediation point for future isolation tiers.
+- **Use `ctx.net.fetch`, not global `fetch`.** Same behavior today, but this is the mediation point for future work.
 
 ## `PluginToolContext` Surface
 
@@ -108,11 +108,9 @@ interface PluginToolContext {
   session: BasicSession; // { channel, id(): string }
   reply: {
     send(content: string, attachments?: string[]): Promise<void>;
-    sendTo(target: BasicSession, content: string, attachments?: string[]): Promise<void>;
     react?(emoji: string, messageId?: string): Promise<void>;
   };
   channel: {
-    downloadAttachments?(messageId: string): Promise<{ filename: string; data: Buffer }[]>;
     resolveChannel(spec: string): Promise<ChannelResolution>;
   };
   cfg: {
@@ -141,13 +139,13 @@ From `@cireilclaw/sdk`:
 - `definePlugin(factory)`: an identity helper; gives you type inference.
 - `Plugin`, `PluginFactory`: the factory's return shape.
 - `ToolDef`, `Tool`, `ToolResult`, `ToolErrorResult`: tool definition types.
-- `PluginToolContext`, `BasicSession`, `ChannelResolution`, `HistoryMessage`, `HistoryDirection`, `Mount`: context types.
+- `PluginToolContext`, `BasicSession`, `ChannelResolution`, `Mount`: context types.
 - `KeyPool`, `KeyPoolManager`: API key rotation with cooldown.
 - `ToolError`: semantic tool-failure exception.
 - `toWebp`, `toJpeg`, `scaleForAnthropic`: image helpers for vision-capable agents.
 - `vb`: reexport of `valibot`, so you don't need a separate dependency.
 
-## Tier-1 Worker Isolation: What It Gives You, What It Doesn't
+## Worker Isolation: What It Gives You, What It Doesn't
 
 Each plugin runs in a dedicated Node worker thread. The runtime talks to it over a small RPC layer.
 
@@ -165,8 +163,6 @@ Each plugin runs in a dedicated Node worker thread. The runtime talks to it over
 **`ctx.createKeyPool` is per-worker.** Each worker has its own `KeyPoolManager` singleton. Rate-limit state does not cross workers or reach the runtime. Fine if your plugin owns its keys. If two plugins share a key, failure tracking drifts silently.
 
 **`ctx.net.fetch` runs locally in the worker.** It's `globalThis.fetch.bind(globalThis)` today. The surface is intentionally abstracted so that network mediation can be added later without changing plugin code.
-
-**`ctx.reply.sendTo` is limited to the invocation's own session.** Cross-session `sendTo` requires harness-level session routing that tier-1 does not implement. Calling it with a target matching `ctx.session` works (it falls through to `reply.send`); anything else throws with a clear error.
 
 **Fire-and-forget callbacks (`addImage`/`addVideo`/`addToolMessage`) don't await.** The RPC fires, you move on. If delivery matters, call them early in `execute`, not in a `finally`.
 
@@ -199,30 +195,17 @@ There is _no compatibility bridge_: the runtime's realpath check forbids two SDK
 
 ## Debugging
 
-**Stack traces across RPC.** Errors carry `message`, `name`, and `hint`. The original stack is lost at the boundary. If you need worker-side stack for debugging, log it before throwing:
-
-```typescript
-try {
-  return await doThing();
-} catch (error) {
-  console.error("plugin error:", error);
-  throw new ToolError(error instanceof Error ? error.message : String(error));
-}
-```
-
-Worker `console.log` goes to the same standard output as the runtime; you'll see it interleaved with runtime logs.
+**Stack traces across RPC.** Errors carry `message`, `name`, `stack`, and `hint`; stack traces are now preserved.
 
 **Worker fatal errors.** If the plugin's initial load (factory call, manifest computation) throws, the worker sends a `fatal` RPC and exits with code 1. The runtime logs it and refuses to start. Fix: check your factory for throws and your tool schemas for Valibot errors.
 
 **SDK version mismatch.** If the plugin fails to load with a `realpath`/version mismatch, the runtime prints both paths. Compare them, since one is coming from the plugin's `node_modules/` and the other from the runtime's. Run `pnpm dedupe` in `~/.cireilclaw/`, or update your `peerDep` range.
 
-## Known Limitations (as of Tier-1)
+## Known Limitations
 
-- No cross-session `sendTo`.
 - No plugin lifecycle hooks (`onStart`, `onShutdown`).
 - No crash recovery, so if a worker dies, the plugin is dead until process restart.
 - No per-plugin sandboxing (network, filesystem).
-- Stack traces don't survive RPC boundaries.
-- `ctx.net.fetch` is a local passthrough today; future tiers will RPC it.
+- `ctx.net.fetch` is a local passthrough today.
 
-Want any of these? File an issue. Tier-2 (subprocess + `bubblewrap`) is the natural next step and covers most of them.
+Want any of these? File an issue. Subprocess+bubblewrap OR WASM is the natural next step and covers most of them.

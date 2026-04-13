@@ -42,7 +42,6 @@ interface PluginToolContext {
   agentSlug: string;
   reply: {
     send: (content: string, attachments?: string[]) => Promise<void>;
-    sendTo: (targetSession: BasicSession, content: string, attachments?: string[]) => Promise<void>;
     react?: (emoji: string, messageId?: string) => Promise<void>;
   };
   channel: {
