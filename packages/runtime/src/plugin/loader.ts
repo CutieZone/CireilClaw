@@ -10,6 +10,7 @@ import { Worker } from "node:worker_threads";
 
 import type { PluginEntry } from "$/config/schemas/plugins.js";
 import { PluginsConfigSchema } from "$/config/schemas/plugins.js";
+import { ToolError } from "$/engine/errors.js";
 import { builtinToolRegistry, setToolRegistry } from "$/engine/tools/index.js";
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import colors from "$/output/colors.js";
@@ -184,7 +185,17 @@ class PluginProcess {
               session: { channel: ctx.session.channel, id: ctx.session.id() },
             };
             const args: InvokeArgs = { ctx: ctxData, input, invocationId, toolName };
-            return await this.rpc.call<Record<string, unknown>>("invoke-tool", [args]);
+            try {
+              return await this.rpc.call<Record<string, unknown>>("invoke-tool", [args]);
+            } catch (error: unknown) {
+              // Re-hydrate ToolError across the RPC boundary so the engine's instanceof check works.
+              if (error instanceof Error && error.name === "ToolError") {
+                const hint =
+                  "hint" in error && typeof error.hint === "string" ? error.hint : undefined;
+                throw new ToolError(error.message, hint);
+              }
+              throw error;
+            }
           } finally {
             this.pending.delete(invocationId);
           }
