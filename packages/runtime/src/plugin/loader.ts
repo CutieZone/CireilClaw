@@ -254,26 +254,6 @@ class PluginProcess {
       await ctx.reply.send(content as string, attachments as string[] | undefined);
       return undefined;
     });
-    this.rpc.handle("channel.downloadAttachments", async (args) => {
-      const [invocationId, messageId] = args;
-      const { downloadAttachments } = this.requireCtx(invocationId).channel;
-      if (downloadAttachments === undefined) {
-        throw new Error("downloadAttachments not supported on this channel");
-      }
-      return await downloadAttachments(messageId as string);
-    });
-    this.rpc.handle("channel.fetchHistory", async (args) => {
-      const [invocationId, messageId, direction, limit] = args;
-      const { fetchHistory } = this.requireCtx(invocationId).channel;
-      if (fetchHistory === undefined) {
-        throw new Error("fetchHistory not supported on this channel");
-      }
-      return await fetchHistory(
-        messageId as string,
-        direction as "after" | "around" | "before",
-        limit as number | undefined,
-      );
-    });
     this.rpc.handle("channel.resolveChannel", async (args) => {
       const [invocationId, spec] = args;
       const resolved = await this.requireCtx(invocationId).channel.resolveChannel(spec as string);

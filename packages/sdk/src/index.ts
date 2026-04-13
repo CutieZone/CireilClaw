@@ -4,8 +4,6 @@ export { KeyPool, KeyPoolManager } from "./key-pool.js";
 export type {
   BasicSession,
   ChannelResolution,
-  HistoryDirection,
-  HistoryMessage,
   Mount,
   PluginToolContext,
   Tool,

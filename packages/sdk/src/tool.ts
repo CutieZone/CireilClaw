@@ -26,17 +26,6 @@ type ChannelResolution =
   | { readonly channel: "discord" | "matrix" | "tui" | "internal"; id(): string }
   | { error: string };
 
-type HistoryDirection = "after" | "around" | "before";
-
-interface HistoryMessage {
-  authorId: string;
-  authorName: string;
-  content: string;
-  formatted: string;
-  id: string;
-  timestamp: string;
-}
-
 interface Mount {
   mode: "ro" | "rw";
   source: string;
@@ -57,12 +46,6 @@ interface PluginToolContext {
     react?: (emoji: string, messageId?: string) => Promise<void>;
   };
   channel: {
-    downloadAttachments?: (messageId: string) => Promise<{ filename: string; data: Buffer }[]>;
-    fetchHistory?: (
-      messageId: string,
-      direction: HistoryDirection,
-      limit?: number,
-    ) => Promise<HistoryMessage[]>;
     resolveChannel: (spec: string) => Promise<ChannelResolution>;
   };
   cfg: {
@@ -88,8 +71,6 @@ interface ToolDef extends Tool {
 export type {
   BasicSession,
   ChannelResolution,
-  HistoryDirection,
-  HistoryMessage,
   Mount,
   PluginToolContext,
   Tool,

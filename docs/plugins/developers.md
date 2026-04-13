@@ -113,11 +113,6 @@ interface PluginToolContext {
   };
   channel: {
     downloadAttachments?(messageId: string): Promise<{ filename: string; data: Buffer }[]>;
-    fetchHistory?(
-      messageId: string,
-      direction: "before" | "after" | "around",
-      limit?: number,
-    ): Promise<HistoryMessage[]>;
     resolveChannel(spec: string): Promise<ChannelResolution>;
   };
   cfg: {
@@ -136,7 +131,7 @@ interface PluginToolContext {
 Notes:
 
 - `session` is deliberately narrow. Plugins do not see conversation history, opened files, or channel-specific internals.
-- `channel.downloadAttachments` / `fetchHistory` / `react` are optional, since not every channel supports them. Check for `undefined` before calling.
+- `reply.react` is optional, since not every channel supports it. Check for `undefined` before calling.
 - `createKeyPool` returns a per-worker instance (see caveats below).
 
 ## SDK Exports
@@ -169,7 +164,7 @@ Each plugin runs in a dedicated Node worker thread. The runtime talks to it over
 
 **`ctx.createKeyPool` is per-worker.** Each worker has its own `KeyPoolManager` singleton. Rate-limit state does not cross workers or reach the runtime. Fine if your plugin owns its keys. If two plugins share a key, failure tracking drifts silently.
 
-**`ctx.net.fetch` runs locally in the worker.** It's `globalThis.fetch.bind(globalThis)` today. Tier-2 will RPC this back to the runtime to mediate network access, and your plugin gets migrated for free because the surface stays the same.
+**`ctx.net.fetch` runs locally in the worker.** It's `globalThis.fetch.bind(globalThis)` today. The surface is intentionally abstracted so that network mediation can be added later without changing plugin code.
 
 **`ctx.reply.sendTo` is limited to the invocation's own session.** Cross-session `sendTo` requires harness-level session routing that tier-1 does not implement. Calling it with a target matching `ctx.session` works (it falls through to `reply.send`); anything else throws with a clear error.
 

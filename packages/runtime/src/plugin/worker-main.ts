@@ -8,8 +8,6 @@ import { KeyPoolManager } from "@cireilclaw/sdk";
 import type {
   BasicSession,
   ChannelResolution,
-  HistoryDirection,
-  HistoryMessage,
   KeyPool,
   Mount,
   Plugin,
@@ -104,18 +102,6 @@ function buildCtx(rpc: RpcChannel, invocationId: string, data: CtxData): PluginT
         ]),
     },
     channel: {
-      downloadAttachments: async (messageId) =>
-        await rpc.call<{ filename: string; data: Buffer }[]>("channel.downloadAttachments", [
-          invocationId,
-          messageId,
-        ]),
-      fetchHistory: async (messageId, direction: HistoryDirection, limit) =>
-        await rpc.call<HistoryMessage[]>("channel.fetchHistory", [
-          invocationId,
-          messageId,
-          direction,
-          limit,
-        ]),
       resolveChannel: async (spec): Promise<ChannelResolution> => {
         const resolved = await rpc.call<
           { channel: BasicSession["channel"]; id: string } | { error: string }
