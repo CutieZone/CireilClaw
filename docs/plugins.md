@@ -6,7 +6,7 @@
 
 Worker isolation only buys _crash isolation_ and a _clean API boundary_, not a security boundary. Plugins still have full Node API access: they can read your filesystem, open network sockets, etc.
 
-Sooo... Only install plugins you trust. If you need defense against a hostile plugin, that's a tier-2 problem (subprocess + `bubblewrap`) and not yet implemented.
+Sooo... Only install plugins you trust. Subprocess sandboxing (e.g. `bubblewrap`) is not yet implemented.
 
 ## Two Kinds of Audience
 

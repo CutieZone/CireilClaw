@@ -20,6 +20,7 @@ interface RpcError {
   message: string;
   name?: string;
   hint?: string;
+  stack?: string;
 }
 
 interface RpcResponseOk {
@@ -128,6 +129,9 @@ class RpcChannel {
     if (raw.error.hint !== undefined) {
       Object.assign(error, { hint: raw.error.hint });
     }
+    if (raw.error.stack !== undefined) {
+      error.stack = raw.error.stack;
+    }
     entry.reject(error);
   }
 
@@ -150,7 +154,7 @@ class RpcChannel {
     } catch (error: unknown) {
       const err = error instanceof Error ? error : new Error(String(error));
       const msg: RpcResponseErr = {
-        error: { hint: extractHint(err), message: err.message, name: err.name },
+        error: { hint: extractHint(err), message: err.message, name: err.name, stack: err.stack },
         id: req.id,
         kind: "res",
         ok: false,
