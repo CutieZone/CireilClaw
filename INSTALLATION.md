@@ -108,8 +108,10 @@ All configuration lives under `~/.cireilclaw/`. Global configs apply to all agen
 <summary><code>config/engine.toml</code> (per-agent, required)</summary>
 
 ```toml
+[provider.openai]
 apiBase = "https://api.openai.com/v1"   # OpenAI-compatible base URL
-model   = "gpt-4o"                       # Model identifier
+defaultModel = "gpt-4o"                       # Model identifier
+isGlobalDefault = true
 apiKey  = "sk-..."                       # Optional, defaults to "not-needed"
 ```
 
