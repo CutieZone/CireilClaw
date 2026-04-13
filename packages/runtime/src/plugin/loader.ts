@@ -242,18 +242,6 @@ class PluginProcess {
       await react(emoji as string, messageId as string | undefined);
       return undefined;
     });
-    this.rpc.handle("reply.sendTo", async (args) => {
-      const [invocationId, target, content, attachments] = args;
-      const ctx = this.requireCtx(invocationId);
-      const { channel, id } = target as { channel: string; id: string };
-      // Tier-1 limitation: we only support sendTo to the invocation's own session.
-      // Cross-session sendTo requires harness-level session lookup, deferred.
-      if (ctx.session.channel !== channel || ctx.session.id() !== id) {
-        throw new Error("sendTo across sessions not supported from plugin workers (tier-1)");
-      }
-      await ctx.reply.send(content as string, attachments as string[] | undefined);
-      return undefined;
-    });
     this.rpc.handle("channel.resolveChannel", async (args) => {
       const [invocationId, spec] = args;
       const resolved = await this.requireCtx(invocationId).channel.resolveChannel(spec as string);

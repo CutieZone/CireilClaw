@@ -41,7 +41,6 @@ import {
 } from "$/util/load.js";
 import { sandboxToReal, sanitizeError } from "$/util/paths.js";
 import { KeyPoolManager } from "@cireilclaw/sdk";
-import type { PluginToolContext } from "@cireilclaw/sdk";
 import * as vb from "valibot";
 
 function truncateToTurns(messages: Message[], maxTurns: number): Message[] {
@@ -348,8 +347,7 @@ export async function runTurn(
     reply: {
       react,
       send,
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      sendTo: sendTo as unknown as PluginToolContext["reply"]["sendTo"],
+      sendTo,
     },
     scheduler,
     session,
