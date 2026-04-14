@@ -20,6 +20,7 @@ interface AppProps {
 }
 
 function TuiApp({ bridge, agent, initialSessionId }: AppProps): ReactElement {
+  // oxlint-disable-next-line typescript/unbound-method
   const { exit } = useApp();
   const [messages, setMessages] = useState(bridge.snapshot());
   const [input, setInput] = useState("");
