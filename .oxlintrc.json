@@ -25,6 +25,7 @@
     }
   ],
   "rules": {
+    "eslint/no-useless-assignment": "off",
     "import/no-named-export": "off",
     "import/no-relative-parent-imports": "off",
     "import/max-dependencies": "off",

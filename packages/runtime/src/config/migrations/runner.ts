@@ -1,7 +1,6 @@
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, basename } from "node:path";
-import { fileURLToPath } from "node:url";
 
 import type { ConfigMigration, MigrationContext } from "$/config/migrations/index.js";
 import colors from "$/output/colors.js";
@@ -11,7 +10,7 @@ import { confirm, select } from "@inquirer/prompts";
 import { stringify } from "smol-toml";
 import * as vb from "valibot";
 
-const MIGRATIONS_DIR = fileURLToPath(new URL("./", import.meta.url));
+const MIGRATIONS_DIR = import.meta.dirname;
 const STATE_FILE = join(root(), "config", "migrations.json");
 const BACKUPS_DIR = join(root(), "config", "backups");
 

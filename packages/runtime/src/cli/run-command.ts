@@ -72,7 +72,7 @@ async function runWatcher(agentSlug: string, signal: AbortSignal): Promise<void>
   const watcher = watch(agentDir, {
     encoding: "utf8",
     recursive: true,
-    signal: signal,
+    signal,
   });
 
   for await (const event of watcher) {

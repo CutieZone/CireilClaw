@@ -236,7 +236,7 @@ export async function generate(
       { content: context.systemPrompt, role: "system" },
       ...context.messages.map(translateMsg),
     ],
-    model: model,
+    model,
     tool_choice: "required",
     tools: context.tools.map(translateTool),
   };
@@ -272,7 +272,7 @@ export async function generate(
     attemptedKeys.add(apiKey);
 
     const client = new OpenAI({
-      apiKey: apiKey,
+      apiKey,
       baseURL: apiBase,
       defaultHeaders: customHeaders,
     });

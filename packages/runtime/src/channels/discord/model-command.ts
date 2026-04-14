@@ -221,7 +221,7 @@ async function handleAutocomplete(
                 (name.startsWith(focused.value) || id.startsWith(focused.value))) ||
                 focused.value.length === 0),
           )
-          .map(({ name, id }) => ({ name: name, value: id }));
+          .map(({ name, id }) => ({ name, value: id }));
       } else if (selected !== undefined) {
         models = selected.availableModels.map((it) => ({
           name: it,
