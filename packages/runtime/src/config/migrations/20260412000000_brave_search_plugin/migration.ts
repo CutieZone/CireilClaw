@@ -55,14 +55,17 @@ export const migration: ConfigMigration = {
     const pluginsTomlPath = join(root(), "config", "plugins.toml");
     await context.backupFile(pluginsTomlPath);
 
-    let pluginsToml: Record<string, unknown> = {};
+    let pluginsToml: Record<string, unknown> = { plugins: [] };
     if (existsSync(pluginsTomlPath)) {
       const content = await readFile(pluginsTomlPath, "utf8");
       pluginsToml = parse(content) as Record<string, unknown>;
     }
 
     const plugins = vb.parse(
-      vb.exactOptional(vb.array(vb.record(vb.string(), vb.unknown())), []),
+      vb.exactOptional(
+        vb.exactOptional(vb.array(vb.record(vb.string(), vb.unknown())), undefined),
+        [],
+      ),
       pluginsToml["plugins"],
     );
     const hasBrave = plugins.some(
