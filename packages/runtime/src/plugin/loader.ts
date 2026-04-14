@@ -22,6 +22,10 @@ import * as vb from "valibot";
 import { RpcChannel } from "./rpc.js";
 import type { CtxData, InvokeArgs, ManifestPayload } from "./worker-main.js";
 
+// Safety net for wedged plugins: a single tool invocation cannot hang the engine turn forever.
+// Generous to accommodate long scrapes / network work; worker crashes already reject immediately.
+const INVOKE_TIMEOUT_MS = 10 * 60 * 1000;
+
 const runtimeRequire = createRequire(import.meta.url);
 const RUNTIME_SDK_PKG = realpathSync(runtimeRequire.resolve("@cireilclaw/sdk/package.json"));
 const WORKER_URL = new URL("worker.ts", import.meta.url);
@@ -166,6 +170,15 @@ class PluginProcess {
       });
     });
 
+    // Persistent handlers: when the worker dies for any reason, reject in-flight RPC calls so
+    // the engine's tool loop doesn't hang forever. RpcChannel.close() is idempotent.
+    worker.on("exit", () => {
+      this.rpc.close();
+    });
+    worker.on("error", () => {
+      this.rpc.close();
+    });
+
     this.registerCallbackHandlers();
   }
 
@@ -186,7 +199,11 @@ class PluginProcess {
             };
             const args: InvokeArgs = { ctx: ctxData, input, invocationId, toolName };
             try {
-              return await this.rpc.call<Record<string, unknown>>("invoke-tool", [args]);
+              return await this.rpc.call<Record<string, unknown>>(
+                "invoke-tool",
+                [args],
+                INVOKE_TIMEOUT_MS,
+              );
             } catch (error: unknown) {
               // Re-hydrate ToolError across the RPC boundary so the engine's instanceof check works.
               if (error instanceof Error && error.name === "ToolError") {

@@ -60,9 +60,14 @@ function extractHint(error: Error): string | undefined {
 class RpcChannel {
   private readonly port: PortLike;
   private nextId = 1;
+  private closed = false;
   private readonly pending = new Map<
     number,
-    { resolve: (value: unknown) => void; reject: (error: Error) => void }
+    {
+      resolve: (value: unknown) => void;
+      reject: (error: Error) => void;
+      timer?: NodeJS.Timeout;
+    }
   >();
   private readonly handlers = new Map<string, Handler>();
   private readonly listener = (raw: unknown): void => {
@@ -75,16 +80,30 @@ class RpcChannel {
   }
 
   // oxlint-disable-next-line eslint/id-length -- `call` mirrors JS-RPC convention
-  async call<T = unknown>(method: string, args: unknown[] = []): Promise<T> {
+  async call<T = unknown>(method: string, args: unknown[] = [], timeoutMs?: number): Promise<T> {
+    if (this.closed) {
+      throw new Error("RPC channel closed");
+    }
     const id = this.nextId++;
     return await new Promise<T>((resolve, reject) => {
-      const entry = {
+      const entry: {
+        resolve: (value: unknown) => void;
+        reject: (error: Error) => void;
+        timer?: NodeJS.Timeout;
+      } = {
         reject,
         resolve: (value: unknown): void => {
           // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- generic untyped channel; caller's T is the contract
           resolve(value as T);
         },
       };
+      if (timeoutMs !== undefined && timeoutMs > 0) {
+        entry.timer = setTimeout(() => {
+          if (this.pending.delete(id)) {
+            reject(new Error(`RPC call ${method} timed out after ${timeoutMs}ms`));
+          }
+        }, timeoutMs);
+      }
       this.pending.set(id, entry);
       const msg: RpcRequest = { args, id, kind: "req", method };
       this.port.postMessage(msg);
@@ -96,8 +115,15 @@ class RpcChannel {
   }
 
   close(): void {
+    if (this.closed) {
+      return;
+    }
+    this.closed = true;
     this.port.off("message", this.listener);
-    for (const { reject } of this.pending.values()) {
+    for (const { reject, timer } of this.pending.values()) {
+      if (timer !== undefined) {
+        clearTimeout(timer);
+      }
       reject(new Error("RPC channel closed"));
     }
     this.pending.clear();
@@ -118,6 +144,9 @@ class RpcChannel {
       return;
     }
     this.pending.delete(raw.id);
+    if (entry.timer !== undefined) {
+      clearTimeout(entry.timer);
+    }
     if (raw.ok) {
       entry.resolve(raw.value);
       return;
