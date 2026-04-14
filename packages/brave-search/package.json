@@ -1,6 +1,6 @@
 {
   "name": "@cireilclaw/plugin-brave-search",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "files": [
     "src",
     "dist"
@@ -32,6 +32,6 @@
     "typescript": "^6.0.2"
   },
   "peerDependencies": {
-    "@cireilclaw/sdk": "^0.2.0"
+    "@cireilclaw/sdk": "^0.3.0"
   }
 }
