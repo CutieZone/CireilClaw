@@ -129,7 +129,7 @@ interface PluginToolContext {
 Notes:
 
 - `session` is deliberately narrow. Plugins do not see conversation history, opened files, or channel-specific internals.
-- `reply.react` is optional, since not every channel supports it. Check for `undefined` before calling.
+- `reply.react` is optional, since not every channel supports it. Calling it on a channel that lacks reaction support (e.g., TUI or internal) will throw a `ToolError`. Always guard the call or let the runtime surface the failure.
 - `createKeyPool` returns a per-worker instance (see caveats below).
 
 ## SDK Exports

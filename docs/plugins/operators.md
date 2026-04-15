@@ -57,6 +57,8 @@ allowOverride = true
 
 ## Plugin Configuration
 
+Changes to `plugins.toml` require a full process restart. They are not hot-reloaded like agent configs.
+
 Each plugin reads its own config via `ctx.cfg.globalPlugin(name)` and `ctx.cfg.agentPlugin(name)`. By convention these live at:
 
 - `~/.cireilclaw/config/plugins/<name>.toml`: global

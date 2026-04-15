@@ -12,7 +12,7 @@ interface Tool<TParameters = GenericSchema> {
 }
 
 interface ToolResult {
-  success: true;
+  success: boolean;
   [key: string]: unknown;
 }
 
