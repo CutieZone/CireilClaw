@@ -6,7 +6,7 @@ const echo = {
   // oxlint-disable-next-line typescript/require-await
   async execute(input: unknown): Promise<ToolResult> {
     const { message } = vb.parse(this.parameters, input);
-    return { echo: message, success: true as const };
+    return { echo: message, success: true };
   },
   name: "echo",
   parameters: vb.strictObject({

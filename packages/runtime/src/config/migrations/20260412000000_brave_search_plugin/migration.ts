@@ -62,10 +62,7 @@ export const migration: ConfigMigration = {
     }
 
     const plugins = vb.parse(
-      vb.exactOptional(
-        vb.exactOptional(vb.array(vb.record(vb.string(), vb.unknown())), undefined),
-        [],
-      ),
+      vb.optional(vb.array(vb.record(vb.string(), vb.unknown())), []),
       pluginsToml["plugins"],
     );
     const hasBrave = plugins.some(

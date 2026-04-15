@@ -55,6 +55,20 @@ function isPluginModule(value: unknown): value is PluginModule {
   return typeof value === "object" && value !== null && "default" in value;
 }
 
+function isPlugin(value: unknown): value is Plugin {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const { name, tools } = value as { name?: unknown; tools?: unknown };
+  if (typeof name !== "string" || name.length === 0) {
+    return false;
+  }
+  if (tools !== undefined && (typeof tools !== "object" || tools === null)) {
+    return false;
+  }
+  return true;
+}
+
 function isInvokeArgs(value: unknown): value is InvokeArgs {
   if (typeof value !== "object" || value === null) {
     return false;
@@ -148,7 +162,12 @@ async function main(parent: NonNullable<typeof parentPort>, init: WorkerInit): P
     throw new TypeError(`Plugin ${init.pluginId} default export is not a function`);
   }
 
-  const plugin: Plugin = await factory();
+  const plugin: unknown = await factory();
+  if (!isPlugin(plugin)) {
+    throw new TypeError(
+      `Plugin ${init.pluginId} factory must return an object with a non-empty string 'name' and optional 'tools' object`,
+    );
+  }
   const toolMap = plugin.tools ?? {};
   const manifestEntries: ToolManifestEntry[] = [];
   for (const [registeredName, def] of Object.entries(toolMap)) {
