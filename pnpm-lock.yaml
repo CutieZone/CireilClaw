@@ -33,6 +33,18 @@ importers:
         specifier: ^6.0.2
         version: 6.0.2
 
+  packages/openweather:
+    devDependencies:
+      '@cireilclaw/sdk':
+        specifier: workspace:*
+        version: link:../sdk
+      tsdown:
+        specifier: ^0.21.8
+        version: 0.21.8(typescript@6.0.2)
+      typescript:
+        specifier: ^6.0.2
+        version: 6.0.2
+
   packages/runtime:
     dependencies:
       '@cireilclaw/sdk':
