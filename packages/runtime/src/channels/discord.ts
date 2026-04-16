@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 import { basename, join } from "node:path";
 
 import * as clearCommand from "$/channels/discord/clear-command.js";
+import * as closeCommand from "$/channels/discord/close-command.js";
 import type { HandlerCtx } from "$/channels/discord/handler-ctx.js";
 import * as inviteCommand from "$/channels/discord/invite-command.js";
 import * as modelCommand from "$/channels/discord/model-command.js";
@@ -59,6 +60,7 @@ const TYPING_INTERVAL_MS = 5000;
 // check on startup will detect changes and re-register with Discord's API.
 const SLASH_COMMANDS = [
   clearCommand.definition,
+  closeCommand.definition,
   inviteCommand.definition,
   modelCommand.definition,
   repairCommand.definition,
@@ -67,15 +69,17 @@ const SLASH_COMMANDS = [
 type SlashHandler = (interaction: CommandInteraction, ctx: HandlerCtx) => Promise<void>;
 const SLASH_HANDLERS = new Map<string, SlashHandler>([
   ["clear", clearCommand.handle],
+  ["close", closeCommand.handleCommand],
   ["invite", inviteCommand.handle],
   ["model", modelCommand.handleCommand],
   ["repair", repairCommand.handle],
 ]);
 
-const SILENT_COMMANDS = new Set(["model", "invite"]);
+const SILENT_COMMANDS = new Set(["model", "invite", "close"]);
 
 type AutocompleteHandler = (interaction: AutocompleteInteraction, ctx: HandlerCtx) => Promise<void>;
 const AUTOCOMPLETE_HANDLERS = new Map<string, AutocompleteHandler>([
+  ["close", closeCommand.handleAutocomplete],
   ["model", modelCommand.handleAutocomplete],
 ]);
 
