@@ -1,6 +1,7 @@
 {
   "name": "@cireilclaw/plugin-brave-search",
   "version": "0.2.1",
+  "license": "Apache-2.0",
   "files": [
     "src",
     "dist"

@@ -1,6 +1,7 @@
 {
   "name": "@cireilclaw/sdk",
   "version": "0.3.0",
+  "license": "Apache-2.0",
   "files": [
     "src",
     "dist"
