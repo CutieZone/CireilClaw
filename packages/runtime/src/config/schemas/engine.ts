@@ -11,6 +11,7 @@ const ModelConfigSchema = vb.record(
   nonEmptyString,
   vb.strictObject({
     contextBudget: vb.optional(vb.pipe(vb.number(), vb.minValue(0.1), vb.maxValue(1))),
+    contextHardBudget: vb.optional(vb.pipe(vb.number(), vb.minValue(0.1), vb.maxValue(1))),
     contextWindow: vb.optional(vb.number()),
     reasoning: vb.exactOptional(vb.boolean(), true),
     reasoningBudget: vb.exactOptional(

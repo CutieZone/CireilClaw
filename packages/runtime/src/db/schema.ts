@@ -17,6 +17,8 @@ const sessions = sqliteTable("sessions", {
   openedFiles: text("opened_files").notNull(),
   // ISO-8601 timestamp
   lastActivity: text("last_activity"),
+  // Index into history: first message sent to the LLM on this turn.
+  historyCursor: integer("history_cursor").notNull().default(0),
 });
 
 // Image files live on disk under agents/{slug}/images/{sha256}.{ext}.

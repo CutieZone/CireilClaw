@@ -13,6 +13,10 @@ abstract class BaseSession {
   selectedProvider?: string;
 
   history: Message[] = new Array<Message>();
+  // Index into history: messages from this index onward are sent to the LLM.
+  // Pruning advances the cursor instead of mutating history, so tools like
+  // read-session can still access the full conversation.
+  historyCursor = 0;
   openedFiles: Set<string> = new Set<string>();
   pendingToolMessages: Message[] = new Array<Message>();
   // Images queued by tools (e.g. read) to be injected as a user message before the next generation.
@@ -32,6 +36,7 @@ abstract class BaseSession {
   /** Wipe conversation state while preserving session identity and user selections. */
   reset(): void {
     this.history = [];
+    this.historyCursor = 0;
     this.openedFiles = new Set();
     this.pendingToolMessages = [];
     this.pendingImages = [];

@@ -12,7 +12,6 @@ import { hashImage } from "$/db/sessions.js";
 import type { ToolCallContent } from "$/engine/content.js";
 import type { Context, UsageInfo } from "$/engine/context.js";
 import { GenerationNoToolCallsError, ToolError, ParseError } from "$/engine/errors.js";
-import type { AssistantMessage, Message, ToolMessage } from "$/engine/message.js";
 import { generate as generateAnthropicOauth } from "$/engine/provider/anthropic-oauth.js";
 import { generate as generateOai } from "$/engine/provider/oai.js";
 import { getToolRegistry } from "$/engine/tools/index.js";
@@ -32,7 +31,8 @@ import { sanitizeError } from "$/util/paths.js";
 import { KeyPoolManager } from "@cireilclaw/sdk";
 import * as vb from "valibot";
 
-import { estimateSystemPrompt, pruneToBudget, squashMessages, truncateToTurns } from "./prune.js";
+import type { AssistantMessage, ToolMessage } from "./message.js";
+import { estimateSystemPrompt, pruneHistory, squashMessages } from "./prune.js";
 import { buildSystemPrompt } from "./system-prompt.js";
 import { buildTools } from "./tools.js";
 
@@ -201,40 +201,25 @@ export async function runTurn(
     }
 
     const prompt = await buildSystemPrompt(agentSlug, session, capabilities, conditions);
-    let { history }: { history: Message[] } = session;
-    if (modelCfg.contextWindow === undefined) {
-      history = truncateToTurns(session.history, selectedProvider.maxTurns);
-    } else {
-      const systemTokens = estimateSystemPrompt(prompt);
-      const budget = Math.floor(modelCfg.contextWindow * (modelCfg.contextBudget ?? 0.8));
-      const { messages: pruned, stats } = pruneToBudget(
-        session.history,
-        systemTokens,
-        Number.MAX_SAFE_INTEGER, // Dynamic cap — let budget govern turns
-        budget,
-      );
-      history = pruned;
 
-      if (stats.readSuperseded > 0 || stats.toolResponsesEvicted > 0 || stats.turnsDropped > 0) {
-        debug(
-          "Pruned context:",
-          colors.number(stats.originalTokens),
-          "→",
-          colors.number(stats.finalTokens),
-          "tokens,",
-          stats.readSuperseded,
-          "reads superseded,",
-          stats.toolResponsesEvicted,
-          "tools evicted,",
-          stats.turnsDropped,
-          "turns dropped",
-        );
-      }
-    }
-    const messages = squashMessages([...history, ...session.pendingToolMessages]);
+    const { modifiedHistory, newCursor } = pruneHistory(
+      session.history,
+      session.historyCursor,
+      selectedProvider.maxTurns,
+      modelCfg.contextWindow,
+      modelCfg.contextBudget ?? 0.6,
+      modelCfg.contextHardBudget ?? 0.85,
+      estimateSystemPrompt(prompt),
+    );
+    session.history = modifiedHistory;
+    session.historyCursor = newCursor;
+
+    const visibleHistory = session.history.slice(session.historyCursor);
+    const messages = squashMessages([...visibleHistory, ...session.pendingToolMessages]);
     const activeTools = tools.filter((tool) => !disabledTools.has(tool.name));
 
     const context: Context = {
+      cacheBreakpoints: messages.length > 0 ? [0, messages.length - 1] : undefined,
       messages,
       sessionId: session.id(),
       systemPrompt: prompt,

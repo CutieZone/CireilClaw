@@ -128,7 +128,10 @@ function translateToolResponse(content: ToolResponseContent): AnthropicToolResul
 // Key differences from OAI: toolResponse messages must be merged into a single user message,
 // and any immediately following user message (typically pending images) is absorbed into that block.
 // Also filters out orphaned tool_result blocks that lack matching tool_use in the preceding assistant message.
-async function translateMessages(messages: Message[]): Promise<AnthropicMessage[]> {
+async function translateMessages(
+  messages: Message[],
+  cacheBreakpoints: Set<number>,
+): Promise<AnthropicMessage[]> {
   const result: AnthropicMessage[] = [];
   let lastToolUseIds = new Set<string>();
 
@@ -138,7 +141,11 @@ async function translateMessages(messages: Message[]): Promise<AnthropicMessage[
       break;
     }
 
+    let shouldCache = false;
+    let resultMsg: AnthropicMessage | undefined = undefined;
+
     if (msg.role === "toolResponse") {
+      const startIdx = idx;
       const blocks: AnthropicUserContentBlock[] = [];
 
       for (;;) {
@@ -175,7 +182,15 @@ async function translateMessages(messages: Message[]): Promise<AnthropicMessage[
       }
 
       if (blocks.length > 0) {
-        result.push({ content: blocks, role: "user" });
+        resultMsg = { content: blocks, role: "user" };
+        result.push(resultMsg);
+      }
+
+      for (let innerIdx = startIdx; innerIdx < idx; innerIdx++) {
+        if (cacheBreakpoints.has(innerIdx)) {
+          shouldCache = true;
+          break;
+        }
       }
     } else if (msg.role === "user") {
       const userContent = Array.isArray(msg.content) ? msg.content : [msg.content];
@@ -196,7 +211,9 @@ async function translateMessages(messages: Message[]): Promise<AnthropicMessage[
           blocks.push(await translateImage(block));
         }
       }
-      result.push({ content: blocks, role: "user" });
+      resultMsg = { content: blocks, role: "user" };
+      result.push(resultMsg);
+      shouldCache = cacheBreakpoints.has(idx);
       idx++;
     } else if (msg.role === "assistant") {
       const assistantContent = Array.isArray(msg.content) ? msg.content : [msg.content];
@@ -224,10 +241,22 @@ async function translateMessages(messages: Message[]): Promise<AnthropicMessage[
           blocks.push({ data: block.data, type: "redacted_thinking" });
         }
       }
-      result.push({ content: blocks, role: "assistant" });
+      resultMsg = { content: blocks, role: "assistant" };
+      result.push(resultMsg);
+      shouldCache = cacheBreakpoints.has(idx);
       idx++;
     } else {
       idx++;
+    }
+
+    if (shouldCache && resultMsg !== undefined) {
+      const lastBlock = resultMsg.content.at(-1);
+      if (lastBlock !== undefined) {
+        // Anthropic accepts cache_control on any block type; narrow types
+        // only declare it on text blocks, so we assert through Record.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        (lastBlock as unknown as Record<string, unknown>)["cache_control"] = { type: "ephemeral" };
+      }
     }
   }
 
@@ -284,11 +313,17 @@ export async function generate(
       ]
     : [];
 
+  const cacheBreakpoints = context.cacheBreakpoints
+    ? new Set(context.cacheBreakpoints)
+    : new Set<number>();
+
   const body: Record<string, unknown> = {
     max_tokens: 64_000,
-    messages: [...initialMessage, ...(await translateMessages(context.messages))],
+    messages: [...initialMessage, ...(await translateMessages(context.messages, cacheBreakpoints))],
     model,
-    system: useClaudeCodeWorkaround ? system : context.systemPrompt,
+    system: useClaudeCodeWorkaround
+      ? system
+      : [{ cache_control: { type: "ephemeral" }, text: context.systemPrompt, type: "text" }],
     tool_choice: { type: "any" },
     tools: context.tools.map((tool, idx, arr) => {
       const translated = translateTool(tool);

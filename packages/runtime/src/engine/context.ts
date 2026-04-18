@@ -5,6 +5,7 @@ interface Context {
   messages: Message[];
   systemPrompt: string;
   sessionId: string;
+  cacheBreakpoints?: number[];
   tools: Tool[];
 }
 

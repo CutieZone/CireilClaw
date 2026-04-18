@@ -214,11 +214,12 @@ function truncateToBudget(messages: Message[], budget: number): Message[] {
 interface PruneResult {
   messages: Message[];
   stats: {
+    finalTokens: number;
+    messagesDropped: number;
+    originalTokens: number;
     readSuperseded: number;
     toolResponsesEvicted: number;
     turnsDropped: number;
-    originalTokens: number;
-    finalTokens: number;
   };
 }
 
@@ -262,28 +263,32 @@ function pruneToBudget(
 
   // Step 3: Drop turns if still over budget
   let turnsDropped = 0;
+  let messagesDropped = 0;
   if (estimateTokens(pruned) > historyBudget) {
     const beforeTurns = countTurns(pruned);
+    const beforeLen = pruned.length;
     pruned = truncateToBudget(pruned, historyBudget);
     turnsDropped = beforeTurns - countTurns(pruned);
+    messagesDropped += beforeLen - pruned.length;
   }
 
   // Step 4: Hard turn cap
   const beforeCap = countTurns(pruned);
+  const beforeCapLen = pruned.length;
   pruned = truncateToTurns(pruned, maxTurns);
+  const capDropped = beforeCap - countTurns(pruned);
   if (turnsDropped === 0) {
-    turnsDropped = beforeCap - countTurns(pruned);
+    turnsDropped = capDropped;
   } else {
-    turnsDropped += beforeCap - countTurns(pruned);
+    turnsDropped += capDropped;
   }
-
-  // Step 5: Squash
-  pruned = squashMessages(pruned);
+  messagesDropped += beforeCapLen - pruned.length;
 
   return {
     messages: pruned,
     stats: {
       finalTokens: estimateTokens(pruned),
+      messagesDropped,
       originalTokens,
       readSuperseded,
       toolResponsesEvicted,
@@ -291,13 +296,110 @@ function pruneToBudget(
     },
   };
 }
+interface PruneHistoryResult {
+  modifiedHistory: Message[];
+  newCursor: number;
+  stats: PruneResult["stats"] | undefined;
+}
+
+/**
+ * Cursor-based pruning with hysteresis.
+ *
+ * - `history` is the FULL conversation (never truncated).
+ * - `cursor` is the index into `history`; messages from this index onward are
+ *   what gets sent to the LLM.
+ * - When under the hard cap, stale reads are superseded but the cursor stays
+ *   put, letting context accumulate for cache stability.
+ * - When over the hard cap, turns are dropped from the front of the visible
+ *   slice and the cursor advances by `messagesDropped`.
+ *
+ * Returns a NEW history array with modifications (superseded reads, evicted
+ * tools) applied, plus the updated cursor.
+ */
+function pruneHistory(
+  history: Message[],
+  cursor: number,
+  maxTurns: number,
+  contextWindow: number | undefined,
+  contextBudget: number,
+  contextHardBudget: number,
+  systemTokens: number,
+): PruneHistoryResult {
+  if (contextWindow === undefined) {
+    // Legacy path: hard turn cap only.
+    const visible = history.slice(cursor);
+    const pruned = truncateToTurns(visible, maxTurns);
+    const messagesDropped = visible.length - pruned.length;
+    const modifiedHistory = [...history];
+    for (let idx = 0; idx < pruned.length; idx++) {
+      const msg = pruned[idx];
+      if (msg !== undefined) {
+        modifiedHistory[cursor + messagesDropped + idx] = msg;
+      }
+    }
+    return {
+      modifiedHistory,
+      newCursor: cursor + messagesDropped,
+      stats: undefined,
+    };
+  }
+
+  const softBudget = Math.floor(contextWindow * contextBudget);
+  const hardCap = Math.floor(contextWindow * contextHardBudget);
+  const visible = history.slice(cursor);
+  const historyTokens = estimateTokens(visible);
+
+  if (historyTokens + systemTokens > hardCap) {
+    const { messages: pruned, stats } = pruneToBudget(
+      visible,
+      systemTokens,
+      Number.MAX_SAFE_INTEGER,
+      softBudget,
+    );
+
+    // Persist modifications (superseded reads, evicted tools) back into
+    // full history. pruned[0] aligns with visible[stats.messagesDropped].
+    const modifiedHistory = [...history];
+    for (let idx = 0; idx < pruned.length; idx++) {
+      const historyIdx = cursor + stats.messagesDropped + idx;
+      const msg = pruned[idx];
+      if (historyIdx < modifiedHistory.length && msg !== undefined) {
+        modifiedHistory[historyIdx] = msg;
+      }
+    }
+    return {
+      modifiedHistory,
+      newCursor: cursor + stats.messagesDropped,
+      stats,
+    };
+  }
+
+  // Under hard cap: still supersede stale reads for correctness, but
+  // leave everything else intact so context can accumulate for caching.
+  const modified = applyReadSupersession([...visible]);
+  const modifiedHistory = [...history];
+  for (let idx = 0; idx < modified.length; idx++) {
+    const historyIdx = cursor + idx;
+    const msg = modified[idx];
+    if (historyIdx < modifiedHistory.length && msg !== undefined) {
+      modifiedHistory[historyIdx] = msg;
+    }
+  }
+  return {
+    modifiedHistory,
+    newCursor: cursor,
+    stats: undefined,
+  };
+}
 
 export {
   applyReadSupersession,
   estimateSystemPrompt,
   estimateTokens,
+  pruneHistory,
   pruneToBudget,
-  type PruneResult,
   squashMessages,
   truncateToTurns,
+  type PruneResult,
+  type PruneHistoryResult,
 };

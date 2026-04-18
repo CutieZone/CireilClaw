@@ -287,6 +287,7 @@ function _flushSession(agentSlug: string, session: Session): void {
     .values({
       channel: session.channel,
       history: historyJson,
+      historyCursor: session.historyCursor,
       id: sessionId,
       lastActivity,
       meta: JSON.stringify(meta),
@@ -295,6 +296,7 @@ function _flushSession(agentSlug: string, session: Session): void {
     .onConflictDoUpdate({
       set: {
         history: historyJson,
+        historyCursor: session.historyCursor,
         lastActivity,
         meta: JSON.stringify(meta),
         openedFiles: JSON.stringify([...session.openedFiles]),
@@ -370,9 +372,10 @@ async function loadSessions(agentSlug: string): Promise<Map<string, Session>> {
         session.selectedProvider ??= common.output.selectedProvider;
       }
     }
-
     session.history = history;
+    session.historyCursor = row.historyCursor;
     session.openedFiles = openedFiles;
+
     session.lastActivity = row.lastActivity === null ? 0 : Date.parse(row.lastActivity);
     map.set(row.id, session);
   }

@@ -1,8 +1,8 @@
 # AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to AI Agents when working with code in this repository.
 
-## What is cireilclaw?
+## What is CireilClaw?
 
 An opinionated, security-focused agent system for running sandboxed AI assistants across multiple channels (Discord, Matrix). Emphasizes safety (least privilege, bubblewrap sandboxing), sanity (debuggable code), speed, and composability (hot-reloadable config, no code edits needed). Features multi-agent orchestration, persistent session management, vision API support with image preprocessing, and extensible tool system.
 
@@ -30,6 +30,7 @@ NixOS-based — `flake.nix` provides nodejs, pnpm, and bubblewrap via direnv. Us
 
 - Never use `pnpm lint` piped through `grep`, `tail`, or `head`. It only makes it harder to find problems. Run it directly and read the full output.
 - Use `eza --git-ignore --tree` to get a project tree that respects `.gitignore`.
+- When editing configuration schemas, the edits should also be made to the example configs _and_ to any related documentation files if there are applicable ones.
 
 ## Architecture
 
