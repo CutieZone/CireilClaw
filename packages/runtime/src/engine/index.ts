@@ -12,7 +12,7 @@ import { getDb } from "$/db/index.js";
 import type { ToolCallContent } from "$/engine/content.js";
 import type { Context, UsageInfo } from "$/engine/context.js";
 import { GenerationNoToolCallsError, ToolError, ParseError } from "$/engine/errors.js";
-import type { AssistantMessage, Message, ToolMessage } from "$/engine/message.js";
+import type { AssistantMessage, ToolMessage } from "$/engine/message.js";
 import { generate as generateAnthropicOauth } from "$/engine/provider/anthropic-oauth.js";
 import { generate as generateOai } from "$/engine/provider/oai.js";
 import { getToolRegistry } from "$/engine/tools/index.js";
@@ -29,6 +29,7 @@ import { debug, warning } from "$/output/log.js";
 import type { Scheduler } from "$/scheduler/index.js";
 import { getDefaultProviderAndModel } from "$/util/default-provider-and-model.js";
 import { sanitizeError } from "$/util/paths.js";
+import { squashMessages, truncateToTurns } from "./prune.js";
 import { buildTools } from "./tools.js";
 import { buildSystemPrompt } from "./system-prompt.js";
 
@@ -36,48 +37,6 @@ import { buildSystemPrompt } from "./system-prompt.js";
 import { KeyPoolManager } from "@cireilclaw/sdk";
 import * as vb from "valibot";
 
-function truncateToTurns(messages: Message[], maxTurns: number): Message[] {
-  const turns: Message[][] = [];
-
-  for (const msg of messages) {
-    // Start a new turn on user messages, or if we're just beginning
-    if (msg.role === "user" || turns.length === 0) {
-      turns.push([msg]);
-    } else {
-      // Associate with the current turn (assistant or toolResponse)
-      const currentTurn = turns.at(-1);
-      if (currentTurn !== undefined) {
-        currentTurn.push(msg);
-      }
-    }
-  }
-
-  // Keep only the last maxTurns
-  const truncated = turns.slice(-maxTurns);
-  return truncated.flat();
-}
-
-function squashMessages(messages: Message[]): Message[] {
-  const result: Message[] = [];
-
-  for (const msg of messages) {
-    const last = result.at(-1);
-
-    if (last?.role === "user" && msg.role === "user") {
-      const prev = Array.isArray(last.content) ? last.content : [last.content];
-      const cur = Array.isArray(msg.content) ? msg.content : [msg.content];
-      result.splice(-1, 1, { content: [...prev, ...cur], role: "user" });
-    } else if (last?.role === "assistant" && msg.role === "assistant") {
-      const prev = Array.isArray(last.content) ? last.content : [last.content];
-      const cur = Array.isArray(msg.content) ? msg.content : [msg.content];
-      result.splice(-1, 1, { content: [...prev, ...cur], role: "assistant" });
-    } else {
-      result.push(msg);
-    }
-  }
-
-  return result;
-}
 
 const NO_CAPABILITIES: ChannelCapabilities = {
   supportsAttachments: false,
