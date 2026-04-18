@@ -29,7 +29,7 @@ import { debug, warning } from "$/output/log.js";
 import type { Scheduler } from "$/scheduler/index.js";
 import { getDefaultProviderAndModel } from "$/util/default-provider-and-model.js";
 import { sanitizeError } from "$/util/paths.js";
-import { squashMessages, truncateToTurns } from "./prune.js";
+import { estimateSystemPrompt, pruneToBudget, squashMessages, truncateToTurns } from "./prune.js";
 import { buildTools } from "./tools.js";
 import { buildSystemPrompt } from "./system-prompt.js";
 
@@ -180,15 +180,6 @@ export async function runTurn(
   const toolConsecutiveFailures = new Map<string, number>();
   const disabledTools = new Set<string>();
 
-  if (session.history.length > selectedProvider.maxTurns * 3) {
-    debug(
-      "Truncating history",
-      colors.number(session.history.length),
-      "messages to last",
-      colors.number(selectedProvider.maxTurns),
-      "turns",
-    );
-  }
 
   const { toolFailThreshold } = modelCfg;
 
@@ -202,7 +193,23 @@ export async function runTurn(
     }
 
     const prompt = await buildSystemPrompt(agentSlug, session, capabilities, conditions);
-    const history = truncateToTurns(session.history, selectedProvider.maxTurns);
+    let history: Message[];
+    if (selectedProvider.contextWindow !== undefined) {
+      const systemTokens = estimateSystemPrompt(prompt);
+      const budget = Math.floor(
+        selectedProvider.contextWindow *
+          (selectedProvider.contextBudget ?? 0.8)
+      );
+      history = pruneToBudget(
+        session.history,
+        systemTokens,
+        selectedProvider.maxTurns,
+        budget,
+      );
+    } else {
+      // Legacy mode: turn-count only
+      history = truncateToTurns(session.history, selectedProvider.maxTurns);
+    }
     const messages = squashMessages([...history, ...session.pendingToolMessages]);
     const activeTools = tools.filter((tool) => !disabledTools.has(tool.name));
 
