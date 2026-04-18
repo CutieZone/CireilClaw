@@ -43,3 +43,5 @@ result/
 .junie
 .claude
 docs/superpowers
+.worktrees/
+
