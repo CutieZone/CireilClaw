@@ -8,7 +8,6 @@ import {
 } from "$/config/index.js";
 import type { ConditionsConfig } from "$/config/schemas/conditions.js";
 import { DefaultReasoningBudget, DefaultToolFailThreshold } from "$/config/schemas/engine.js";
-import type { ToolsConfig } from "$/config/schemas/tools.js";
 import { getDb } from "$/db/index.js";
 import type { ToolCallContent } from "$/engine/content.js";
 import type { Context, UsageInfo } from "$/engine/context.js";
@@ -16,7 +15,6 @@ import { GenerationNoToolCallsError, ToolError, ParseError } from "$/engine/erro
 import type { AssistantMessage, Message, ToolMessage } from "$/engine/message.js";
 import { generate as generateAnthropicOauth } from "$/engine/provider/anthropic-oauth.js";
 import { generate as generateOai } from "$/engine/provider/oai.js";
-import type { Tool } from "$/engine/tool.js";
 import { getToolRegistry } from "$/engine/tools/index.js";
 import type { ToolContext } from "$/engine/tools/tool-def.js";
 import type {
@@ -31,6 +29,7 @@ import { debug, warning } from "$/output/log.js";
 import type { Scheduler } from "$/scheduler/index.js";
 import { getDefaultProviderAndModel } from "$/util/default-provider-and-model.js";
 import { sanitizeError } from "$/util/paths.js";
+import { buildTools } from "./tools.js";
 import { buildSystemPrompt } from "./system-prompt.js";
 
 
@@ -87,38 +86,6 @@ const NO_CAPABILITIES: ChannelCapabilities = {
 };
 
 
-async function buildTools(
-  agentSlug: string,
-  _session: Session,
-  toolsConfig?: ToolsConfig,
-): Promise<Tool[]> {
-  const cfg = Object.entries(toolsConfig ?? (await loadTools(agentSlug)));
-
-  const tools: Tool[] = [];
-
-  for (const [tool, setting] of cfg) {
-    const def = getToolRegistry()[tool];
-
-    if (def === undefined) {
-      throw new Error(`Tried to enable invalid tool ${colors.keyword(tool)}: does not exist`);
-    }
-
-    const enabledByValue = typeof setting === "boolean" && setting;
-    const enabledByKey =
-      typeof setting === "object" &&
-      "enabled" in setting &&
-      typeof setting.enabled === "boolean" &&
-      setting.enabled;
-
-    if (!(enabledByValue || enabledByKey)) {
-      continue;
-    }
-
-    tools.push(def);
-  }
-
-  return tools;
-}
 
 function logUsage(
   agentSlug: string,
