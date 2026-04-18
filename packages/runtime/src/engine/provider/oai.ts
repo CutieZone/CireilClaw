@@ -274,7 +274,12 @@ export async function generate(
     const client = new OpenAI({
       apiKey,
       baseURL: apiBase,
-      defaultHeaders: customHeaders,
+      defaultHeaders: {
+        "HTTP-Referer": "https://github.com/CutieZone/CireilClaw",
+        "X-OpenRouter-Categories": "personal-agent,cli-agent",
+        "X-OpenRouter-Title": "CireilClaw",
+        ...customHeaders,
+      },
     });
 
     let resp: Awaited<ReturnType<typeof client.chat.completions.create>> | undefined = undefined;
