@@ -79,6 +79,10 @@ class KeyPool {
     this.failures.set(key, { timestamp: Date.now() });
   }
 
+  reuseLastKey(): void {
+    this.currentIndex = (this.currentIndex - 1 + this.keys.length) % this.keys.length;
+  }
+
   get availableCount(): number {
     const now = Date.now();
     return this.keys.filter((key) => {

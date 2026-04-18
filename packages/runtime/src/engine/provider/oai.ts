@@ -303,6 +303,8 @@ export async function generate(
               "You MUST call a tool. You are not allowed to respond with plain text. Call a tool NOW.",
             role: "system",
           });
+          // This is a model-compatibility retry, not a key failure. Reset so we can reuse the same key.
+          attemptedKeys.clear();
           continue;
         }
 
@@ -348,90 +350,95 @@ export async function generate(
     }
 
     // Process successful response
-    if (!Array.isArray(resp.choices)) {
-      debug("Got unexpected response", resp);
-      throw new TypeError(
-        `Unexpected API response: 'choices' is ${String(resp.choices)} — the model may not support vision, or the request was rejected`,
-      );
-    }
-    const [choice] = resp.choices;
+    try {
+      if (!Array.isArray(resp.choices)) {
+        debug("Got unexpected response", resp);
+        throw new TypeError(
+          `Unexpected API response: 'choices' is ${String(resp.choices)} — the model may not support vision, or the request was rejected`,
+        );
+      }
+      const [choice] = resp.choices;
 
-    if (choice === undefined) {
-      throw new Error("Could not generate response: unknown reason");
-    }
-
-    const reason = choice.finish_reason;
-
-    if (reason === "content_filter") {
-      throw new Error("Hit `content_filter`", {
-        cause: choice.message.refusal,
-      });
-    }
-
-    if (reason !== "tool_calls") {
-      debug("Failing due to wrong end reason.");
-      debug("Message object:", choice.message);
-
-      if (choice.message.tool_calls !== undefined && choice.message.tool_calls.length > 0) {
-        debug("Had at least one tool call.");
+      if (choice === undefined) {
+        throw new Error("Could not generate response: unknown reason");
       }
 
-      const rawText =
-        typeof choice.message.content === "string" ? choice.message.content : undefined;
-      throw new GenerationNoToolCallsError(rawText, reason);
-    }
+      const reason = choice.finish_reason;
 
-    if (choice.message.tool_calls === undefined) {
-      throw new Error("Expected tool calls, but got undefined");
-    }
+      if (reason === "content_filter") {
+        throw new Error("Hit `content_filter`", {
+          cause: choice.message.refusal,
+        });
+      }
 
-    if (choice.message.tool_calls.length === 0) {
-      throw new Error("Expected at least one tool call, but got empty array");
-    }
+      if (reason !== "tool_calls") {
+        debug("Failing due to wrong end reason.");
+        debug("Message object:", choice.message);
 
-    const toolCallBlocks: ToolCallContent[] = choice.message.tool_calls.map((it) => {
-      if (it.type === "function") {
-        try {
-          return {
-            id: it.id,
-            input: it.function.arguments.trim() === "" ? {} : JSON.parse(it.function.arguments),
-            name: it.function.name,
-            type: "toolCall",
-          } as ToolCallContent;
-        } catch (error: unknown) {
-          throw new Error(
-            `Failed to parse tool-call arguments into a json object\n ${it.function.arguments}`,
-            { cause: error },
-          );
+        if (choice.message.tool_calls !== undefined && choice.message.tool_calls.length > 0) {
+          debug("Had at least one tool call.");
         }
+
+        const rawText =
+          typeof choice.message.content === "string" ? choice.message.content : undefined;
+        throw new GenerationNoToolCallsError(rawText, reason);
       }
-      throw new Error("custom not supported");
-    });
 
-    // Some OAI-compatible providers (DeepSeek R1, QwQ, etc.) expose their
-    // chain-of-thought as reasoning_content on the message object.
-    const rawMsg = choice.message as typeof choice.message & {
-      reasoning_content?: string;
-    };
-    const messageContent: AssistantMessage["content"] =
-      typeof rawMsg.reasoning_content === "string" && rawMsg.reasoning_content.length > 0
-        ? [{ thinking: rawMsg.reasoning_content, type: "thinking" }, ...toolCallBlocks]
-        : toolCallBlocks;
+      if (choice.message.tool_calls === undefined) {
+        throw new Error("Expected tool calls, but got undefined");
+      }
 
-    const message: AssistantMessage = {
-      content: messageContent,
-      role: "assistant",
-    };
+      if (choice.message.tool_calls.length === 0) {
+        throw new Error("Expected at least one tool call, but got empty array");
+      }
 
-    let usage: UsageInfo | undefined = undefined;
-    if (resp.usage !== undefined) {
-      usage = {
-        completionTokens: resp.usage.completion_tokens,
-        promptTokens: resp.usage.prompt_tokens,
-        systemPromptTokensEst: Math.round(context.systemPrompt.length / 4),
+      const toolCallBlocks: ToolCallContent[] = choice.message.tool_calls.map((it) => {
+        if (it.type === "function") {
+          try {
+            return {
+              id: it.id,
+              input: it.function.arguments.trim() === "" ? {} : JSON.parse(it.function.arguments),
+              name: it.function.name,
+              type: "toolCall",
+            } as ToolCallContent;
+          } catch (error: unknown) {
+            throw new Error(
+              `Failed to parse tool-call arguments into a json object\n ${it.function.arguments}`,
+              { cause: error },
+            );
+          }
+        }
+        throw new Error("custom not supported");
+      });
+
+      // Some OAI-compatible providers (DeepSeek R1, QwQ, etc.) expose their
+      // chain-of-thought as reasoning_content on the message object.
+      const rawMsg = choice.message as typeof choice.message & {
+        reasoning_content?: string;
       };
-    }
+      const messageContent: AssistantMessage["content"] =
+        typeof rawMsg.reasoning_content === "string" && rawMsg.reasoning_content.length > 0
+          ? [{ thinking: rawMsg.reasoning_content, type: "thinking" }, ...toolCallBlocks]
+          : toolCallBlocks;
 
-    return { message, usage };
+      const message: AssistantMessage = {
+        content: messageContent,
+        role: "assistant",
+      };
+
+      let usage: UsageInfo | undefined = undefined;
+      if (resp.usage !== undefined) {
+        usage = {
+          completionTokens: resp.usage.completion_tokens,
+          promptTokens: resp.usage.prompt_tokens,
+          systemPromptTokensEst: Math.round(context.systemPrompt.length / 4),
+        };
+      }
+
+      return { message, usage };
+    } catch (error) {
+      keyPool.reuseLastKey();
+      throw error;
+    }
   }
 }

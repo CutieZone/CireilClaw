@@ -89,6 +89,26 @@ describe("KeyPool", () => {
     expect(pool.availableCount).toBe(2);
     vi.useRealTimers();
   });
+
+  it("reuseLastKey resets rotation so the same key is returned next", () => {
+    const pool = new KeyPool(["a", "b", "c"], 30_000);
+    expect(pool.getNextKey()).toBe("a");
+    pool.reuseLastKey();
+    expect(pool.getNextKey()).toBe("a");
+    expect(pool.getNextKey()).toBe("b");
+    pool.reuseLastKey();
+    expect(pool.getNextKey()).toBe("b");
+  });
+
+  it("reuseLastKey wraps correctly for the first key", () => {
+    const pool = new KeyPool(["a", "b"], 30_000);
+    expect(pool.getNextKey()).toBe("a");
+    expect(pool.getNextKey()).toBe("b");
+    pool.reuseLastKey();
+    expect(pool.getNextKey()).toBe("b");
+    pool.reuseLastKey();
+    expect(pool.getNextKey()).toBe("b");
+  });
 });
 
 describe("KeyPoolManager", () => {

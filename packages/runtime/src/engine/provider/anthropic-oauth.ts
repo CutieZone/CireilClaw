@@ -349,89 +349,94 @@ export async function generate(
       );
     }
 
-    const AnthropicResponseSchema = vb.object({
-      content: vb.array(
-        vb.object({
-          data: vb.exactOptional(vb.string()),
-          id: vb.exactOptional(vb.string()),
-          input: vb.exactOptional(vb.unknown()),
-          name: vb.exactOptional(vb.string()),
-          signature: vb.exactOptional(vb.string()),
-          text: vb.exactOptional(vb.string()),
-          thinking: vb.exactOptional(vb.string()),
-          type: vb.string(),
+    try {
+      const AnthropicResponseSchema = vb.object({
+        content: vb.array(
+          vb.object({
+            data: vb.exactOptional(vb.string()),
+            id: vb.exactOptional(vb.string()),
+            input: vb.exactOptional(vb.unknown()),
+            name: vb.exactOptional(vb.string()),
+            signature: vb.exactOptional(vb.string()),
+            text: vb.exactOptional(vb.string()),
+            thinking: vb.exactOptional(vb.string()),
+            type: vb.string(),
+          }),
+        ),
+        stop_reason: vb.string(),
+        usage: vb.object({
+          input_tokens: vb.number(),
+          output_tokens: vb.number(),
         }),
-      ),
-      stop_reason: vb.string(),
-      usage: vb.object({
-        input_tokens: vb.number(),
-        output_tokens: vb.number(),
-      }),
-    });
+      });
 
-    const data = vb.parse(AnthropicResponseSchema, await resp.json());
+      const data = vb.parse(AnthropicResponseSchema, await resp.json());
 
-    if (data.stop_reason !== "tool_use") {
-      const textBlock = data.content.find((block) => block.type === "text");
-      throw new GenerationNoToolCallsError(
-        typeof textBlock?.text === "string" ? textBlock.text : undefined,
-        data.stop_reason,
-      );
-    }
-
-    const toolUseBlocks = data.content.filter((block) => block.type === "tool_use");
-
-    if (toolUseBlocks.length === 0) {
-      throw new Error("Expected at least one tool_use block, but got none");
-    }
-
-    // Preserve thinking/redacted_thinking blocks so they can be re-sent in
-    // subsequent turns (retained reasoning). Order matters: thinking blocks
-    // must appear before the tool_use blocks they preceded.
-    const contentBlocks: AssistantMessage["content"] = [];
-
-    for (const block of data.content) {
-      if (
-        block.type === "thinking" &&
-        block.thinking !== undefined &&
-        block.signature !== undefined
-      ) {
-        contentBlocks.push({
-          signature: block.signature,
-          thinking: block.thinking,
-          type: "thinking",
-        } as ThinkingContent);
-      } else if (block.type === "redacted_thinking" && block.data !== undefined) {
-        contentBlocks.push({
-          data: block.data,
-          type: "redacted_thinking",
-        } as RedactedThinkingContent);
-      } else if (block.type === "tool_use") {
-        if (block.id === undefined || block.name === undefined) {
-          throw new Error(
-            `Anthropic returned tool_use block missing id or name: ${JSON.stringify(block)}`,
-          );
-        }
-        contentBlocks.push({
-          id: block.id,
-          input: block.input ?? {},
-          name: block.name,
-          type: "toolCall",
-        } as ToolCallContent);
+      if (data.stop_reason !== "tool_use") {
+        const textBlock = data.content.find((block) => block.type === "text");
+        throw new GenerationNoToolCallsError(
+          typeof textBlock?.text === "string" ? textBlock.text : undefined,
+          data.stop_reason,
+        );
       }
+
+      const toolUseBlocks = data.content.filter((block) => block.type === "tool_use");
+
+      if (toolUseBlocks.length === 0) {
+        throw new Error("Expected at least one tool_use block, but got none");
+      }
+
+      // Preserve thinking/redacted_thinking blocks so they can be re-sent in
+      // subsequent turns (retained reasoning). Order matters: thinking blocks
+      // must appear before the tool_use blocks they preceded.
+      const contentBlocks: AssistantMessage["content"] = [];
+
+      for (const block of data.content) {
+        if (
+          block.type === "thinking" &&
+          block.thinking !== undefined &&
+          block.signature !== undefined
+        ) {
+          contentBlocks.push({
+            signature: block.signature,
+            thinking: block.thinking,
+            type: "thinking",
+          } as ThinkingContent);
+        } else if (block.type === "redacted_thinking" && block.data !== undefined) {
+          contentBlocks.push({
+            data: block.data,
+            type: "redacted_thinking",
+          } as RedactedThinkingContent);
+        } else if (block.type === "tool_use") {
+          if (block.id === undefined || block.name === undefined) {
+            throw new Error(
+              `Anthropic returned tool_use block missing id or name: ${JSON.stringify(block)}`,
+            );
+          }
+          contentBlocks.push({
+            id: block.id,
+            input: block.input ?? {},
+            name: block.name,
+            type: "toolCall",
+          } as ToolCallContent);
+        }
+      }
+
+      const message: AssistantMessage = {
+        content: contentBlocks,
+        role: "assistant",
+      };
+
+      const usage: UsageInfo = {
+        completionTokens: data.usage.output_tokens,
+        promptTokens: data.usage.input_tokens,
+        systemPromptTokensEst: Math.round(system.length / 4),
+      };
+
+      return { message, usage };
+    } catch (error) {
+      keyPool.reuseLastKey();
+      throw error;
     }
-
-    const message: AssistantMessage = {
-      content: contentBlocks,
-      role: "assistant",
-    };
-
-    const usage: UsageInfo = {
-      completionTokens: data.usage.output_tokens,
-      promptTokens: data.usage.input_tokens,
-      systemPromptTokensEst: Math.round(system.length / 4),
-    };
-
-    return { message, usage };
   }
 }
