@@ -168,7 +168,7 @@ describe("pruneToBudget", () => {
       m.role === "toolResponse" && (m.content as { id: string }).id === "call-1"
     );
     expect(firstTool).toBeDefined();
-    expect((firstTool!.content as { output: Record<string, unknown> }).output.superseded).toBe(true);
+    expect((firstTool!.content as { output: Record<string, unknown> }).output["superseded"]).toBe(true);
   });
 
   it("applies maxTurns as hard cap", () => {

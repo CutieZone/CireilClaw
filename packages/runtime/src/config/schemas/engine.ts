@@ -37,6 +37,8 @@ const ProviderConfigSchema = vb.strictObject({
       "Either a list of available models, or 'analyze' to attempt automatic resolution of a model list",
     ),
   ),
+  contextBudget: vb.optional(vb.pipe(vb.number(), vb.minValue(0.1), vb.maxValue(1))),
+  contextWindow: vb.optional(vb.number()),
   customHeaders: vb.pipe(
     vb.exactOptional(
       vb.record(nonEmptyString, vb.union([nonEmptyString, vb.array(nonEmptyString)])),

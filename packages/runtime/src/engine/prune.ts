@@ -138,19 +138,19 @@ function evictToolResponses(messages: Message[], budget: number): Message[] {
 
   for (let i = 0; i < result.length && currentTokens > budget; i++) {
     const msg = result[i];
+    if (!msg) continue;
     if (msg.role !== "toolResponse") continue;
     if (!evictable.includes(msg.content.name)) continue;
-    if (msg.persist === false) continue;
 
     const oldTokens = estimateTokens([msg]);
     result[i] = {
       ...msg,
       content: {
         ...msg.content,
-        output: { tool: msg.content.name, superseded: true, reason: "budget" },
+        output: { reason: "budget", superseded: true, tool: msg.content.name },
       },
     };
-    const newTokens = estimateTokens([result[i]]);
+    const newTokens = estimateTokens([result[i]!]);
     currentTokens -= oldTokens - newTokens;
   }
 
