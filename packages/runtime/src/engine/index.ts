@@ -214,14 +214,34 @@ export async function runTurn(
         selectedProvider.contextWindow *
           (selectedProvider.contextBudget ?? 0.8)
       );
-      history = pruneToBudget(
+      const { messages: pruned, stats } = pruneToBudget(
         session.history,
         systemTokens,
         selectedProvider.maxTurns,
         budget,
       );
+      history = pruned;
+
+      if (stats.readSuperseded > 0 || stats.toolResponsesEvicted > 0 || stats.turnsDropped > 0) {
+        debug(
+          "Pruned context:",
+          colors.number(stats.originalTokens), "→", colors.number(stats.finalTokens), "tokens,",
+          stats.readSuperseded, "reads superseded,",
+          stats.toolResponsesEvicted, "tools evicted,",
+          stats.turnsDropped, "turns dropped",
+        );
+      }
     } else {
       // Legacy mode: turn-count only
+      if (session.history.length > selectedProvider.maxTurns * 3) {
+        debug(
+          "Truncating history",
+          colors.number(session.history.length),
+          "messages to last",
+          colors.number(selectedProvider.maxTurns),
+          "turns",
+        );
+      }
       history = truncateToTurns(session.history, selectedProvider.maxTurns);
     }
     const messages = squashMessages([...history, ...session.pendingToolMessages]);

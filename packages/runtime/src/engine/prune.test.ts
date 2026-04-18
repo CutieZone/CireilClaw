@@ -135,7 +135,7 @@ describe("pruneToBudget", () => {
       { content: { content: "Hi there", type: "text" }, role: "assistant" },
     ];
     const result = pruneToBudget(messages, 0, 100, 1000);
-    expect(result).toHaveLength(2);
+    expect(result.messages).toHaveLength(2);
   });
 
   it("evicts tool responses when over budget", () => {
@@ -164,7 +164,7 @@ describe("pruneToBudget", () => {
     ];
 
     const result = pruneToBudget(messages, 0, 100, 500);
-    const firstTool = result.find((m) =>
+    const firstTool = result.messages.find((m) =>
       m.role === "toolResponse" && (m.content as { id: string }).id === "call-1"
     );
     expect(firstTool).toBeDefined();
@@ -179,7 +179,7 @@ describe("pruneToBudget", () => {
     }
 
     const result = pruneToBudget(messages, 0, 5, 1_000_000);
-    const userCount = result.filter((m) => m.role === "user").length;
+    const userCount = result.messages.filter((m) => m.role === "user").length;
     expect(userCount).toBeLessThanOrEqual(5);
   });
 });

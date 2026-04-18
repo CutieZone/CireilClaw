@@ -180,27 +180,79 @@ function truncateToBudget(messages: Message[], budget: number): Message[] {
   return turns.flat();
 }
 
+export interface PruneResult {
+  messages: Message[];
+  stats: {
+    readSuperseded: number;
+    toolResponsesEvicted: number;
+    turnsDropped: number;
+    originalTokens: number;
+    finalTokens: number;
+  };
+}
+
+function countTurns(messages: Message[]): number {
+  let turns = 0;
+  for (const msg of messages) {
+    if (msg.role === "user") turns++;
+  }
+  return turns || 1;
+}
+
 export function pruneToBudget(
   messages: Message[],
   systemTokens: number,
   maxTurns: number,
   budget: number,
-): Message[] {
+): PruneResult {
+  const originalTokens = estimateTokens(messages);
+
   // Step 1: Supersede stale reads
   let pruned = applyReadSupersession([...messages]);
+  const readSuperseded = pruned.filter(
+    (m) =>
+      m.role === "toolResponse" &&
+      m.content.name === "read" &&
+      (m.content.output as Record<string, unknown>)?.["superseded"] === true
+  ).length;
 
   // Step 2: Evict oldest tool responses
   const historyBudget = budget - systemTokens;
   pruned = evictToolResponses(pruned, historyBudget);
+  const toolResponsesEvicted = pruned.filter(
+    (m) =>
+      m.role === "toolResponse" &&
+      (m.content.output as Record<string, unknown>)?.["reason"] === "budget"
+  ).length;
 
   // Step 3: Drop turns if still over budget
+  let turnsDropped = 0;
   if (estimateTokens(pruned) > historyBudget) {
+    const beforeTurns = countTurns(pruned);
     pruned = truncateToBudget(pruned, historyBudget);
+    turnsDropped = beforeTurns - countTurns(pruned);
   }
 
   // Step 4: Hard turn cap
+  const beforeCap = countTurns(pruned);
   pruned = truncateToTurns(pruned, maxTurns);
+  if (turnsDropped === 0) {
+    turnsDropped = beforeCap - countTurns(pruned);
+  } else {
+    turnsDropped += beforeCap - countTurns(pruned);
+  }
 
   // Step 5: Squash
-  return squashMessages(pruned);
+  pruned = squashMessages(pruned);
+
+  return {
+    messages: pruned,
+    stats: {
+      finalTokens: estimateTokens(pruned),
+      originalTokens,
+      readSuperseded,
+      toolResponsesEvicted,
+      turnsDropped,
+    },
+  };
 }
