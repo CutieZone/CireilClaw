@@ -1,7 +1,7 @@
 import type { Message } from "$/engine/message.js";
 import type { Content } from "./content.js";
 
-export function truncateToTurns(messages: Message[], maxTurns: number): Message[] {
+function truncateToTurns(messages: Message[], maxTurns: number): Message[] {
   const turns: Message[][] = [];
 
   for (const msg of messages) {
@@ -22,7 +22,7 @@ export function truncateToTurns(messages: Message[], maxTurns: number): Message[
   return truncated.flat();
 }
 
-export function squashMessages(messages: Message[]): Message[] {
+function squashMessages(messages: Message[]): Message[] {
   const result: Message[] = [];
 
   for (const msg of messages) {
@@ -68,13 +68,13 @@ function estimateContentTokens(block: Content): number {
     case "video_ref":
       return IMAGE_TOKEN_OVERHEAD;
     default: {
-      void (block as never);
-      return MESSAGE_OVERHEAD;
+      const _exhaustive: never = block;
+      return _exhaustive;
     }
   }
 }
 
-export function estimateTokens(messages: Message[]): number {
+function estimateTokens(messages: Message[]): number {
   let tokens = 0;
   for (const msg of messages) {
     tokens += MESSAGE_OVERHEAD;
@@ -86,32 +86,43 @@ export function estimateTokens(messages: Message[]): number {
   return tokens;
 }
 
-export function estimateSystemPrompt(prompt: string): number {
+function estimateSystemPrompt(prompt: string): number {
   return Math.ceil(prompt.length / CHARS_PER_TOKEN);
 }
 
-export function applyReadSupersession(messages: Message[]): Message[] {
+function isRecord(obj: unknown): obj is Record<string, unknown> {
+  return typeof obj === "object" && obj !== null;
+}
+
+function applyReadSupersession(messages: Message[]): Message[] {
   const lastReadByPath = new Map<string, number>();
 
-  for (let i = 0; i < messages.length; i++) {
-    const msg = messages[i]!;
-    if (msg.role === "toolResponse" && msg.content.name === "read") {
-      const output = msg.content.output as Record<string, unknown>;
-      if (typeof output["path"] === "string") {
-        lastReadByPath.set(output["path"], i);
-      }
+  for (let idx = 0; idx < messages.length; idx++) {
+    const msg = messages[idx];
+    if (msg === undefined) {
+      continue;
+    }
+    if (
+      msg.role === "toolResponse" &&
+      msg.content.name === "read" &&
+      isRecord(msg.content.output) &&
+      typeof msg.content.output["path"] === "string"
+    ) {
+      lastReadByPath.set(msg.content.output["path"], idx);
     }
   }
 
-  return messages.map((msg, i) => {
+  return messages.map((msg, idx) => {
     if (msg.role !== "toolResponse" || msg.content.name !== "read") {
       return msg;
     }
-    const output = msg.content.output as Record<string, unknown>;
-    if (typeof output["path"] !== "string") {
+    if (!isRecord(msg.content.output)) {
       return msg;
     }
-    if (lastReadByPath.get(output["path"]) === i) {
+    if (typeof msg.content.output["path"] !== "string") {
+      return msg;
+    }
+    if (lastReadByPath.get(msg.content.output["path"]) === idx) {
       return msg;
     }
 
@@ -119,38 +130,38 @@ export function applyReadSupersession(messages: Message[]): Message[] {
       ...msg,
       content: {
         ...msg.content,
-        output: { path: output["path"], superseded: true },
+        output: { path: msg.content.output["path"], superseded: true },
       },
     };
   });
 }
 
 function evictToolResponses(messages: Message[], budget: number): Message[] {
-  const evictable = [
+  const evictable = new Set([
     "read", "exec", "list-dir", "brave-search", "session-info",
     "query-sessions", "list-sessions", "read-session", "read-history",
     "read-skill", "download-attachments", "schedule", "react",
     "open-file", "close-file", "str-replace",
-  ];
+  ]);
 
   let currentTokens = estimateTokens(messages);
   const result = [...messages];
 
-  for (let i = 0; i < result.length && currentTokens > budget; i++) {
-    const msg = result[i];
-    if (!msg) continue;
-    if (msg.role !== "toolResponse") continue;
-    if (!evictable.includes(msg.content.name)) continue;
+  for (let idx = 0; idx < result.length && currentTokens > budget; idx++) {
+    const msg = result[idx];
+    if (!msg) { continue; }
+    if (msg.role !== "toolResponse") { continue; }
+    if (!evictable.has(msg.content.name)) { continue; }
 
     const oldTokens = estimateTokens([msg]);
-    result[i] = {
+    result[idx] = {
       ...msg,
       content: {
         ...msg.content,
         output: { reason: "budget", superseded: true, tool: msg.content.name },
       },
     };
-    const newTokens = estimateTokens([result[i]!]);
+    const newTokens = estimateTokens([result[idx] ?? msg]);
     currentTokens -= oldTokens - newTokens;
   }
 
@@ -173,14 +184,14 @@ function truncateToBudget(messages: Message[], budget: number): Message[] {
 
   while (turns.length > 1) {
     const flat = turns.flat();
-    if (estimateTokens(flat) <= budget) break;
+    if (estimateTokens(flat) <= budget) { break; }
     turns.shift();
   }
 
   return turns.flat();
 }
 
-export interface PruneResult {
+interface PruneResult {
   messages: Message[];
   stats: {
     readSuperseded: number;
@@ -194,12 +205,12 @@ export interface PruneResult {
 function countTurns(messages: Message[]): number {
   let turns = 0;
   for (const msg of messages) {
-    if (msg.role === "user") turns++;
+    if (msg.role === "user") { turns++; }
   }
   return turns || 1;
 }
 
-export function pruneToBudget(
+function pruneToBudget(
   messages: Message[],
   systemTokens: number,
   maxTurns: number,
@@ -210,19 +221,21 @@ export function pruneToBudget(
   // Step 1: Supersede stale reads
   let pruned = applyReadSupersession([...messages]);
   const readSuperseded = pruned.filter(
-    (m) =>
-      m.role === "toolResponse" &&
-      m.content.name === "read" &&
-      (m.content.output as Record<string, unknown>)?.["superseded"] === true
+    (msg) =>
+      msg.role === "toolResponse" &&
+      msg.content.name === "read" &&
+      isRecord(msg.content.output) &&
+      msg.content.output["superseded"] === true
   ).length;
 
   // Step 2: Evict oldest tool responses
   const historyBudget = budget - systemTokens;
   pruned = evictToolResponses(pruned, historyBudget);
   const toolResponsesEvicted = pruned.filter(
-    (m) =>
-      m.role === "toolResponse" &&
-      (m.content.output as Record<string, unknown>)?.["reason"] === "budget"
+    (msg) =>
+      msg.role === "toolResponse" &&
+      isRecord(msg.content.output) &&
+      msg.content.output["reason"] === "budget"
   ).length;
 
   // Step 3: Drop turns if still over budget
@@ -256,3 +269,13 @@ export function pruneToBudget(
     },
   };
 }
+
+export {
+  applyReadSupersession,
+  estimateSystemPrompt,
+  estimateTokens,
+  pruneToBudget,
+  type PruneResult,
+  squashMessages,
+  truncateToTurns,
+};

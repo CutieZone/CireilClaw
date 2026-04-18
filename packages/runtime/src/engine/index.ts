@@ -207,7 +207,7 @@ export async function runTurn(
     }
 
     const prompt = await buildSystemPrompt(agentSlug, session, capabilities, conditions);
-    let history: Message[];
+    let history: Message[] = truncateToTurns(session.history, selectedProvider.maxTurns);
     if (selectedProvider.contextWindow !== undefined) {
       const systemTokens = estimateSystemPrompt(prompt);
       const budget = Math.floor(
@@ -231,18 +231,6 @@ export async function runTurn(
           stats.turnsDropped, "turns dropped",
         );
       }
-    } else {
-      // Legacy mode: turn-count only
-      if (session.history.length > selectedProvider.maxTurns * 3) {
-        debug(
-          "Truncating history",
-          colors.number(session.history.length),
-          "messages to last",
-          colors.number(selectedProvider.maxTurns),
-          "turns",
-        );
-      }
-      history = truncateToTurns(session.history, selectedProvider.maxTurns);
     }
     const messages = squashMessages([...history, ...session.pendingToolMessages]);
     const activeTools = tools.filter((tool) => !disabledTools.has(tool.name));

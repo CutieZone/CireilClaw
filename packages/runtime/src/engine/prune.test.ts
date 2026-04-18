@@ -78,8 +78,11 @@ describe("applyReadSupersession", () => {
     ];
 
     const result = applyReadSupersession(messages);
-    expect((result[0]!.content as { output: Record<string, unknown> }).output["superseded"]).toBe(true);
-    expect((result[1]!.content as { output: Record<string, unknown> }).output["superseded"]).toBeUndefined();
+    const [msg0, msg1] = result;
+    if (msg0 === undefined) { throw new Error("Expected msg0"); }
+    expect(msg0.content).toHaveProperty("output.superseded", true);
+    if (msg1 === undefined) { throw new Error("Expected msg1"); }
+    expect(msg1.content).not.toHaveProperty("output.superseded");
   });
 
   it("does not affect different paths", () => {
@@ -105,8 +108,11 @@ describe("applyReadSupersession", () => {
     ];
 
     const result = applyReadSupersession(messages);
-    expect((result[0]!.content as { output: Record<string, unknown> }).output["superseded"]).toBeUndefined();
-    expect((result[1]!.content as { output: Record<string, unknown> }).output["superseded"]).toBeUndefined();
+    const [msg0, msg1] = result;
+    if (msg0 === undefined) { throw new Error("Expected msg0"); }
+    expect(msg0.content).not.toHaveProperty("output.superseded");
+    if (msg1 === undefined) { throw new Error("Expected msg1"); }
+    expect(msg1.content).not.toHaveProperty("output.superseded");
   });
 
   it("does not affect non-read tool responses", () => {
@@ -123,7 +129,9 @@ describe("applyReadSupersession", () => {
     ];
 
     const result = applyReadSupersession(messages);
-    expect((result[0]!.content as { output: Record<string, unknown> }).output["superseded"]).toBeUndefined();
+    const [msg0] = result;
+    if (msg0 === undefined) { throw new Error("Expected msg0"); }
+    expect(msg0.content).not.toHaveProperty("output.superseded");
   });
 });
 
@@ -164,22 +172,25 @@ describe("pruneToBudget", () => {
     ];
 
     const result = pruneToBudget(messages, 0, 100, 500);
-    const firstTool = result.messages.find((m) =>
-      m.role === "toolResponse" && (m.content as { id: string }).id === "call-1"
-    );
-    expect(firstTool).toBeDefined();
-    expect((firstTool!.content as { output: Record<string, unknown> }).output["superseded"]).toBe(true);
+    const firstTool = result.messages.find((msg) => {
+      const content = Array.isArray(msg.content) ? msg.content[0] : msg.content;
+      return content?.type === "toolResponse" && content.id === "call-1";
+    });
+    if (firstTool === undefined) {
+      throw new Error("Expected firstTool to be defined");
+    }
+    expect(firstTool.content).toHaveProperty("output.superseded", true);
   });
 
   it("applies maxTurns as hard cap", () => {
     const messages: Message[] = [];
-    for (let i = 0; i < 10; i++) {
-      messages.push({ content: { content: `Turn ${i}`, type: "text" }, role: "user" });
-      messages.push({ content: { content: `Reply ${i}`, type: "text" }, role: "assistant" });
+    for (let idx = 0; idx < 10; idx++) {
+      messages.push({ content: { content: `Turn ${idx}`, type: "text" }, role: "user" });
+      messages.push({ content: { content: `Reply ${idx}`, type: "text" }, role: "assistant" });
     }
 
     const result = pruneToBudget(messages, 0, 5, 1_000_000);
-    const userCount = result.messages.filter((m) => m.role === "user").length;
+    const userCount = result.messages.filter((msg) => msg.role === "user").length;
     expect(userCount).toBeLessThanOrEqual(5);
   });
 });

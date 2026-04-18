@@ -41,7 +41,7 @@ function imagePath(agentSlug: string, id: string, mediaType: string): string {
   return join(imageDir(agentSlug), `${id}${ext}`);
 }
 
-export function hashImage(data: Uint8Array): string {
+function hashImage(data: Uint8Array): string {
   return Buffer.from(blake3(data)).toString("hex");
 }
 
@@ -650,6 +650,7 @@ function updateSessionVideoRefs(
 
 export {
   flushAllSessions,
+  hashImage,
   loadSessions,
   saveSession,
   deleteSession,
