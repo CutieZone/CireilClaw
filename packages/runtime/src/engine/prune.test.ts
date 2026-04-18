@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyReadSupersession, estimateSystemPrompt, estimateTokens } from "./prune.js";
+import { applyReadSupersession, estimateSystemPrompt, estimateTokens, pruneToBudget } from "./prune.js";
 import type { Message } from "./message.js";
 
 describe("estimateTokens", () => {
@@ -124,5 +124,62 @@ describe("applyReadSupersession", () => {
 
     const result = applyReadSupersession(messages);
     expect((result[0]!.content as { output: Record<string, unknown> }).output["superseded"]).toBeUndefined();
+  });
+});
+
+
+describe("pruneToBudget", () => {
+  it("returns all messages when under budget", () => {
+    const messages: Message[] = [
+      { content: { content: "Hello", type: "text" }, role: "user" },
+      { content: { content: "Hi there", type: "text" }, role: "assistant" },
+    ];
+    const result = pruneToBudget(messages, 0, 100, 1000);
+    expect(result).toHaveLength(2);
+  });
+
+  it("evicts tool responses when over budget", () => {
+    const longContent = "x".repeat(3000);
+    const messages: Message[] = [
+      { content: { content: "Hello", type: "text" }, role: "user" },
+      {
+        content: {
+          id: "call-1",
+          name: "read",
+          output: { content: longContent, path: "/workspace/file.txt", success: true },
+          type: "toolResponse",
+        },
+        role: "toolResponse",
+      },
+      { content: { content: "Thanks", type: "text" }, role: "user" },
+      {
+        content: {
+          id: "call-2",
+          name: "read",
+          output: { content: longContent, path: "/workspace/file2.txt", success: true },
+          type: "toolResponse",
+        },
+        role: "toolResponse",
+      },
+    ];
+
+    const result = pruneToBudget(messages, 0, 100, 500);
+    const firstTool = result.find((m) =>
+      m.role === "toolResponse" && (m.content as { id: string }).id === "call-1"
+    );
+    expect(firstTool).toBeDefined();
+    expect((firstTool!.content as { output: Record<string, unknown> }).output.superseded).toBe(true);
+  });
+
+  it("applies maxTurns as hard cap", () => {
+    const messages: Message[] = [];
+    for (let i = 0; i < 10; i++) {
+      messages.push({ content: { content: `Turn ${i}`, type: "text" }, role: "user" });
+      messages.push({ content: { content: `Reply ${i}`, type: "text" }, role: "assistant" });
+    }
+
+    const result = pruneToBudget(messages, 0, 5, 1_000_000);
+    const userCount = result.filter((m) => m.role === "user").length;
+    expect(userCount).toBeLessThanOrEqual(5);
   });
 });

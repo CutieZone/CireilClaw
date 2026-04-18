@@ -124,3 +124,83 @@ export function applyReadSupersession(messages: Message[]): Message[] {
     };
   });
 }
+
+function evictToolResponses(messages: Message[], budget: number): Message[] {
+  const evictable = [
+    "read", "exec", "list-dir", "brave-search", "session-info",
+    "query-sessions", "list-sessions", "read-session", "read-history",
+    "read-skill", "download-attachments", "schedule", "react",
+    "open-file", "close-file", "str-replace",
+  ];
+
+  let currentTokens = estimateTokens(messages);
+  const result = [...messages];
+
+  for (let i = 0; i < result.length && currentTokens > budget; i++) {
+    const msg = result[i];
+    if (msg.role !== "toolResponse") continue;
+    if (!evictable.includes(msg.content.name)) continue;
+    if (msg.persist === false) continue;
+
+    const oldTokens = estimateTokens([msg]);
+    result[i] = {
+      ...msg,
+      content: {
+        ...msg.content,
+        output: { tool: msg.content.name, superseded: true, reason: "budget" },
+      },
+    };
+    const newTokens = estimateTokens([result[i]]);
+    currentTokens -= oldTokens - newTokens;
+  }
+
+  return result;
+}
+
+function truncateToBudget(messages: Message[], budget: number): Message[] {
+  const turns: Message[][] = [];
+
+  for (const msg of messages) {
+    if (msg.role === "user" || turns.length === 0) {
+      turns.push([msg]);
+    } else {
+      const currentTurn = turns.at(-1);
+      if (currentTurn !== undefined) {
+        currentTurn.push(msg);
+      }
+    }
+  }
+
+  while (turns.length > 1) {
+    const flat = turns.flat();
+    if (estimateTokens(flat) <= budget) break;
+    turns.shift();
+  }
+
+  return turns.flat();
+}
+
+export function pruneToBudget(
+  messages: Message[],
+  systemTokens: number,
+  maxTurns: number,
+  budget: number,
+): Message[] {
+  // Step 1: Supersede stale reads
+  let pruned = applyReadSupersession([...messages]);
+
+  // Step 2: Evict oldest tool responses
+  const historyBudget = budget - systemTokens;
+  pruned = evictToolResponses(pruned, historyBudget);
+
+  // Step 3: Drop turns if still over budget
+  if (estimateTokens(pruned) > historyBudget) {
+    pruned = truncateToBudget(pruned, historyBudget);
+  }
+
+  // Step 4: Hard turn cap
+  pruned = truncateToTurns(pruned, maxTurns);
+
+  // Step 5: Squash
+  return squashMessages(pruned);
+}
