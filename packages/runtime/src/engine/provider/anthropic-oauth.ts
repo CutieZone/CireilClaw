@@ -263,27 +263,32 @@ export async function generate(
   { reasoning = true, reasoningBudget = DefaultReasoningBudget, customHeaders }: Options,
 ): Promise<{ message: AssistantMessage; usage?: UsageInfo }> {
   // Required preamble for the claude-code-20250219 beta — the model checks for this.
+
+  const useClaudeCodeWorkaround = apiBase.includes("api.anthropic.com");
   const system = `You are Claude Code, Anthropic's official CLI for Claude.`;
+
+  const initialMessage = useClaudeCodeWorkaround
+    ? [
+        {
+          content: [
+            {
+              cache_control: {
+                type: "ephemeral",
+              },
+              text: context.systemPrompt,
+              type: "text",
+            },
+          ],
+          role: "assistant",
+        } satisfies AnthropicMessage,
+      ]
+    : [];
 
   const body: Record<string, unknown> = {
     max_tokens: 64_000,
-    messages: [
-      {
-        content: [
-          {
-            cache_control: {
-              type: "ephemeral",
-            },
-            text: context.systemPrompt,
-            type: "text",
-          },
-        ],
-        role: "assistant",
-      } satisfies AnthropicMessage,
-      ...(await translateMessages(context.messages)),
-    ],
+    messages: [...initialMessage, ...(await translateMessages(context.messages))],
     model,
-    system,
+    system: useClaudeCodeWorkaround ? system : context.systemPrompt,
     tool_choice: { type: "any" },
     tools: context.tools.map((tool, idx, arr) => {
       const translated = translateTool(tool);
