@@ -9,10 +9,11 @@ import {
 import type { ConditionsConfig } from "$/config/schemas/conditions.js";
 import { DefaultReasoningBudget, DefaultToolFailThreshold } from "$/config/schemas/engine.js";
 import { getDb } from "$/db/index.js";
+import { hashImage } from "$/db/sessions.js";
 import type { ToolCallContent } from "$/engine/content.js";
 import type { Context, UsageInfo } from "$/engine/context.js";
 import { GenerationNoToolCallsError, ToolError, ParseError } from "$/engine/errors.js";
-import type { AssistantMessage, ToolMessage } from "$/engine/message.js";
+import type { AssistantMessage, Message, ToolMessage } from "$/engine/message.js";
 import { generate as generateAnthropicOauth } from "$/engine/provider/anthropic-oauth.js";
 import { generate as generateOai } from "$/engine/provider/oai.js";
 import { getToolRegistry } from "$/engine/tools/index.js";
@@ -187,6 +188,19 @@ export async function runTurn(
     // If tools or Discord queued images/videos, inject them as a user message
     // AFTER pending tool responses. The OAI API only allows images/video in
     // user-role messages, and they must come after the matching tool responses.
+
+    // Deduplicate pending images by blake3 hash
+    const seenImages = new Set<string>();
+    const dedupedImages = session.pendingImages.filter((img) => {
+      const hash = hashImage(img.data);
+      if (seenImages.has(hash)) {
+        return false;
+      }
+      seenImages.add(hash);
+      return true;
+    });
+    session.pendingImages = dedupedImages;
+
     if (session.pendingImages.length > 0 || session.pendingVideos.length > 0) {
       const media = [...session.pendingImages.splice(0), ...session.pendingVideos.splice(0)];
       session.pendingToolMessages.push({ content: media, role: "user" });

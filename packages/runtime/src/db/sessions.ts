@@ -41,7 +41,7 @@ function imagePath(agentSlug: string, id: string, mediaType: string): string {
   return join(imageDir(agentSlug), `${id}${ext}`);
 }
 
-function hashImage(data: Uint8Array): string {
+export function hashImage(data: Uint8Array): string {
   return Buffer.from(blake3(data)).toString("hex");
 }
 
