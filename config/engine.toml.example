@@ -31,11 +31,11 @@ maxTurns = 30
 #   reasoningBudget = 16384     # Token budget for reasoning. Default: 16384
 #   supportsVideo = false       # Video support flag. Default: false
 #   toolFailThreshold = 3       # Max tool failures before giving up. Default: 3
-contextWindow = 128000 # Model context window in tokens. Enables token-budget pruning.
+#   contextWindow = 128000      # Model context window in tokens. Enables token-budget pruning.
 #                                 When set, the engine evicts stale tool responses before dropping turns.
 #                                 When omitted, legacy maxTurns-only truncation is used.
-contextBudget = 0.6 # Fraction of contextWindow to prune back to (0.1–1.0). Default: 0.6
-contextHardBudget = 0.85 # Fraction of contextWindow that triggers pruning (0.1–1.0). Default: 0.85
+#   contextBudget = 0.6         # Fraction of contextWindow to prune back to (0.1–1.0). Default: 0.6
+#   contextHardBudget = 0.85    # Fraction of contextWindow that triggers pruning (0.1–1.0). Default: 0.85
 #                                 Context accumulates from contextBudget up to contextHardBudget,
 #                                 then prunes back to contextBudget. This hysteresis improves
 #                                 cache hit rates by keeping prefixes stable across turns.
