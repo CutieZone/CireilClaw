@@ -163,8 +163,8 @@ export async function runTurn(
 
   const selectedModel = override.model ?? session.selectedModel ?? engineDefaults.model.name;
 
-  const modelCfg = engineDefaults.model.config ??
-    selectedProvider.models?.[selectedModel] ?? {
+  const modelCfg = selectedProvider.models?.[selectedModel] ??
+    engineDefaults.model.config ?? {
       reasoning: true,
       reasoningBudget: DefaultReasoningBudget,
       supportsVideo: false,
@@ -201,14 +201,16 @@ export async function runTurn(
     }
 
     const prompt = await buildSystemPrompt(agentSlug, session, capabilities, conditions);
-    let history: Message[] = truncateToTurns(session.history, selectedProvider.maxTurns);
-    if (modelCfg.contextWindow !== undefined) {
+    let { history }: { history: Message[] } = session;
+    if (modelCfg.contextWindow === undefined) {
+      history = truncateToTurns(session.history, selectedProvider.maxTurns);
+    } else {
       const systemTokens = estimateSystemPrompt(prompt);
       const budget = Math.floor(modelCfg.contextWindow * (modelCfg.contextBudget ?? 0.8));
       const { messages: pruned, stats } = pruneToBudget(
         session.history,
         systemTokens,
-        selectedProvider.maxTurns,
+        Number.MAX_SAFE_INTEGER, // Dynamic cap — let budget govern turns
         budget,
       );
       history = pruned;

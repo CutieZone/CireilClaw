@@ -708,130 +708,132 @@ async function handleMessageCreate(
   session.lastActivity = Date.now();
   session.lastMessageId = msg.id;
   session.busy = true;
+  try {
+    // Crawl the full reply tree and add ancestor messages as context.
+    // These messages help the agent understand the conversation flow but
+    // aren't persisted to avoid polluting long-term history.
+    if (directReply !== undefined) {
+      // Crawl ancestors (messages older than the direct reply)
+      const ancestors = await crawlReplyTree(client, directReply);
 
-  // Crawl the full reply tree and add ancestor messages as context.
-  // These messages help the agent understand the conversation flow but
-  // aren't persisted to avoid polluting long-term history.
-  if (directReply !== undefined) {
-    // Crawl ancestors (messages older than the direct reply)
-    const ancestors = await crawlReplyTree(client, directReply);
+      // Add ancestor messages that aren't already in history
+      for (const ancestor of ancestors) {
+        if (isMessageInHistory(ds.history, ancestor.id)) {
+          continue;
+        }
 
-    // Add ancestor messages that aren't already in history
-    for (const ancestor of ancestors) {
-      if (isMessageInHistory(ds.history, ancestor.id)) {
-        continue;
+        const ancestorContent = await formatHistoryContext(ancestor);
+        const ancestorImages = await fetchAllImages(ancestor);
+        ds.history.push({
+          content:
+            ancestorImages.length > 0 ? [ancestorContent, ...ancestorImages] : ancestorContent,
+          id: ancestor.id,
+          persist: false,
+          role: "user",
+          timestamp: Date.now(),
+        });
       }
 
-      const ancestorContent = await formatHistoryContext(ancestor);
-      const ancestorImages = await fetchAllImages(ancestor);
-      ds.history.push({
-        content: ancestorImages.length > 0 ? [ancestorContent, ...ancestorImages] : ancestorContent,
-        id: ancestor.id,
-        persist: false,
-        role: "user",
-        timestamp: Date.now(),
-      });
+      // Add direct reply only if not already in history
+      if (!isMessageInHistory(ds.history, directReply.id)) {
+        const replyContent = await formatHistoryContext(directReply);
+        const replyImages = await fetchAllImages(directReply);
+        ds.history.push({
+          content: replyImages.length > 0 ? [replyContent, ...replyImages] : replyContent,
+          id: directReply.id,
+          persist: true,
+          role: "user",
+          timestamp: Date.now(),
+        });
+      }
     }
 
-    // Add direct reply only if not already in history
-    if (!isMessageInHistory(ds.history, directReply.id)) {
-      const replyContent = await formatHistoryContext(directReply);
-      const replyImages = await fetchAllImages(directReply);
-      ds.history.push({
-        content: replyImages.length > 0 ? [replyContent, ...replyImages] : replyContent,
-        id: directReply.id,
-        persist: true,
-        role: "user",
-        timestamp: Date.now(),
-      });
+    // Push user message into history, including any image/video attachments.
+    const textContent = await formatUserMessage(msg);
+    const imageContents = await fetchAllImages(msg);
+
+    const engineConfig = await loadEngine(agentSlug);
+
+    const provider = engineConfig[session.selectedProvider ?? defaults.provider.name];
+    if (provider === undefined) {
+      throw new Error(
+        `Could not load the provider ${session.selectedProvider} from the engine config: check your configuration`,
+      );
     }
-  }
+    const { models } = provider;
+    const modelSupportsVideo =
+      models?.[session.selectedModel ?? defaults.model.name] === undefined
+        ? false
+        : models[session.selectedModel ?? defaults.model.name]?.supportsVideo;
 
-  // Push user message into history, including any image/video attachments.
-  const textContent = await formatUserMessage(msg);
-  const imageContents = await fetchAllImages(msg);
-
-  const engineConfig = await loadEngine(agentSlug);
-
-  const provider = engineConfig[session.selectedProvider ?? defaults.provider.name];
-  if (provider === undefined) {
-    throw new Error(
-      `Could not load the provider ${session.selectedProvider} from the engine config: check your configuration`,
-    );
-  }
-  const { models } = provider;
-  const modelSupportsVideo =
-    models?.[session.selectedModel ?? defaults.model.name] === undefined
-      ? false
-      : models[session.selectedModel ?? defaults.model.name]?.supportsVideo;
-
-  const supportsVideo = models === undefined ? false : (modelSupportsVideo ?? false);
-  const videoContents = supportsVideo ? await fetchAttachmentVideos(msg) : [];
-  const mediaContents = [...imageContents, ...videoContents];
-  const historyLengthBeforeTurn = session.history.length;
-  session.history.push({
-    content: mediaContents.length > 0 ? [textContent, ...mediaContents] : textContent,
-    id: msg.id,
-    persist: true,
-    role: "user",
-    timestamp: Date.now(),
-  });
-
-  // Start typing indicator — Discord shows "Bot is typing…" for ~5 s, so we
-  // refresh it on an interval for the duration of the turn.
-  try {
-    await msgChannel.sendTyping();
-  } catch (error) {
-    warning(
-      "Got error while trying to send typing",
-      error instanceof Error ? error.message : String(error),
-    );
-    warning(error);
-    // Non-fatal — typing indicators are best-effort.
-  }
-  ds.typingInterval = setInterval(() => {
-    // oxlint-disable-next-line promise/prefer-await-to-then
-    msgChannel.sendTyping().catch(() => {
-      // Intentionally ignored
+    const supportsVideo = models === undefined ? false : (modelSupportsVideo ?? false);
+    const videoContents = supportsVideo ? await fetchAttachmentVideos(msg) : [];
+    const mediaContents = [...imageContents, ...videoContents];
+    const historyLengthBeforeTurn = session.history.length;
+    session.history.push({
+      content: mediaContents.length > 0 ? [textContent, ...mediaContents] : textContent,
+      id: msg.id,
+      persist: true,
+      role: "user",
+      timestamp: Date.now(),
     });
-  }, TYPING_INTERVAL_MS);
 
-  try {
-    await agent.runTurn(session);
-  } catch (error) {
-    // Roll back any history entries added during this failed turn so that the
-    // next message doesn't see a stranded user message with no response.
-    // Also clear pending tool messages — they reference tool calls from the
-    // rolled-back assistant message and must not leak into the next turn.
-    session.history.length = historyLengthBeforeTurn;
-    session.pendingToolMessages.length = 0;
-    warning("Error during agent turn:", error instanceof Error ? error.message : String(error));
-    if (error instanceof Error && error.stack !== undefined) {
-      warning("Stack trace:", error.stack);
-    }
-    const reason = sanitizeError(error, agentSlug);
+    // Start typing indicator — Discord shows "Bot is typing…" for ~5 s, so we
+    // refresh it on an interval for the duration of the turn.
     try {
-      const newMsg = await msgChannel.createMessage({
-        allowedMentions: {
-          repliedUser: true,
-        },
-        content: `⚠️ Engine error: ${reason}\n\n-# agent owner can react with ✨ to delete`,
-        messageReference: {
-          channelID: msg.channelID,
-          guildID: msg.guildID ?? undefined,
-          messageID: msg.id,
-        },
-      });
-
-      await newMsg.createReaction("✨");
-
-      // oxlint-disable-next-line no-shadow
+      await msgChannel.sendTyping();
     } catch (error) {
       warning(
-        "Failed to send engine error Discord message",
+        "Got error while trying to send typing",
         error instanceof Error ? error.message : String(error),
       );
-      // Best-effort.
+      warning(error);
+      // Non-fatal — typing indicators are best-effort.
+    }
+    ds.typingInterval = setInterval(() => {
+      // oxlint-disable-next-line promise/prefer-await-to-then
+      msgChannel.sendTyping().catch(() => {
+        // Intentionally ignored
+      });
+    }, TYPING_INTERVAL_MS);
+
+    try {
+      await agent.runTurn(session);
+    } catch (error) {
+      // Roll back any history entries added during this failed turn so that the
+      // next message doesn't see a stranded user message with no response.
+      // Also clear pending tool messages — they reference tool calls from the
+      // rolled-back assistant message and must not leak into the next turn.
+      session.history.length = historyLengthBeforeTurn;
+      session.pendingToolMessages.length = 0;
+      warning("Error during agent turn:", error instanceof Error ? error.message : String(error));
+      if (error instanceof Error && error.stack !== undefined) {
+        warning("Stack trace:", error.stack);
+      }
+      const reason = sanitizeError(error, agentSlug);
+      try {
+        const newMsg = await msgChannel.createMessage({
+          allowedMentions: {
+            repliedUser: true,
+          },
+          content: `⚠️ Engine error: ${reason}\n\n-# agent owner can react with ✨ to delete`,
+          messageReference: {
+            channelID: msg.channelID,
+            guildID: msg.guildID ?? undefined,
+            messageID: msg.id,
+          },
+        });
+
+        await newMsg.createReaction("✨");
+
+        // oxlint-disable-next-line no-shadow
+      } catch (error) {
+        warning(
+          "Failed to send engine error Discord message",
+          error instanceof Error ? error.message : String(error),
+        );
+        // Best-effort.
+      }
     }
   } finally {
     saveSession(agent.slug, session);
