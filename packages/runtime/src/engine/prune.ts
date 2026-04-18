@@ -89,3 +89,38 @@ export function estimateTokens(messages: Message[]): number {
 export function estimateSystemPrompt(prompt: string): number {
   return Math.ceil(prompt.length / CHARS_PER_TOKEN);
 }
+
+export function applyReadSupersession(messages: Message[]): Message[] {
+  const lastReadByPath = new Map<string, number>();
+
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i]!;
+    if (msg.role === "toolResponse" && msg.content.name === "read") {
+      const output = msg.content.output as Record<string, unknown>;
+      if (typeof output["path"] === "string") {
+        lastReadByPath.set(output["path"], i);
+      }
+    }
+  }
+
+  return messages.map((msg, i) => {
+    if (msg.role !== "toolResponse" || msg.content.name !== "read") {
+      return msg;
+    }
+    const output = msg.content.output as Record<string, unknown>;
+    if (typeof output["path"] !== "string") {
+      return msg;
+    }
+    if (lastReadByPath.get(output["path"]) === i) {
+      return msg;
+    }
+
+    return {
+      ...msg,
+      content: {
+        ...msg.content,
+        output: { path: output["path"], superseded: true },
+      },
+    };
+  });
+}
