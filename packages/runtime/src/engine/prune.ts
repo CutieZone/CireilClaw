@@ -1,4 +1,5 @@
 import type { Message } from "$/engine/message.js";
+import type { Content } from "./content.js";
 
 export function truncateToTurns(messages: Message[], maxTurns: number): Message[] {
   const turns: Message[][] = [];
@@ -41,4 +42,50 @@ export function squashMessages(messages: Message[]): Message[] {
   }
 
   return result;
+}
+
+
+const CHARS_PER_TOKEN = 3;
+const IMAGE_TOKEN_OVERHEAD = 200;
+const MESSAGE_OVERHEAD = 4;
+
+function estimateContentTokens(block: Content): number {
+  switch (block.type) {
+    case "text":
+      return Math.ceil(block.content.length / CHARS_PER_TOKEN);
+    case "toolCall":
+      return Math.ceil(JSON.stringify(block.input).length / CHARS_PER_TOKEN);
+    case "toolResponse":
+      return Math.ceil(JSON.stringify(block.output).length / CHARS_PER_TOKEN);
+    case "image":
+    case "image_ref":
+      return IMAGE_TOKEN_OVERHEAD;
+    case "thinking":
+      return Math.ceil(block.thinking.length / CHARS_PER_TOKEN);
+    case "redacted_thinking":
+      return Math.ceil(block.data.length / CHARS_PER_TOKEN);
+    case "video":
+    case "video_ref":
+      return IMAGE_TOKEN_OVERHEAD;
+    default: {
+      void (block as never);
+      return MESSAGE_OVERHEAD;
+    }
+  }
+}
+
+export function estimateTokens(messages: Message[]): number {
+  let tokens = 0;
+  for (const msg of messages) {
+    tokens += MESSAGE_OVERHEAD;
+    const blocks = Array.isArray(msg.content) ? msg.content : [msg.content];
+    for (const block of blocks) {
+      tokens += estimateContentTokens(block);
+    }
+  }
+  return tokens;
+}
+
+export function estimateSystemPrompt(prompt: string): number {
+  return Math.ceil(prompt.length / CHARS_PER_TOKEN);
 }
