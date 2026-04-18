@@ -204,9 +204,7 @@ export async function runTurn(
     let history: Message[] = truncateToTurns(session.history, selectedProvider.maxTurns);
     if (modelCfg.contextWindow !== undefined) {
       const systemTokens = estimateSystemPrompt(prompt);
-      const budget = Math.floor(
-        modelCfg.contextWindow * (modelCfg.contextBudget ?? 0.8),
-      );
+      const budget = Math.floor(modelCfg.contextWindow * (modelCfg.contextBudget ?? 0.8));
       const { messages: pruned, stats } = pruneToBudget(
         session.history,
         systemTokens,
