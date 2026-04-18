@@ -11,9 +11,6 @@ defaultModel = "gpt-4o"
 isGlobalDefault = true
 maxTurns = 30
 
-# Enable token-budget pruning (optional)
-# contextWindow = 128000
-# contextBudget = 0.8
 # --- Provider fields ---
 #
 # apiBase               (required)  Valid API base URL
@@ -24,11 +21,8 @@ maxTurns = 30
 # availableModels       (optional)  List of model names, or "analyze" for auto-resolution. Default: "analyze"
 # maxGenerationRetries  (optional)  How many times generation can fail before crashing. Default: 2
 # maxTurns              (optional)  Number of conversation turns sent to the API. Default: 30
-# contextWindow         (optional)  Model context window in tokens. Enables token-budget pruning.
-#                                     When set, the engine evicts stale tool responses before dropping turns.
-#                                     When omitted, legacy maxTurns-only truncation is used.
-# contextBudget         (optional)  Fraction of contextWindow to use (0.1–1.0). Default: 0.8
 # useJpegForImages      (optional)  Force JPEG over WEBP for images. Default: false
+# useToolChoiceAuto     (optional)  Prefer tool_choice: auto over required. Default: false
 # customHeaders         (optional)  Custom headers for generation requests
 #
 # models                (optional)  Model-specific overrides, keyed by model name:
@@ -37,3 +31,7 @@ maxTurns = 30
 #   reasoningBudget = 16384     # Token budget for reasoning. Default: 16384
 #   supportsVideo = false       # Video support flag. Default: false
 #   toolFailThreshold = 3       # Max tool failures before giving up. Default: 3
+#   contextWindow = 128000      # Model context window in tokens. Enables token-budget pruning.
+#                                 When set, the engine evicts stale tool responses before dropping turns.
+#                                 When omitted, legacy maxTurns-only truncation is used.
+#   contextBudget = 0.8         # Fraction of contextWindow to use (0.1–1.0). Default: 0.8

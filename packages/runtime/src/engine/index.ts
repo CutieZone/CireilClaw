@@ -202,10 +202,10 @@ export async function runTurn(
 
     const prompt = await buildSystemPrompt(agentSlug, session, capabilities, conditions);
     let history: Message[] = truncateToTurns(session.history, selectedProvider.maxTurns);
-    if (selectedProvider.contextWindow !== undefined) {
+    if (modelCfg.contextWindow !== undefined) {
       const systemTokens = estimateSystemPrompt(prompt);
       const budget = Math.floor(
-        selectedProvider.contextWindow * (selectedProvider.contextBudget ?? 0.8),
+        modelCfg.contextWindow * (modelCfg.contextBudget ?? 0.8),
       );
       const { messages: pruned, stats } = pruneToBudget(
         session.history,

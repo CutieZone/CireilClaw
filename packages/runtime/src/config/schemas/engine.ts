@@ -10,6 +10,8 @@ const DefaultMaxTurns = 30;
 const ModelConfigSchema = vb.record(
   nonEmptyString,
   vb.strictObject({
+    contextBudget: vb.optional(vb.pipe(vb.number(), vb.minValue(0.1), vb.maxValue(1))),
+    contextWindow: vb.optional(vb.number()),
     reasoning: vb.exactOptional(vb.boolean(), true),
     reasoningBudget: vb.exactOptional(
       vb.pipe(vb.number(), vb.integer(), vb.minValue(0)),
@@ -37,8 +39,6 @@ const ProviderConfigSchema = vb.strictObject({
       "Either a list of available models, or 'analyze' to attempt automatic resolution of a model list",
     ),
   ),
-  contextBudget: vb.optional(vb.pipe(vb.number(), vb.minValue(0.1), vb.maxValue(1))),
-  contextWindow: vb.optional(vb.number()),
   customHeaders: vb.pipe(
     vb.exactOptional(
       vb.record(nonEmptyString, vb.union([nonEmptyString, vb.array(nonEmptyString)])),
