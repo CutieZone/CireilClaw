@@ -1,4 +1,3 @@
-
 import {
   loadAgentPluginConfig,
   loadEngine,
@@ -30,22 +29,18 @@ import { debug, warning } from "$/output/log.js";
 import type { Scheduler } from "$/scheduler/index.js";
 import { getDefaultProviderAndModel } from "$/util/default-provider-and-model.js";
 import { sanitizeError } from "$/util/paths.js";
-import { estimateSystemPrompt, pruneToBudget, squashMessages, truncateToTurns } from "./prune.js";
-import { buildTools } from "./tools.js";
-import { buildSystemPrompt } from "./system-prompt.js";
-
-
 import { KeyPoolManager } from "@cireilclaw/sdk";
 import * as vb from "valibot";
 
+import { estimateSystemPrompt, pruneToBudget, squashMessages, truncateToTurns } from "./prune.js";
+import { buildSystemPrompt } from "./system-prompt.js";
+import { buildTools } from "./tools.js";
 
 const NO_CAPABILITIES: ChannelCapabilities = {
   supportsAttachments: false,
   supportsDownloadAttachments: false,
   supportsReactions: false,
 };
-
-
 
 function logUsage(
   agentSlug: string,
@@ -181,7 +176,6 @@ export async function runTurn(
   const toolConsecutiveFailures = new Map<string, number>();
   const disabledTools = new Set<string>();
 
-
   const { toolFailThreshold } = modelCfg;
 
   for (;;) {
@@ -211,8 +205,7 @@ export async function runTurn(
     if (selectedProvider.contextWindow !== undefined) {
       const systemTokens = estimateSystemPrompt(prompt);
       const budget = Math.floor(
-        selectedProvider.contextWindow *
-          (selectedProvider.contextBudget ?? 0.8)
+        selectedProvider.contextWindow * (selectedProvider.contextBudget ?? 0.8),
       );
       const { messages: pruned, stats } = pruneToBudget(
         session.history,
@@ -225,10 +218,16 @@ export async function runTurn(
       if (stats.readSuperseded > 0 || stats.toolResponsesEvicted > 0 || stats.turnsDropped > 0) {
         debug(
           "Pruned context:",
-          colors.number(stats.originalTokens), "→", colors.number(stats.finalTokens), "tokens,",
-          stats.readSuperseded, "reads superseded,",
-          stats.toolResponsesEvicted, "tools evicted,",
-          stats.turnsDropped, "turns dropped",
+          colors.number(stats.originalTokens),
+          "→",
+          colors.number(stats.finalTokens),
+          "tokens,",
+          stats.readSuperseded,
+          "reads superseded,",
+          stats.toolResponsesEvicted,
+          "tools evicted,",
+          stats.turnsDropped,
+          "turns dropped",
         );
       }
     }

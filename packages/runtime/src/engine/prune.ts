@@ -1,4 +1,5 @@
 import type { Message } from "$/engine/message.js";
+
 import type { Content } from "./content.js";
 
 function truncateToTurns(messages: Message[], maxTurns: number): Message[] {
@@ -43,7 +44,6 @@ function squashMessages(messages: Message[]): Message[] {
 
   return result;
 }
-
 
 const CHARS_PER_TOKEN = 3;
 const IMAGE_TOKEN_OVERHEAD = 200;
@@ -138,10 +138,22 @@ function applyReadSupersession(messages: Message[]): Message[] {
 
 function evictToolResponses(messages: Message[], budget: number): Message[] {
   const evictable = new Set([
-    "read", "exec", "list-dir", "brave-search", "session-info",
-    "query-sessions", "list-sessions", "read-session", "read-history",
-    "read-skill", "download-attachments", "schedule", "react",
-    "open-file", "close-file", "str-replace",
+    "read",
+    "exec",
+    "list-dir",
+    "brave-search",
+    "session-info",
+    "query-sessions",
+    "list-sessions",
+    "read-session",
+    "read-history",
+    "read-skill",
+    "download-attachments",
+    "schedule",
+    "react",
+    "open-file",
+    "close-file",
+    "str-replace",
   ]);
 
   let currentTokens = estimateTokens(messages);
@@ -149,9 +161,15 @@ function evictToolResponses(messages: Message[], budget: number): Message[] {
 
   for (let idx = 0; idx < result.length && currentTokens > budget; idx++) {
     const msg = result[idx];
-    if (!msg) { continue; }
-    if (msg.role !== "toolResponse") { continue; }
-    if (!evictable.has(msg.content.name)) { continue; }
+    if (!msg) {
+      continue;
+    }
+    if (msg.role !== "toolResponse") {
+      continue;
+    }
+    if (!evictable.has(msg.content.name)) {
+      continue;
+    }
 
     const oldTokens = estimateTokens([msg]);
     result[idx] = {
@@ -184,7 +202,9 @@ function truncateToBudget(messages: Message[], budget: number): Message[] {
 
   while (turns.length > 1) {
     const flat = turns.flat();
-    if (estimateTokens(flat) <= budget) { break; }
+    if (estimateTokens(flat) <= budget) {
+      break;
+    }
     turns.shift();
   }
 
@@ -205,7 +225,9 @@ interface PruneResult {
 function countTurns(messages: Message[]): number {
   let turns = 0;
   for (const msg of messages) {
-    if (msg.role === "user") { turns++; }
+    if (msg.role === "user") {
+      turns++;
+    }
   }
   return turns || 1;
 }
@@ -225,7 +247,7 @@ function pruneToBudget(
       msg.role === "toolResponse" &&
       msg.content.name === "read" &&
       isRecord(msg.content.output) &&
-      msg.content.output["superseded"] === true
+      msg.content.output["superseded"] === true,
   ).length;
 
   // Step 2: Evict oldest tool responses
@@ -235,7 +257,7 @@ function pruneToBudget(
     (msg) =>
       msg.role === "toolResponse" &&
       isRecord(msg.content.output) &&
-      msg.content.output["reason"] === "budget"
+      msg.content.output["reason"] === "budget",
   ).length;
 
   // Step 3: Drop turns if still over budget

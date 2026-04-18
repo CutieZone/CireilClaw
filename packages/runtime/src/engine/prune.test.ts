@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { applyReadSupersession, estimateSystemPrompt, estimateTokens, pruneToBudget } from "./prune.js";
+
 import type { Message } from "./message.js";
+import {
+  applyReadSupersession,
+  estimateSystemPrompt,
+  estimateTokens,
+  pruneToBudget,
+} from "./prune.js";
 
 describe("estimateTokens", () => {
   it("estimates text messages", () => {
@@ -53,7 +59,6 @@ describe("estimateSystemPrompt", () => {
   });
 });
 
-
 describe("applyReadSupersession", () => {
   it("keeps the latest read for each path", () => {
     const messages: Message[] = [
@@ -79,9 +84,13 @@ describe("applyReadSupersession", () => {
 
     const result = applyReadSupersession(messages);
     const [msg0, msg1] = result;
-    if (msg0 === undefined) { throw new Error("Expected msg0"); }
+    if (msg0 === undefined) {
+      throw new Error("Expected msg0");
+    }
     expect(msg0.content).toHaveProperty("output.superseded", true);
-    if (msg1 === undefined) { throw new Error("Expected msg1"); }
+    if (msg1 === undefined) {
+      throw new Error("Expected msg1");
+    }
     expect(msg1.content).not.toHaveProperty("output.superseded");
   });
 
@@ -109,9 +118,13 @@ describe("applyReadSupersession", () => {
 
     const result = applyReadSupersession(messages);
     const [msg0, msg1] = result;
-    if (msg0 === undefined) { throw new Error("Expected msg0"); }
+    if (msg0 === undefined) {
+      throw new Error("Expected msg0");
+    }
     expect(msg0.content).not.toHaveProperty("output.superseded");
-    if (msg1 === undefined) { throw new Error("Expected msg1"); }
+    if (msg1 === undefined) {
+      throw new Error("Expected msg1");
+    }
     expect(msg1.content).not.toHaveProperty("output.superseded");
   });
 
@@ -130,11 +143,12 @@ describe("applyReadSupersession", () => {
 
     const result = applyReadSupersession(messages);
     const [msg0] = result;
-    if (msg0 === undefined) { throw new Error("Expected msg0"); }
+    if (msg0 === undefined) {
+      throw new Error("Expected msg0");
+    }
     expect(msg0.content).not.toHaveProperty("output.superseded");
   });
 });
-
 
 describe("pruneToBudget", () => {
   it("returns all messages when under budget", () => {
