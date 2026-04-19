@@ -1,7 +1,12 @@
 import { readdir } from "node:fs/promises";
 
 import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
-import { checkConditionalAccess, sandboxToReal, validateSystemPath } from "$/util/paths.js";
+import {
+  checkConditionalAccess,
+  getMountEntriesAtPath,
+  sandboxToReal,
+  validateSystemPath,
+} from "$/util/paths.js";
 import * as vb from "valibot";
 
 const AGENT_SANDBOX_PREFIXES = ["/workspace", "/memories", "/blocks", "/skills", "/tasks"] as const;
@@ -51,19 +56,40 @@ export const listDir: ToolDef = {
       checkConditionalAccess(data.path, ctx.agentSlug, ctx.conditions, ctx.session);
     }
 
-    const entries = await readdir(realPath, { withFileTypes: true });
-    const items = entries.map((ent): { name: string; type: "directory" | "symlink" | "file" } => ({
-      name: ent.name,
-      type: ((): "directory" | "symlink" | "file" => {
-        if (ent.isDirectory()) {
-          return "directory";
-        }
-        if (ent.isSymbolicLink()) {
-          return "symlink";
-        }
-        return "file";
-      })(),
-    }));
+    const items: { name: string; type: "directory" | "symlink" | "file" }[] = [];
+
+    try {
+      const entries = await readdir(realPath, { withFileTypes: true });
+      for (const ent of entries) {
+        const type = ((): "directory" | "symlink" | "file" => {
+          if (ent.isDirectory()) {
+            return "directory";
+          }
+          if (ent.isSymbolicLink()) {
+            return "symlink";
+          }
+          return "file";
+        })();
+        items.push({ name: ent.name, type });
+      }
+    } catch (error) {
+      const code =
+        error instanceof Error && "code" in error ? (error as { code: unknown }).code : undefined;
+      // Only swallow ENOENT for workspace paths that may have mount entries.
+      if (!isAgentPath || code !== "ENOENT") {
+        throw error;
+      }
+    }
+
+    // Merge synthetic mount entries for workspace paths. Mounts shadow physical entries.
+    if (isAgentPath && ctx.mounts !== undefined && ctx.mounts.length > 0) {
+      const mountItems = getMountEntriesAtPath(data.path, ctx.mounts);
+      const mountNames = new Set(mountItems.map((mountItem) => mountItem.name));
+      const filtered = items.filter((item) => !mountNames.has(item.name));
+      items.length = 0;
+      items.push(...filtered, ...mountItems);
+    }
+
     return { entries: items, path: data.path, success: true };
   },
   name: "list-dir",

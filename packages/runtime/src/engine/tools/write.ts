@@ -40,7 +40,7 @@ export const write: ToolDef = {
     "- Making small, targeted changes to an existing file — use `str-replace` instead, which is safer and preserves surrounding content.",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     const data = vb.parse(Schema, input);
-    const realPath = sandboxToReal(data.path, ctx.agentSlug);
+    const realPath = sandboxToReal(data.path, ctx.agentSlug, ctx.mounts);
 
     // Check conditional access rules if conditions are available
     if (ctx.conditions !== undefined) {

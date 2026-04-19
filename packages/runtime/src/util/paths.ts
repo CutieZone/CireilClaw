@@ -161,6 +161,45 @@ function checkMountWriteAccess(sandboxPath: string, mounts: readonly Mount[]): v
   }
 }
 
+function getMountEntriesAtPath(
+  sandboxPath: string,
+  mounts: readonly Mount[],
+): { name: string; type: "directory" }[] {
+  if (sandboxPath !== "/workspace" && !sandboxPath.startsWith("/workspace/")) {
+    return [];
+  }
+
+  const rest = sandboxPath === "/workspace" ? "" : sandboxPath.slice("/workspace/".length);
+
+  // If we're inside or exactly at a mount target, readdir on the resolved real path handles it.
+  for (const mount of mounts) {
+    if (rest === mount.target || rest.startsWith(`${mount.target}/`)) {
+      return [];
+    }
+  }
+
+  const entries = new Map<string, { name: string; type: "directory" }>();
+
+  for (const mount of mounts) {
+    if (rest === "") {
+      // At /workspace — first segment of each mount target is visible.
+      const [firstSegment] = mount.target.split("/");
+      if (firstSegment !== undefined) {
+        entries.set(firstSegment, { name: firstSegment, type: "directory" });
+      }
+    } else if (mount.target.startsWith(`${rest}/`)) {
+      // At a subdirectory that is a prefix of a mount target.
+      const remaining = mount.target.slice(rest.length + 1);
+      const [firstSegment] = remaining.split("/");
+      if (firstSegment !== undefined) {
+        entries.set(firstSegment, { name: firstSegment, type: "directory" });
+      }
+    }
+  }
+
+  return [...entries.values()];
+}
+
 function sanitizeError(err: unknown, agentSlug: string): string {
   const msg = err instanceof Error ? err.message : String(err);
   return msg.replaceAll(agentRoot(agentSlug), "<sandbox>");
@@ -251,6 +290,7 @@ function validateSystemPath(path: string): string {
 
 export {
   checkMountWriteAccess,
+  getMountEntriesAtPath,
   sandboxToReal,
   sanitizeError,
   agentRoot,

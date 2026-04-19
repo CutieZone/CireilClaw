@@ -7,6 +7,7 @@ import {
   agentRoot,
   checkConditionalAccess,
   checkMountWriteAccess,
+  getMountEntriesAtPath,
   root,
   sanitizeError,
   sandboxToReal,
@@ -178,6 +179,60 @@ describe("checkMountWriteAccess", () => {
     expect(() => {
       checkMountWriteAccess("/workspace/file.txt", []);
     }).not.toThrow();
+  });
+});
+
+describe("getMountEntriesAtPath", () => {
+  const mounts: Mount[] = [
+    { mode: "rw", source: "/home/test/projects/my-app", target: "project" },
+    { mode: "ro", source: "/data/libs", target: "libs/data" },
+    { mode: "rw", source: "/docs", target: "docs" },
+  ];
+
+  it("returns empty array for non-workspace paths", () => {
+    expect(getMountEntriesAtPath("/memories", mounts)).toEqual([]);
+    expect(getMountEntriesAtPath("/blocks/file.md", mounts)).toEqual([]);
+  });
+
+  it("returns empty array when inside a mount target", () => {
+    expect(getMountEntriesAtPath("/workspace/project", mounts)).toEqual([]);
+    expect(getMountEntriesAtPath("/workspace/project/src", mounts)).toEqual([]);
+  });
+
+  it("returns empty array when exactly at a mount target", () => {
+    expect(getMountEntriesAtPath("/workspace/docs", mounts)).toEqual([]);
+    expect(getMountEntriesAtPath("/workspace/libs/data", mounts)).toEqual([]);
+  });
+
+  it("returns first-level mount entries at /workspace", () => {
+    const entries = getMountEntriesAtPath("/workspace", mounts);
+    expect(entries).toHaveLength(3);
+    expect(entries.map((entry) => entry.name).toSorted()).toEqual(["docs", "libs", "project"]);
+    expect(entries[0]?.type).toBe("directory");
+  });
+
+  it("returns nested mount entries at intermediate paths", () => {
+    const entries = getMountEntriesAtPath("/workspace/libs", mounts);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toEqual({ name: "data", type: "directory" });
+  });
+
+  it("returns empty array for paths with no relevant mounts", () => {
+    expect(getMountEntriesAtPath("/workspace/unrelated", mounts)).toEqual([]);
+  });
+
+  it("returns empty array for empty mounts", () => {
+    expect(getMountEntriesAtPath("/workspace", [])).toEqual([]);
+  });
+
+  it("deduplicates overlapping first segments", () => {
+    const overlappingMounts: Mount[] = [
+      { mode: "rw", source: "/a", target: "foo/bar" },
+      { mode: "rw", source: "/b", target: "foo/baz" },
+    ];
+    const entries = getMountEntriesAtPath("/workspace", overlappingMounts);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toEqual({ name: "foo", type: "directory" });
   });
 });
 
