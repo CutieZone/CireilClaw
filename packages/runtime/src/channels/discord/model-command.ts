@@ -6,6 +6,7 @@ import { saveSession } from "$/db/sessions.js";
 import { DiscordSession } from "$/harness/session.js";
 import colors from "$/output/colors.js";
 import { debug, warning } from "$/output/log.js";
+import { getDefaultProviderAndModel } from "$/util/default-provider-and-model.js";
 import { sanitizeError } from "$/util/paths.js";
 import { ApplicationCommandOptionTypes, ApplicationCommandTypes, MessageFlags } from "oceanic.js";
 import type {
@@ -16,22 +17,39 @@ import type {
 import * as vb from "valibot";
 
 const definition: CreateApplicationCommandOptions = {
-  description: "Change the agent's model",
+  description: "Manage the agent's model overrides",
   name: "model",
   options: [
     {
-      autocomplete: true,
-      description: "The provider to pick from",
-      name: "provider",
-      required: true,
-      type: ApplicationCommandOptionTypes.STRING,
+      description: "Override the provider and model for this channel",
+      name: "override",
+      options: [
+        {
+          autocomplete: true,
+          description: "The provider to pick from",
+          name: "provider",
+          required: true,
+          type: ApplicationCommandOptionTypes.STRING,
+        },
+        {
+          autocomplete: true,
+          description: "The model from the chosen provider",
+          name: "model",
+          required: true,
+          type: ApplicationCommandOptionTypes.STRING,
+        },
+      ],
+      type: ApplicationCommandOptionTypes.SUB_COMMAND,
     },
     {
-      autocomplete: true,
-      description: "The model from the chosen provider",
-      name: "model",
-      required: true,
-      type: ApplicationCommandOptionTypes.STRING,
+      description: "Clear any model override for this channel",
+      name: "clear",
+      type: ApplicationCommandOptionTypes.SUB_COMMAND,
+    },
+    {
+      description: "Show the effective provider and model for this channel",
+      name: "query",
+      type: ApplicationCommandOptionTypes.SUB_COMMAND,
     },
   ],
   type: ApplicationCommandTypes.CHAT_INPUT,
@@ -99,15 +117,23 @@ async function fetchModelListFor(
   }
 }
 
-async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): Promise<void> {
-  async function success(model: string, provider: string): Promise<void> {
-    const sessionId =
-      (interaction.guildID ?? undefined) === undefined
-        ? `discord:${interaction.channelID}`
-        : `discord:${interaction.channelID}|${interaction.guildID}`;
+function getSession(interaction: CommandInteraction, ctx: HandlerCtx): DiscordSession | undefined {
+  const sessionId =
+    (interaction.guildID ?? undefined) === undefined
+      ? `discord:${interaction.channelID}`
+      : `discord:${interaction.channelID}|${interaction.guildID}`;
 
-    const session = ctx.owner.agents.get(ctx.agentSlug)?.sessions.get(sessionId);
-    if (session === undefined || !(session instanceof DiscordSession)) {
+  const session = ctx.owner.agents.get(ctx.agentSlug)?.sessions.get(sessionId);
+  if (session === undefined || !(session instanceof DiscordSession)) {
+    return undefined;
+  }
+  return session;
+}
+
+async function handleOverride(interaction: CommandInteraction, ctx: HandlerCtx): Promise<void> {
+  async function success(model: string, provider: string): Promise<void> {
+    const session = getSession(interaction, ctx);
+    if (session === undefined) {
       return;
     }
 
@@ -121,68 +147,143 @@ async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): 
     });
   }
 
+  const provider = interaction.data.options.getStringOption("provider", true);
+  const model = interaction.data.options.getStringOption("model", true);
+
+  if (
+    provider.value === "invalid" ||
+    model.value === "invalid" ||
+    provider.value.length === 0 ||
+    model.value.length === 0
+  ) {
+    await interaction.createFollowup({
+      content: "Failed to change model. Either provider or model was invalid.",
+      flags: MessageFlags.EPHEMERAL,
+    });
+    return;
+  }
+
+  debug(
+    "Attempting model change to",
+    colors.keyword(model.value),
+    "from provider",
+    colors.keyword(provider.value),
+  );
+
+  const engineCfg = await loadEngine(ctx.agentSlug);
+  const providerCfg = engineCfg[provider.value];
+
+  if (providerCfg === undefined) {
+    await interaction.createFollowup({
+      content: `Could not find the provider \`${provider.value}\``,
+      flags: MessageFlags.EPHEMERAL,
+    });
+    return;
+  }
+
+  if (providerCfg.availableModels === "analyze") {
+    const models = await fetchModelListFor(providerCfg);
+
+    if (models.some((it) => it.id === model.value)) {
+      await success(model.value, provider.value);
+    } else {
+      await interaction.createFollowup({
+        content: `:warning: Could not find the model \`${model.value}\` from the provider \`${provider.value}\`. If you are certain it exists, use \`availableModels\` to forcibly list it.`,
+        flags: MessageFlags.EPHEMERAL,
+      });
+    }
+    return;
+  } else if (
+    providerCfg.availableModels.includes(model.value) ||
+    providerCfg.models?.[model.value] !== undefined
+  ) {
+    await success(model.value, provider.value);
+    return;
+  }
+
+  await interaction.createFollowup({
+    content: "Failed to set model and provider.",
+    flags: MessageFlags.EPHEMERAL,
+  });
+}
+
+async function handleClear(interaction: CommandInteraction, ctx: HandlerCtx): Promise<void> {
+  const session = getSession(interaction, ctx);
+  if (session === undefined) {
+    await interaction.createFollowup({
+      content: "No active session to clear overrides in.",
+      flags: MessageFlags.EPHEMERAL,
+    });
+    return;
+  }
+
+  session.selectedModel = undefined;
+  session.selectedProvider = undefined;
+  saveSession(ctx.agentSlug, session);
+
+  await interaction.createFollowup({
+    content: "Cleared model override for this channel.",
+    flags: MessageFlags.EPHEMERAL,
+  });
+}
+
+async function handleQuery(interaction: CommandInteraction, ctx: HandlerCtx): Promise<void> {
+  const session = getSession(interaction, ctx);
+  if (session === undefined) {
+    await interaction.createFollowup({
+      content: "No active session to query.",
+      flags: MessageFlags.EPHEMERAL,
+    });
+    return;
+  }
+
+  const engineCfg = await loadEngine(ctx.agentSlug);
+  const defaults = getDefaultProviderAndModel(engineCfg);
+
+  const effectiveProvider = session.selectedProvider ?? defaults.provider.name;
+  const effectiveModel = session.selectedModel ?? defaults.model.name;
+
+  const isOverridden =
+    session.selectedProvider !== undefined || session.selectedModel !== undefined;
+
+  const content = isOverridden
+    ? `This channel is using **${effectiveProvider}** / **${effectiveModel}** (overridden).`
+    : `This channel is using **${effectiveProvider}** / **${effectiveModel}** (default).`;
+
+  await interaction.createFollowup({
+    content,
+    flags: MessageFlags.EPHEMERAL,
+  });
+}
+
+async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): Promise<void> {
   try {
-    const provider = interaction.data.options.getStringOption("provider", true);
-    const model = interaction.data.options.getStringOption("model", true);
+    const sub = interaction.data.options.getSubCommand(true);
+    const [subName] = sub;
 
-    if (
-      provider.value === "invalid" ||
-      model.value === "invalid" ||
-      provider.value.length === 0 ||
-      model.value.length === 0
-    ) {
-      await interaction.createFollowup({
-        content: "Failed to change model. Either provider or model was invalid.",
-        flags: MessageFlags.EPHEMERAL,
-      });
-      return;
-    }
-
-    debug(
-      "Attempting model change to",
-      colors.keyword(model.value),
-      "from provider",
-      colors.keyword(provider.value),
-    );
-
-    const engineCfg = await loadEngine(ctx.agentSlug);
-    const providerCfg = engineCfg[provider.value];
-
-    if (providerCfg === undefined) {
-      await interaction.createFollowup({
-        content: `Could not find the provider \`\${provider.value}\``,
-        flags: MessageFlags.EPHEMERAL,
-      });
-      return;
-    }
-
-    if (providerCfg.availableModels === "analyze") {
-      const models = await fetchModelListFor(providerCfg);
-
-      if (models.some((it) => it.id === model.value)) {
-        await success(model.value, provider.value);
-      } else {
+    switch (subName) {
+      case "override": {
+        await handleOverride(interaction, ctx);
+        break;
+      }
+      case "clear": {
+        await handleClear(interaction, ctx);
+        break;
+      }
+      case "query": {
+        await handleQuery(interaction, ctx);
+        break;
+      }
+      default: {
         await interaction.createFollowup({
-          content: `:warning: Could not find the model \`${model.value}\` from the provider \`${provider.value}\`. If you are certain it exists, use \`availableModels\` to forcibly list it.`,
+          content: "Unknown subcommand.",
           flags: MessageFlags.EPHEMERAL,
         });
       }
-      return;
-    } else if (
-      providerCfg.availableModels.includes(model.value) ||
-      providerCfg.models?.[model.value] !== undefined
-    ) {
-      await success(model.value, provider.value);
-      return;
     }
-
-    await interaction.createFollowup({
-      content: "Failed to set model and provider.",
-      flags: MessageFlags.EPHEMERAL,
-    });
   } catch (error) {
     await interaction.createFollowup({
-      content: `Model change failed: ${sanitizeError(error, ctx.agentSlug)}`,
+      content: `Model command failed: ${sanitizeError(error, ctx.agentSlug)}`,
       flags: MessageFlags.EPHEMERAL,
     });
   }
@@ -192,6 +293,17 @@ async function handleAutocomplete(
   interaction: AutocompleteInteraction,
   ctx: HandlerCtx,
 ): Promise<void> {
+  const sub = interaction.data.options.getSubCommand(false);
+  if (sub?.[0] !== "override") {
+    await interaction.result([
+      {
+        name: "This subcommand does not support autocomplete",
+        value: "invalid",
+      },
+    ]);
+    return;
+  }
+
   let responded = false;
   try {
     const focused = interaction.data.options.getFocused(true);
