@@ -1,17 +1,43 @@
 import { loadSystem } from "$/config/index.js";
 
 /**
- * Format a date as ISO 8601 with timezone offset.
+ * Format a date as ISO 8601 with timezone offset and a relative time hint.
  * If timezone is configured in system.toml, uses that timezone.
  * Otherwise uses system local time.
  * @param date The date to format (defaults to now)
- * @returns ISO 8601 string with timezone offset (e.g. "2026-03-12T14:30:00-05:00")
+ * @param now Reference date for calculating relative time (defaults to now)
+ * @returns ISO 8601 string with timezone offset and relative hint (e.g. "2026-03-12T14:30:00-05:00 (Thursday, EST) [2 hours ago]")
  */
-export async function formatDate(date: Date = new Date()): Promise<string> {
+export async function formatDate(date: Date = new Date(), now: Date = new Date()): Promise<string> {
   const systemCfg = await loadSystem();
   const { timezone } = systemCfg;
 
-  if (timezone !== undefined) {
+  let absolute: string | undefined = undefined;
+
+  if (timezone === undefined) {
+    // Use local time if no timezone specified
+    const offset = -date.getTimezoneOffset();
+    const offsetSign = offset >= 0 ? "+" : "-";
+    const offsetHours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, "0");
+    const offsetMinutes = String(Math.abs(offset) % 60).padStart(2, "0");
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    const seconds = String(date.getSeconds()).padStart(2, "0");
+
+    const weekday = new Intl.DateTimeFormat("en-US", {
+      weekday: "long",
+    }).format(date);
+    const tzAbbr =
+      new Intl.DateTimeFormat("en-US", { timeZoneName: "short" })
+        .formatToParts(date)
+        .find((part) => part.type === "timeZoneName")?.value ?? "";
+
+    absolute = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetSign}${offsetHours}:${offsetMinutes} (${weekday}, ${tzAbbr})`;
+  } else {
     // Format the date-time in the target timezone
     const formatted = new Intl.DateTimeFormat("en-CA", {
       day: "2-digit",
@@ -48,27 +74,46 @@ export async function formatDate(date: Date = new Date()): Promise<string> {
     }).format(date);
 
     // Replace the comma with T, append the offset, then weekday and tz abbreviation
-    return `${formatted.replace(", ", "T")}${tzOffset} (${weekday}, ${tzAbbr})`;
+    absolute = `${formatted.replace(", ", "T")}${tzOffset} (${weekday}, ${tzAbbr})`;
   }
 
-  // Use local time if no timezone specified
-  const offset = -date.getTimezoneOffset();
-  const offsetSign = offset >= 0 ? "+" : "-";
-  const offsetHours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, "0");
-  const offsetMinutes = String(Math.abs(offset) % 60).padStart(2, "0");
+  // Calculate relative time
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
 
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  const seconds = String(date.getSeconds()).padStart(2, "0");
+  let relative: string | undefined = undefined;
+  if (Math.abs(diffSec) < 10) {
+    relative = "just now";
+  } else if (diffSec > 0) {
+    if (diffDay > 0) {
+      relative = `${diffDay} day${diffDay === 1 ? "" : "s"} ago`;
+    } else if (diffHour > 0) {
+      relative = `${diffHour} hour${diffHour === 1 ? "" : "s"} ago`;
+    } else if (diffMin > 0) {
+      relative = `${diffMin} minute${diffMin === 1 ? "" : "s"} ago`;
+    } else {
+      relative = `${diffSec} second${diffSec === 1 ? "" : "s"} ago`;
+    }
+  } else {
+    // Future dates (rare but possible due to clock drift)
+    const absSec = Math.abs(diffSec);
+    const absMin = Math.abs(diffMin);
+    const absHour = Math.abs(diffHour);
+    const absDay = Math.abs(diffDay);
 
-  const weekday = new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(date);
-  const tzAbbr =
-    new Intl.DateTimeFormat("en-US", { timeZoneName: "short" })
-      .formatToParts(date)
-      .find((part) => part.type === "timeZoneName")?.value ?? "";
+    if (absDay > 0) {
+      relative = `in ${absDay} day${absDay === 1 ? "" : "s"}`;
+    } else if (absHour > 0) {
+      relative = `in ${absHour} hour${absHour === 1 ? "" : "s"}`;
+    } else if (absMin > 0) {
+      relative = `in ${absMin} minute${absMin === 1 ? "" : "s"}`;
+    } else {
+      relative = `in ${absSec} second${absSec === 1 ? "" : "s"}`;
+    }
+  }
 
-  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetSign}${offsetHours}:${offsetMinutes} (${weekday}, ${tzAbbr})`;
+  return `${absolute} [${relative}]`;
 }
