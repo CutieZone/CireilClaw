@@ -11,27 +11,6 @@ import { debug, warning } from "$/output/log.js";
 import { sanitizeError } from "$/util/paths.js";
 import { MessageFlags } from "oceanic.js";
 
-// Returns the best session to target based on a target string.
-function resolveTarget(agent: Agent, target: string): Session | undefined {
-  if (target === "none") {
-    return undefined;
-  }
-
-  const { sessions } = agent;
-
-  if (target === "last") {
-    let best: Session | undefined = undefined;
-    for (const session of sessions.values()) {
-      if (best === undefined || session.lastActivity > best.lastActivity) {
-        best = session;
-      }
-    }
-    return best;
-  }
-
-  return sessions.get(target);
-}
-
 async function deliverOutput(
   agent: Agent,
   job: CronJobConfig,
@@ -67,7 +46,7 @@ async function deliverOutput(
   }
 
   // delivery === "announce"
-  const target = resolveTarget(agent, job.target);
+  const target = agent.resolveTarget(job.target);
   if (target === undefined) {
     debug("Cron: no target session to announce for job", colors.keyword(job.id));
     return;
@@ -85,7 +64,7 @@ async function deliverOutput(
 }
 
 async function runMainSession(agent: Agent, job: CronJobConfig): Promise<void> {
-  const session = resolveTarget(agent, job.target);
+  const session = agent.resolveTarget(job.target);
   if (session === undefined) {
     debug("Cron: no target session for job", colors.keyword(job.id), "— skipping");
     return;

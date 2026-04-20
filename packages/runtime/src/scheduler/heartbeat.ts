@@ -8,52 +8,11 @@ import { saveSession } from "$/db/sessions.js";
 import { runTurn } from "$/engine/index.js";
 import type { ChannelResolution } from "$/harness/channel-handler.js";
 import type { Session } from "$/harness/session.js";
-import { NamedInternalSession, TuiSession } from "$/harness/session.js";
 import colors from "$/output/colors.js";
 import { debug, warning } from "$/output/log.js";
 import { agentRoot } from "$/util/paths.js";
 
 const HEARTBEAT_OK = "HEARTBEAT_OK";
-
-// Returns the most recently active session from the agent's session map,
-// or undefined if there are none.
-function resolveTarget(agent: Agent, target: string): Session | undefined {
-  if (target === "none") {
-    return undefined;
-  }
-
-  const { sessions } = agent;
-
-  if (target === "last") {
-    let best: Session | undefined = undefined;
-    for (const session of sessions.values()) {
-      if (best === undefined || session.lastActivity > best.lastActivity) {
-        best = session;
-      }
-    }
-    return best;
-  }
-
-  const existing = sessions.get(target);
-  if (existing !== undefined) {
-    return existing;
-  }
-
-  // Auto-create named internal or TUI sessions if requested but missing.
-  if (target.startsWith("internal:")) {
-    const session = new NamedInternalSession(target.slice("internal:".length));
-    sessions.set(target, session);
-    return session;
-  }
-
-  if (target === "tui") {
-    const session = new TuiSession();
-    sessions.set(target, session);
-    return session;
-  }
-
-  return undefined;
-}
 
 // Check whether the current time falls within the configured active hours window.
 function isInActiveHours(activeHours: NonNullable<HeartbeatConfig["activeHours"]>): boolean {
@@ -98,7 +57,7 @@ export async function runHeartbeat(agent: Agent, cfg: HeartbeatConfig): Promise<
     return;
   }
 
-  const session = resolveTarget(agent, cfg.target);
+  const session = agent.resolveTarget(cfg.target);
   if (session === undefined) {
     debug("Heartbeat: no target session found — skipping");
     return;

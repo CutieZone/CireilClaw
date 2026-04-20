@@ -9,6 +9,7 @@ import type {
   HistoryMessage,
 } from "$/harness/channel-handler.js";
 import type { Session } from "$/harness/session.js";
+import { DiscordSession, NamedInternalSession, TuiSession } from "$/harness/session.js";
 import { Scheduler } from "$/scheduler/index.js";
 import type { Client as OceanicClient } from "oceanic.js";
 
@@ -74,6 +75,58 @@ export class Agent {
 
   registerChannel(channel: string, handler: ChannelHandler): void {
     this._channelHandlers.set(channel, handler);
+  }
+
+  // Resolve a scheduler target string to a session, auto-creating ephemeral
+  // sessions (internal, TUI, Discord) when the target is valid but missing.
+  resolveTarget(target: string): Session | undefined {
+    if (target === "none") {
+      return undefined;
+    }
+
+    if (target === "last") {
+      let best: Session | undefined = undefined;
+      for (const session of this._sessions.values()) {
+        if (best === undefined || session.lastActivity > best.lastActivity) {
+          best = session;
+        }
+      }
+      return best;
+    }
+
+    const existing = this._sessions.get(target);
+    if (existing !== undefined) {
+      return existing;
+    }
+
+    // Auto-create named internal or TUI sessions if requested but missing.
+    if (target.startsWith("internal:")) {
+      const session = new NamedInternalSession(target.slice("internal:".length));
+      this._sessions.set(target, session);
+      return session;
+    }
+
+    if (target === "tui") {
+      const session = new TuiSession();
+      this._sessions.set(target, session);
+      return session;
+    }
+
+    // Auto-create Discord sessions for valid targets.
+    if (target.startsWith("discord:")) {
+      const rest = target.slice("discord:".length);
+      const [channelId, guildId] = rest.split("|");
+      if (channelId !== undefined && channelId.length > 0) {
+        const session = new DiscordSession({
+          channelId,
+          guildId: guildId ?? undefined,
+        });
+        this._sessions.set(target, session);
+        return session;
+      }
+    }
+
+    return undefined;
   }
 
   private _getHandler(session: Session): ChannelHandler {
