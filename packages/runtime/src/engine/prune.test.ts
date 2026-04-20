@@ -157,7 +157,7 @@ describe("pruneToBudget", () => {
       { content: { content: "Hello", type: "text" }, role: "user" },
       { content: { content: "Hi there", type: "text" }, role: "assistant" },
     ];
-    const result = pruneToBudget(messages, 0, 100, 1000);
+    const result = pruneToBudget(messages, 0, 1000);
     expect(result.messages).toHaveLength(2);
   });
 
@@ -186,7 +186,7 @@ describe("pruneToBudget", () => {
       },
     ];
 
-    const result = pruneToBudget(messages, 0, 100, 500);
+    const result = pruneToBudget(messages, 0, 500);
     const firstTool = result.messages.find((msg) => {
       const content = Array.isArray(msg.content) ? msg.content[0] : msg.content;
       return content?.type === "toolResponse" && content.id === "call-1";
@@ -195,18 +195,6 @@ describe("pruneToBudget", () => {
       throw new Error("Expected firstTool to be defined");
     }
     expect(firstTool.content).toHaveProperty("output.superseded", true);
-  });
-
-  it("applies maxTurns as hard cap", () => {
-    const messages: Message[] = [];
-    for (let idx = 0; idx < 10; idx++) {
-      messages.push({ content: { content: `Turn ${idx}`, type: "text" }, role: "user" });
-      messages.push({ content: { content: `Reply ${idx}`, type: "text" }, role: "assistant" });
-    }
-
-    const result = pruneToBudget(messages, 0, 5, 1_000_000);
-    const userCount = result.messages.filter((msg) => msg.role === "user").length;
-    expect(userCount).toBeLessThanOrEqual(5);
   });
 });
 describe("pruneHistory", () => {

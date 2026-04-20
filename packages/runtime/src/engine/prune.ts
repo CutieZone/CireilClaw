@@ -233,12 +233,7 @@ function countTurns(messages: Message[]): number {
   return turns || 1;
 }
 
-function pruneToBudget(
-  messages: Message[],
-  systemTokens: number,
-  maxTurns: number,
-  budget: number,
-): PruneResult {
+function pruneToBudget(messages: Message[], systemTokens: number, budget: number): PruneResult {
   const originalTokens = estimateTokens(messages);
 
   // Step 1: Supersede stale reads
@@ -271,18 +266,6 @@ function pruneToBudget(
     turnsDropped = beforeTurns - countTurns(pruned);
     messagesDropped += beforeLen - pruned.length;
   }
-
-  // Step 4: Hard turn cap
-  const beforeCap = countTurns(pruned);
-  const beforeCapLen = pruned.length;
-  pruned = truncateToTurns(pruned, maxTurns);
-  const capDropped = beforeCap - countTurns(pruned);
-  if (turnsDropped === 0) {
-    turnsDropped = capDropped;
-  } else {
-    turnsDropped += capDropped;
-  }
-  messagesDropped += beforeCapLen - pruned.length;
 
   return {
     messages: pruned,
@@ -350,12 +333,7 @@ function pruneHistory(
   const historyTokens = estimateTokens(visible);
 
   if (historyTokens + systemTokens > hardCap) {
-    const { messages: pruned, stats } = pruneToBudget(
-      visible,
-      systemTokens,
-      Number.MAX_SAFE_INTEGER,
-      softBudget,
-    );
+    const { messages: pruned, stats } = pruneToBudget(visible, systemTokens, softBudget);
 
     // Persist modifications (superseded reads, evicted tools) back into
     // full history. pruned[0] aligns with visible[stats.messagesDropped].
