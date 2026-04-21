@@ -28,6 +28,8 @@ abstract class BaseSession {
   busy = false;
   // Timestamp (ms) of the last user-initiated message; used to resolve target = "last".
   lastActivity = 0;
+  // Timestamp (ms) of the most recent heartbeat turn for this session.
+  lastHeartbeatAt?: number;
   // Optional hook checked by Harness.send() — return false to suppress delivery.
   sendFilter?: (content: string) => boolean = undefined;
 

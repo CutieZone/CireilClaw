@@ -4,7 +4,6 @@ import type { ConditionsConfig } from "$/config/schemas/conditions.js";
 import type { ChannelCapabilities } from "$/harness/channel-handler.js";
 import { InternalSession } from "$/harness/session.js";
 import type { Session } from "$/harness/session.js";
-import { formatDate } from "$/util/date.js";
 import {
   loadBlocks,
   loadBaseInstructions,
@@ -110,11 +109,7 @@ async function buildSystemPrompt(
     lines.push("</opened_files>");
   }
 
-  lines.push(
-    "<metadata>",
-    `The current system date is: ${await formatDate()}`,
-    `The current session is on the platform: ${session.channel}`,
-  );
+  lines.push("<metadata>", `The current session is on the platform: ${session.channel}`);
 
   if (session.channel === "discord") {
     lines.push(`The channel id is: ${session.channelId}`);

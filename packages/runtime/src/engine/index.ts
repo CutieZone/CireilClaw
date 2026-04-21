@@ -26,6 +26,7 @@ import type { Session } from "$/harness/session.js";
 import colors from "$/output/colors.js";
 import { debug, warning } from "$/output/log.js";
 import type { Scheduler } from "$/scheduler/index.js";
+import { formatDate } from "$/util/date.js";
 import { getDefaultProviderAndModel } from "$/util/default-provider-and-model.js";
 import { sanitizeError } from "$/util/paths.js";
 import { KeyPoolManager } from "@cireilclaw/sdk";
@@ -216,10 +217,18 @@ export async function runTurn(
 
     const visibleHistory = session.history.slice(session.historyCursor);
     const messages = squashMessages([...visibleHistory, ...session.pendingToolMessages]);
+
+    // Append an ephemeral date reminder so the LLM always sees the current time
+    // at the very end of context, preventing date hallucination from stale history.
+    messages.push({
+      content: { content: `Current date: ${await formatDate()}`, type: "text" },
+      role: "user",
+    });
+
     const activeTools = tools.filter((tool) => !disabledTools.has(tool.name));
 
     const context: Context = {
-      cacheBreakpoints: messages.length > 0 ? [0, messages.length - 1] : undefined,
+      cacheBreakpoints: messages.length > 1 ? [0, messages.length - 2] : [0],
       messages,
       sessionId: session.id(),
       systemPrompt: prompt,

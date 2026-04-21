@@ -1,5 +1,46 @@
 import { loadSystem } from "$/config/index.js";
 
+function formatRelativeTime(ms: number): string {
+  const diffSec = Math.floor(ms / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+
+  if (Math.abs(diffSec) < 10) {
+    return "just now";
+  }
+
+  if (diffSec > 0) {
+    if (diffDay > 0) {
+      return `${diffDay} day${diffDay === 1 ? "" : "s"} ago`;
+    }
+    if (diffHour > 0) {
+      return `${diffHour} hour${diffHour === 1 ? "" : "s"} ago`;
+    }
+    if (diffMin > 0) {
+      return `${diffMin} minute${diffMin === 1 ? "" : "s"} ago`;
+    }
+    return `${diffSec} second${diffSec === 1 ? "" : "s"} ago`;
+  }
+
+  // Future dates
+  const absSec = Math.abs(diffSec);
+  const absMin = Math.abs(diffMin);
+  const absHour = Math.abs(diffHour);
+  const absDay = Math.abs(diffDay);
+
+  if (absDay > 0) {
+    return `in ${absDay} day${absDay === 1 ? "" : "s"}`;
+  }
+  if (absHour > 0) {
+    return `in ${absHour} hour${absHour === 1 ? "" : "s"}`;
+  }
+  if (absMin > 0) {
+    return `in ${absMin} minute${absMin === 1 ? "" : "s"}`;
+  }
+  return `in ${absSec} second${absSec === 1 ? "" : "s"}`;
+}
+
 /**
  * Format a date as ISO 8601 with timezone offset and a relative time hint.
  * If timezone is configured in system.toml, uses that timezone.
@@ -8,7 +49,7 @@ import { loadSystem } from "$/config/index.js";
  * @param now Reference date for calculating relative time (defaults to now)
  * @returns ISO 8601 string with timezone offset and relative hint (e.g. "2026-03-12T14:30:00-05:00 (Thursday, EST) [2 hours ago]")
  */
-export async function formatDate(date: Date = new Date(), now: Date = new Date()): Promise<string> {
+async function formatDate(date: Date = new Date(), now: Date = new Date()): Promise<string> {
   const systemCfg = await loadSystem();
   const { timezone } = systemCfg;
 
@@ -77,43 +118,9 @@ export async function formatDate(date: Date = new Date(), now: Date = new Date()
     absolute = `${formatted.replace(", ", "T")}${tzOffset} (${weekday}, ${tzAbbr})`;
   }
 
-  // Calculate relative time
-  const diffMs = now.getTime() - date.getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-  const diffMin = Math.floor(diffSec / 60);
-  const diffHour = Math.floor(diffMin / 60);
-  const diffDay = Math.floor(diffHour / 24);
-
-  let relative: string | undefined = undefined;
-  if (Math.abs(diffSec) < 10) {
-    relative = "just now";
-  } else if (diffSec > 0) {
-    if (diffDay > 0) {
-      relative = `${diffDay} day${diffDay === 1 ? "" : "s"} ago`;
-    } else if (diffHour > 0) {
-      relative = `${diffHour} hour${diffHour === 1 ? "" : "s"} ago`;
-    } else if (diffMin > 0) {
-      relative = `${diffMin} minute${diffMin === 1 ? "" : "s"} ago`;
-    } else {
-      relative = `${diffSec} second${diffSec === 1 ? "" : "s"} ago`;
-    }
-  } else {
-    // Future dates (rare but possible due to clock drift)
-    const absSec = Math.abs(diffSec);
-    const absMin = Math.abs(diffMin);
-    const absHour = Math.abs(diffHour);
-    const absDay = Math.abs(diffDay);
-
-    if (absDay > 0) {
-      relative = `in ${absDay} day${absDay === 1 ? "" : "s"}`;
-    } else if (absHour > 0) {
-      relative = `in ${absHour} hour${absHour === 1 ? "" : "s"}`;
-    } else if (absMin > 0) {
-      relative = `in ${absMin} minute${absMin === 1 ? "" : "s"}`;
-    } else {
-      relative = `in ${absSec} second${absSec === 1 ? "" : "s"}`;
-    }
-  }
+  const relative = formatRelativeTime(now.getTime() - date.getTime());
 
   return `${absolute} [${relative}]`;
 }
+
+export { formatDate, formatRelativeTime };

@@ -10,6 +10,7 @@ import type { ChannelResolution } from "$/harness/channel-handler.js";
 import type { Session } from "$/harness/session.js";
 import colors from "$/output/colors.js";
 import { debug, warning } from "$/output/log.js";
+import { formatRelativeTime } from "$/util/date.js";
 import { agentRoot } from "$/util/paths.js";
 
 const HEARTBEAT_OK = "HEARTBEAT_OK";
@@ -84,14 +85,25 @@ export async function runHeartbeat(agent: Agent, cfg: HeartbeatConfig): Promise<
   };
 
   const historyLengthBefore = session.history.length;
+  const now = Date.now();
+
+  let prompt = "[HEARTBEAT] Evaluate your heartbeat checklist.\n\n";
+  if (session.lastHeartbeatAt !== undefined) {
+    prompt += `It has been ${formatRelativeTime(now - session.lastHeartbeatAt)} since the previous heartbeat.\n`;
+  }
+  prompt += `Next heartbeat will likely happen in ${formatRelativeTime(cfg.interval * 1000)}.\n\n`;
+  prompt += checklist;
+
   session.history.push({
     content: {
-      content: `[HEARTBEAT] Evaluate your heartbeat checklist.\n\n${checklist}`,
+      content: prompt,
       type: "text",
     },
+    persist: false,
     role: "user",
-    timestamp: Date.now(),
+    timestamp: now,
   });
+  session.lastHeartbeatAt = now;
 
   async function resolveChannel(spec: string): Promise<ChannelResolution> {
     // oxlint-disable-next-line typescript/no-non-null-assertion
