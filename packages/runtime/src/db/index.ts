@@ -1,11 +1,12 @@
 import { join } from "node:path";
 
-import colors from "$/output/colors.js";
-import { warning } from "$/output/log.js";
-import { agentRoot } from "$/util/paths.js";
 import BetterSqlite3 from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+
+import colors from "#output/colors.js";
+import { warning } from "#output/log.js";
+import { agentRoot } from "#util/paths.js";
 
 import * as schema from "./schema.js";
 

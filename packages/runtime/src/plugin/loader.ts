@@ -8,16 +8,17 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Worker } from "node:worker_threads";
 
-import type { PluginEntry } from "$/config/schemas/plugins.js";
-import { PluginsConfigSchema } from "$/config/schemas/plugins.js";
-import { ToolError } from "$/engine/errors.js";
-import { builtinToolRegistry, setToolRegistry } from "$/engine/tools/index.js";
-import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
-import colors from "$/output/colors.js";
-import { info, warning } from "$/output/log.js";
-import { root } from "$/util/paths.js";
 import { parse } from "smol-toml";
 import * as vb from "valibot";
+
+import type { PluginEntry } from "#config/schemas/plugins.js";
+import { PluginsConfigSchema } from "#config/schemas/plugins.js";
+import { ToolError } from "#engine/errors.js";
+import { builtinToolRegistry, setToolRegistry } from "#engine/tools/index.js";
+import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
+import colors from "#output/colors.js";
+import { info, warning } from "#output/log.js";
+import { checkConditionalAccess, checkMountWriteAccess, root, sandboxToReal } from "#util/paths.js";
 
 import { RpcChannel } from "./rpc.js";
 import type { CtxData, InvokeArgs, ManifestPayload } from "./worker-main.js";
@@ -290,6 +291,25 @@ class PluginProcess {
       this.requireCtx(invocationId).addToolMessage(content as string);
       return Promise.resolve(undefined);
     });
+    this.rpc.handle("paths.resolve", (args) => {
+      const [invocationId, sandboxPath] = args;
+      const ctx = this.requireCtx(invocationId);
+      return Promise.resolve(sandboxToReal(sandboxPath as string, ctx.agentSlug, ctx.mounts));
+    });
+    this.rpc.handle("paths.checkWriteAccess", (args) => {
+      const [invocationId, sandboxPath] = args;
+      const ctx = this.requireCtx(invocationId);
+      checkMountWriteAccess(sandboxPath as string, ctx.mounts ?? []);
+      return Promise.resolve(undefined);
+    });
+    this.rpc.handle("paths.checkConditionalAccess", (args) => {
+      const [invocationId, sandboxPath] = args;
+      const ctx = this.requireCtx(invocationId);
+      if (ctx.conditions !== undefined) {
+        checkConditionalAccess(sandboxPath as string, ctx.agentSlug, ctx.conditions, ctx.session);
+      }
+      return Promise.resolve(undefined);
+    });
   }
 }
 
@@ -381,4 +401,4 @@ async function destroyPlugins(): Promise<void> {
   );
 }
 
-export { destroyPlugins, initializePlugins, loadPlugins, mergeToolRegistries };
+export { destroyPlugins, initializePlugins, loadPlugins, mergeToolRegistries, PluginProcess };

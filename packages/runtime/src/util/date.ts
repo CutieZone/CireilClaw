@@ -1,4 +1,4 @@
-import { loadSystem } from "$/config/index.js";
+import { loadSystem } from "#config/index.js";
 
 function formatRelativeTime(ms: number): string {
   const diffSec = Math.floor(ms / 1000);

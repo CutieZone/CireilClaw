@@ -1,11 +1,12 @@
 import { readFile, stat } from "node:fs/promises";
 import { extname } from "node:path";
 
-import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
-import { IMAGE_EXT_TO_MEDIA_TYPE } from "$/supports.js";
-import { toWebp } from "$/util/image.js";
-import { checkConditionalAccess, sandboxToReal } from "$/util/paths.js";
 import * as vb from "valibot";
+
+import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
+import { IMAGE_EXT_TO_MEDIA_TYPE } from "#supports.js";
+import { toWebp } from "#util/image.js";
+import { checkConditionalAccess, sandboxToReal } from "#util/paths.js";
 
 const Schema = vb.strictObject({
   path: vb.pipe(

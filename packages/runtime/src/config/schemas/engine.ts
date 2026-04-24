@@ -1,6 +1,7 @@
-import { ApiKeySchema, nonEmptyString } from "$/config/schemas/shared.js";
-import { ProviderKindSchema } from "$/engine/provider/index.js";
 import * as vb from "valibot";
+
+import { ApiKeySchema, nonEmptyString } from "#config/schemas/shared.js";
+import { ProviderKindSchema } from "#engine/provider/index.js";
 
 const DefaultReasoningBudget = 16_384;
 const DefaultToolFailThreshold = 3;
@@ -19,6 +20,7 @@ const ModelConfigSchema = vb.record(
       DefaultReasoningBudget,
     ),
     supportsVideo: vb.exactOptional(vb.boolean(), false),
+    supportsVision: vb.exactOptional(vb.boolean(), true),
     toolFailThreshold: vb.exactOptional(
       vb.pipe(vb.number(), vb.integer(), vb.minValue(1)),
       DefaultToolFailThreshold,

@@ -1,9 +1,9 @@
-import { resetSession } from "$/db/sessions.js";
-import { sanitizeError } from "$/util/paths.js";
 import type { CommandInteraction, CreateApplicationCommandOptions } from "oceanic.js";
 import { ApplicationCommandTypes, MessageFlags } from "oceanic.js";
 
-import type { HandlerCtx } from "./handler-ctx.js";
+import type { HandlerCtx } from "#channels/discord/handler-ctx.js";
+import { resetSession } from "#db/sessions.js";
+import { sanitizeError } from "#util/paths.js";
 
 const definition: CreateApplicationCommandOptions = {
   description: "Clear the current channel's conversation history",

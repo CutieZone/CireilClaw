@@ -1,4 +1,4 @@
-import type { Session } from "$/harness/session.js";
+import type { Session } from "#harness/session.js";
 
 interface ChannelCapabilities {
   supportsAttachments: boolean;

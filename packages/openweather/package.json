@@ -1,6 +1,6 @@
 {
   "name": "@cireilclaw/plugin-openweather",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "Apache-2.0",
   "files": [
     "src",
@@ -33,6 +33,6 @@
     "typescript": "^6.0.3"
   },
   "peerDependencies": {
-    "@cireilclaw/sdk": "^0.3.0"
+    "@cireilclaw/sdk": "^0.4.0"
   }
 }

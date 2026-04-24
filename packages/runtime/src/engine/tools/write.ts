@@ -1,9 +1,10 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
-import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
-import { checkConditionalAccess, checkMountWriteAccess, sandboxToReal } from "$/util/paths.js";
 import * as vb from "valibot";
+
+import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
+import { checkConditionalAccess, checkMountWriteAccess, sandboxToReal } from "#util/paths.js";
 
 const Schema = vb.strictObject({
   content: vb.pipe(

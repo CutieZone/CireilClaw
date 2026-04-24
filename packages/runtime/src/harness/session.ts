@@ -1,6 +1,6 @@
-import type { TuiBridge } from "$/channels/tui/bridge.js";
-import type { ImageContent, VideoContent } from "$/engine/content.js";
-import type { Message } from "$/engine/message.js";
+import type { TuiBridge } from "#channels/tui/bridge.js";
+import type { ImageContent, VideoContent } from "#engine/content.js";
+import type { Message } from "#engine/message.js";
 
 const channelTypes = ["discord", "matrix", "internal", "tui"] as const;
 type ChannelType = (typeof channelTypes)[number];

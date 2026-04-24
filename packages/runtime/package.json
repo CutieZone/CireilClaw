@@ -4,6 +4,9 @@
   "license": "Apache-2.0",
   "type": "module",
   "module": "src/entrypoint.ts",
+  "imports": {
+    "#*": "./src/*"
+  },
   "scripts": {
     "prestart": "pnpm install --frozen-lockfile",
     "start": "tsx ./src/entrypoint.ts",

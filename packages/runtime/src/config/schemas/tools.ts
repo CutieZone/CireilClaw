@@ -1,5 +1,6 @@
-import { nonEmptyString } from "$/config/schemas/shared.js";
 import * as vb from "valibot";
+
+import { nonEmptyString } from "#config/schemas/shared.js";
 
 const DefaultExecTimeout = 60_000;
 

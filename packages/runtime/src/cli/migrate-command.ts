@@ -1,7 +1,8 @@
-import { runMigrations } from "$/config/migrations/runner.js";
-import colors from "$/output/colors.js";
-import { info } from "$/output/log.js";
 import { buildCommand } from "@stricli/core";
+
+import { runMigrations } from "#config/migrations/runner.js";
+import colors from "#output/colors.js";
+import { info } from "#output/log.js";
 
 interface Flags {
   dryRun: boolean;

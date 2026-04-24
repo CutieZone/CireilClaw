@@ -1,6 +1,6 @@
 import EventEmitter from "node:events";
 
-import type { TuiMessage } from "$/channels/tui/tui-message.js";
+import type { TuiMessage } from "#channels/tui/tui-message.js";
 
 export class TuiBridge extends EventEmitter {
   private readonly _messages: TuiMessage[] = [];

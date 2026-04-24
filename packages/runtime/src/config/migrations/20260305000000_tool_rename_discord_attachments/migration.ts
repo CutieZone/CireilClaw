@@ -1,4 +1,4 @@
-import type { ConfigMigration } from "$/config/migrations/index.js";
+import type { ConfigMigration } from "#config/migrations/index.js";
 
 const migration: ConfigMigration = {
   description: "Rename discord-download-attachments to download-attachments",

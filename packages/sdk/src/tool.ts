@@ -1,6 +1,6 @@
 import type { GenericSchema } from "valibot";
 
-import type { KeyPool } from "./key-pool.js";
+import type { KeyPool } from "#key-pool.js";
 
 interface Tool<TParameters = GenericSchema> {
   name: string;
@@ -61,6 +61,11 @@ interface PluginToolContext {
   addImage: (data: Uint8Array, mediaType: string) => void;
   addVideo: (data: Uint8Array, mediaType: string) => void;
   addToolMessage: (content: string) => void;
+  paths: {
+    resolve: (sandboxPath: string) => Promise<string>;
+    checkWriteAccess: (sandboxPath: string) => Promise<void>;
+    checkConditionalAccess: (sandboxPath: string) => Promise<void>;
+  };
 }
 
 interface ToolDef extends Tool {

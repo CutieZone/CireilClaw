@@ -3,8 +3,8 @@ import { spawn } from "node:child_process";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { parse, isAbsolute, join, resolve as resolvePath, delimiter } from "node:path";
 
-import type { Mount } from "$/config/schemas/sandbox.js";
-import { debug, warning } from "$/output/log.js";
+import type { Mount } from "#config/schemas/sandbox.js";
+import { debug, warning } from "#output/log.js";
 
 import { root } from "./paths.js";
 

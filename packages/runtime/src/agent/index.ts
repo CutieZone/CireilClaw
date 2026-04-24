@@ -1,17 +1,18 @@
-import { loadConditions } from "$/config/index.js";
-import type { ConditionsConfig } from "$/config/schemas/conditions.js";
-import { runTurn } from "$/engine/index.js";
-import { MINIMAL_HANDLER } from "$/harness/channel-handler.js";
+import type { Client as OceanicClient } from "oceanic.js";
+
+import { loadConditions } from "#config/index.js";
+import type { ConditionsConfig } from "#config/schemas/conditions.js";
+import { runTurn } from "#engine/index.js";
+import { MINIMAL_HANDLER } from "#harness/channel-handler.js";
 import type {
   ChannelHandler,
   ChannelResolution,
   HistoryDirection,
   HistoryMessage,
-} from "$/harness/channel-handler.js";
-import type { Session } from "$/harness/session.js";
-import { DiscordSession, NamedInternalSession, TuiSession } from "$/harness/session.js";
-import { Scheduler } from "$/scheduler/index.js";
-import type { Client as OceanicClient } from "oceanic.js";
+} from "#harness/channel-handler.js";
+import type { Session } from "#harness/session.js";
+import { DiscordSession, NamedInternalSession, TuiSession } from "#harness/session.js";
+import { Scheduler } from "#scheduler/index.js";
 
 export class Agent {
   private readonly _slug: string;

@@ -2,11 +2,12 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import type { ConfigMigration, MigrationContext } from "$/config/migrations/index.js";
-import { root } from "$/util/paths.js";
 import { parse, stringify } from "smol-toml";
 import type { TomlTable } from "smol-toml";
 import * as vb from "valibot";
+
+import type { ConfigMigration, MigrationContext } from "#config/migrations/index.js";
+import { root } from "#util/paths.js";
 
 const OldIntegrationsSchema = vb.partial(
   vb.strictObject({

@@ -1,4 +1,4 @@
-import { warning } from "$/output/log.js";
+import { warning } from "#output/log.js";
 
 type ShutdownHook = () => void;
 

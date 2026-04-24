@@ -1,4 +1,4 @@
-import type { Agent } from "$/agent/index.js";
+import type { Agent } from "#agent/index.js";
 
 export class Harness {
   private static _instance: Harness | undefined;

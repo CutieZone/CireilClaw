@@ -2,15 +2,16 @@ import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { format, join } from "node:path";
 
-import type { ConditionsConfig } from "$/config/schemas/conditions.js";
-import type { MemoryBlock } from "$/engine/block.js";
-import type { Session } from "$/harness/session.js";
-import colors from "$/output/colors.js";
-import { getMatchingBlockNames } from "$/util/conditions.js";
-import { root } from "$/util/paths.js";
 import { parse } from "smol-toml";
 import * as vb from "valibot";
 import { parse as parseYaml } from "yaml";
+
+import type { ConditionsConfig } from "#config/schemas/conditions.js";
+import type { MemoryBlock } from "#engine/block.js";
+import type { Session } from "#harness/session.js";
+import colors from "#output/colors.js";
+import { getMatchingBlockNames } from "#util/conditions.js";
+import { root } from "#util/paths.js";
 
 const BlockFrontmatterSchema = vb.object({
   description: vb.string(),

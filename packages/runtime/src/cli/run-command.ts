@@ -1,19 +1,20 @@
 import { watch } from "node:fs/promises";
 import path, { join } from "node:path";
 
-import { Agent } from "$/agent/index.js";
-import { startDiscord } from "$/channels/discord.js";
-import { loadAgents, loadConditions } from "$/config/index.js";
-import { runMigrations } from "$/config/migrations/runner.js";
-import { initDb } from "$/db/index.js";
-import { flushAllSessions, loadSessions } from "$/db/sessions.js";
-import { Harness } from "$/harness/index.js";
-import colors from "$/output/colors.js";
-import { config, debug, info, setLogFile, warning } from "$/output/log.js";
-import { destroyPlugins, initializePlugins } from "$/plugin/loader.js";
-import { root } from "$/util/paths.js";
-import { onShutdown, registerSigint } from "$/util/shutdown.js";
 import { buildCommand } from "@stricli/core";
+
+import { Agent } from "#agent/index.js";
+import { startDiscord } from "#channels/discord.js";
+import { loadAgents, loadConditions } from "#config/index.js";
+import { runMigrations } from "#config/migrations/runner.js";
+import { initDb } from "#db/index.js";
+import { flushAllSessions, loadSessions } from "#db/sessions.js";
+import { Harness } from "#harness/index.js";
+import colors from "#output/colors.js";
+import { config, debug, info, setLogFile, warning } from "#output/log.js";
+import { destroyPlugins, initializePlugins } from "#plugin/loader.js";
+import { root } from "#util/paths.js";
+import { onShutdown, registerSigint } from "#util/shutdown.js";
 
 // Extracts agent slug from a config directory path
 // e.g., "/home/user/.cireilclaw/agents/mybot/config" -> "mybot"

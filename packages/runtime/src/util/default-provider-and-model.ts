@@ -1,4 +1,4 @@
-import type { ModelConfig, ProviderConfig, ProvidersConfig } from "$/config/schemas/engine.js";
+import type { ModelConfig, ProviderConfig, ProvidersConfig } from "#config/schemas/engine.js";
 
 interface Result {
   provider: {

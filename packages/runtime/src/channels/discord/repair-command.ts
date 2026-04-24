@@ -1,8 +1,9 @@
-import { initDb } from "$/db/index.js";
-import { sanitizeError } from "$/util/paths.js";
-import { repairSession } from "$/util/repair-session.js";
 import type { CommandInteraction, CreateApplicationCommandOptions } from "oceanic.js";
 import { ApplicationCommandTypes, MessageFlags } from "oceanic.js";
+
+import { initDb } from "#db/index.js";
+import { sanitizeError } from "#util/paths.js";
+import { repairSession } from "#util/repair-session.js";
 
 import type { HandlerCtx } from "./handler-ctx.js";
 

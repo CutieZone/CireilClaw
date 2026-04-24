@@ -1,17 +1,18 @@
-import type { BlockRule, Condition, PathRule } from "$/config/schemas/conditions.js";
+import { describe, expect, it } from "vitest";
+
+import type { BlockRule, Condition, PathRule } from "#config/schemas/conditions.js";
 import {
   DiscordSession,
   InternalSession,
   NamedInternalSession,
   TuiSession,
-} from "$/harness/session.js";
+} from "#harness/session.js";
 import {
   checkPathAccess,
   evaluate,
   evaluateRule,
   getMatchingBlockNames,
-} from "$/util/conditions.js";
-import { describe, expect, it } from "vitest";
+} from "#util/conditions.js";
 
 function makeDiscord(opts: {
   channelId?: string;

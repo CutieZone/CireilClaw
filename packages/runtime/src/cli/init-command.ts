@@ -3,18 +3,19 @@ import { existsSync } from "node:fs";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { loadGlobalPluginConfig } from "$/config/index.js";
-import { getToolRegistry } from "$/engine/tools/index.js";
-import colors from "$/output/colors.js";
-import { info, warning } from "$/output/log.js";
-import type { BlockLabel } from "$/util/load.js";
-import { blockLabels } from "$/util/load.js";
-import { root } from "$/util/paths.js";
 import { confirm, input, password, select } from "@inquirer/prompts";
 import { buildCommand } from "@stricli/core";
 import { OpenAI } from "openai/client.js";
 import ora from "ora";
 import { stringify } from "smol-toml";
+
+import { loadGlobalPluginConfig } from "#config/index.js";
+import { getToolRegistry } from "#engine/tools/index.js";
+import colors from "#output/colors.js";
+import { info, warning } from "#output/log.js";
+import type { BlockLabel } from "#util/load.js";
+import { blockLabels } from "#util/load.js";
+import { root } from "#util/paths.js";
 
 interface Flags {
   printStub?: string;

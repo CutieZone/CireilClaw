@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { dirname } from "node:path";
 
-import color from "$/output/colors.js";
+import color from "#output/colors.js";
 
 type Level = "error" | "warning" | "info" | "debug";
 

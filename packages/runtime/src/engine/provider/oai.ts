@@ -1,11 +1,3 @@
-import type { Content, ThinkingContent, ToolCallContent } from "$/engine/content.js";
-import type { Context, UsageInfo } from "$/engine/context.js";
-import { GenerationNoToolCallsError } from "$/engine/errors.js";
-import type { AssistantMessage, Message } from "$/engine/message.js";
-import type { Tool } from "$/engine/tool.js";
-import { debug, warning } from "$/output/log.js";
-import { encode } from "$/util/base64.js";
-import { toJpeg } from "$/util/image.js";
 import type { KeyPool } from "@cireilclaw/sdk";
 import { toJsonSchema } from "@valibot/to-json-schema";
 import { OpenAI } from "openai/client.js";
@@ -19,6 +11,15 @@ import type {
   ChatCompletionTool,
 } from "openai/resources";
 import * as vb from "valibot";
+
+import type { Content, ThinkingContent, ToolCallContent } from "#engine/content.js";
+import type { Context, UsageInfo } from "#engine/context.js";
+import { GenerationNoToolCallsError } from "#engine/errors.js";
+import type { AssistantMessage, Message } from "#engine/message.js";
+import type { Tool } from "#engine/tool.js";
+import { debug, warning } from "#output/log.js";
+import { encode } from "#util/base64.js";
+import { toJpeg } from "#util/image.js";
 
 // Per-apiBase JPEG requirement flag. Set on first WebP rejection so subsequent
 // turns skip the doomed WebP attempt entirely.

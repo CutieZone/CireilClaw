@@ -1,6 +1,7 @@
-// oxlint-disable no-template-curly-in-string
-import { locate, parseEnvFile, SHELL_METACHAR_PATTERN } from "$/util/sandbox.js";
 import { describe, expect, it, vi } from "vitest";
+
+// oxlint-disable no-template-curly-in-string
+import { locate, parseEnvFile, SHELL_METACHAR_PATTERN } from "#util/sandbox.js";
 
 vi.mock("node:fs", {
   spy: true,

@@ -1,7 +1,8 @@
-import { ToolError } from "$/engine/errors.js";
-import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
-import { DiscordSession, InternalSession, MatrixSession, TuiSession } from "$/harness/session.js";
 import * as vb from "valibot";
+
+import { ToolError } from "#engine/errors.js";
+import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
+import { DiscordSession, InternalSession, MatrixSession, TuiSession } from "#harness/session.js";
 
 // No input parameters needed — this just returns session context.
 const Schema = vb.strictObject({});

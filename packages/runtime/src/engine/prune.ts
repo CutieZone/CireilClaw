@@ -1,4 +1,4 @@
-import type { Message } from "$/engine/message.js";
+import type { Message } from "#engine/message.js";
 
 import type { Content } from "./content.js";
 

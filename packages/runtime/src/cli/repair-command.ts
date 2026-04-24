@@ -1,14 +1,15 @@
 import { createRequire } from "node:module";
 
-import { loadAgents, loadChannel } from "$/config/index.js";
-import { getDb, initDb } from "$/db/index.js";
-import { sessions } from "$/db/schema.js";
-import colors from "$/output/colors.js";
-import { error as logError, info, warning } from "$/output/log.js";
-import { fetchSessionDisplayName, repairSession } from "$/util/repair-session.js";
 import { select } from "@inquirer/prompts";
 import { buildCommand } from "@stricli/core";
 import * as vb from "valibot";
+
+import { loadAgents, loadChannel } from "#config/index.js";
+import { getDb, initDb } from "#db/index.js";
+import { sessions } from "#db/schema.js";
+import colors from "#output/colors.js";
+import { error as logError, info, warning } from "#output/log.js";
+import { fetchSessionDisplayName, repairSession } from "#util/repair-session.js";
 
 // oceanic.js's ESM shim breaks under tsx's module loader (.default.default chain
 // resolves to undefined). Force CJS to get the real constructors.

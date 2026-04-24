@@ -8,8 +8,8 @@ import type {
   ToolResponseContent,
   VideoContent,
   VideoRef,
-} from "$/engine/content.js";
-import type { Role } from "$/engine/role.js";
+} from "#engine/content.js";
+import type { Role } from "#engine/role.js";
 
 interface BaseMessage {
   role: Role;

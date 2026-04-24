@@ -1,4 +1,4 @@
-import type { ConfigMigration } from "$/config/migrations/index.js";
+import type { ConfigMigration } from "#config/migrations/index.js";
 
 // Guard: This is a template file and should never be executed
 throw new Error(

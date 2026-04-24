@@ -1,11 +1,12 @@
-import { saveSession } from "$/db/sessions.js";
-import { sanitizeError } from "$/util/paths.js";
 import type {
   AutocompleteInteraction,
   CommandInteraction,
   CreateApplicationCommandOptions,
 } from "oceanic.js";
 import { ApplicationCommandOptionTypes, ApplicationCommandTypes, MessageFlags } from "oceanic.js";
+
+import { saveSession } from "#db/sessions.js";
+import { sanitizeError } from "#util/paths.js";
 
 import type { HandlerCtx } from "./handler-ctx.js";
 

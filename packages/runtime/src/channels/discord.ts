@@ -4,26 +4,6 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { basename, join } from "node:path";
 
-import * as clearCommand from "$/channels/discord/clear-command.js";
-import * as closeCommand from "$/channels/discord/close-command.js";
-import type { HandlerCtx } from "$/channels/discord/handler-ctx.js";
-import * as inviteCommand from "$/channels/discord/invite-command.js";
-import * as modelCommand from "$/channels/discord/model-command.js";
-import * as repairCommand from "$/channels/discord/repair-command.js";
-import { loadChannel, loadEngine } from "$/config/index.js";
-import { saveSession } from "$/db/sessions.js";
-import type { ImageContent, TextContent, VideoContent } from "$/engine/content.js";
-import type { Message } from "$/engine/message.js";
-import type { ChannelHandler } from "$/harness/channel-handler.js";
-import type { Harness } from "$/harness/index.js";
-import { DiscordSession } from "$/harness/session.js";
-import colors from "$/output/colors.js";
-import { debug, error as logError, info, warning } from "$/output/log.js";
-import { SUPPORTED_IMAGE_TYPES, SUPPORTED_VIDEO_TYPES, VIDEO_SIZE_CAP } from "$/supports.js";
-import { formatDate } from "$/util/date.js";
-import { getDefaultProviderAndModel } from "$/util/default-provider-and-model.js";
-import { toWebp } from "$/util/image.js";
-import { root, sanitizeError, sandboxToReal } from "$/util/paths.js";
 import type {
   AnyInteractionGateway,
   Client as OceanicClient,
@@ -43,6 +23,27 @@ import {
   StickerFormatTypes,
   TextableChannelTypes,
 } from "oceanic.js";
+
+import * as clearCommand from "#channels/discord/clear-command.js";
+import * as closeCommand from "#channels/discord/close-command.js";
+import type { HandlerCtx } from "#channels/discord/handler-ctx.js";
+import * as inviteCommand from "#channels/discord/invite-command.js";
+import * as modelCommand from "#channels/discord/model-command.js";
+import * as repairCommand from "#channels/discord/repair-command.js";
+import { loadChannel, loadEngine } from "#config/index.js";
+import { saveSession } from "#db/sessions.js";
+import type { ImageContent, TextContent, VideoContent } from "#engine/content.js";
+import type { Message } from "#engine/message.js";
+import type { ChannelHandler } from "#harness/channel-handler.js";
+import type { Harness } from "#harness/index.js";
+import { DiscordSession } from "#harness/session.js";
+import colors from "#output/colors.js";
+import { debug, error as logError, info, warning } from "#output/log.js";
+import { SUPPORTED_IMAGE_TYPES, SUPPORTED_VIDEO_TYPES, VIDEO_SIZE_CAP } from "#supports.js";
+import { formatDate } from "#util/date.js";
+import { getDefaultProviderAndModel } from "#util/default-provider-and-model.js";
+import { toWebp } from "#util/image.js";
+import { root, sanitizeError, sandboxToReal } from "#util/paths.js";
 
 // oceanic.js's ESM shim breaks under tsx's module loader (.default.default chain
 // resolves to undefined). Force CJS to get the real constructors.

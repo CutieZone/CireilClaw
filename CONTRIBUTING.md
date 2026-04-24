@@ -24,8 +24,8 @@ The project uses NixOS with `direnv` for the best development experience, but an
 
 - Package manager: `pnpm` (not npm, not yarn). **Bun cannot be used** due to incompatible dependencies (`better-sqlite3` is the [primary culprit](https://github.com/oven-sh/bun/issues/4290)).
 - No build step. TypeScript runs directly via `tsx`.
-- Path alias: `$/` maps to `./src/` (e.g., `import { foo } from "$/engine/index.js"`). **Always use the `.js` extension in imports** even for `.ts` files (due to NodeNext requirement).
-- Prefer absolute imports whenever possible. `$/...` instead of `./...`
+- Path alias: `#` maps to `./src/` (e.g., `import { foo } from "#engine/index.js"`). **Always use the `.js` extension in imports** even for `.ts` files (due to NodeNext requirement).
+- Prefer absolute imports whenever possible. `#...` instead of `./...`
 
 Note: _Running_ CireilClaw (via `pnpm start`) requires Linux, as the sandbox depends on Linux kernel features (bubblewrap). Development and testing work on any platform, but `exec` and sandbox-related changes **must** be verified on Linux.
 

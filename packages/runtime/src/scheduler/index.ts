@@ -1,14 +1,15 @@
-import type { Agent } from "$/agent/index.js";
-import { CronJobConfigSchema } from "$/config/cron.js";
-import type { CronJobConfig } from "$/config/cron.js";
-import type { HeartbeatConfig } from "$/config/heartbeat.js";
-import { loadCron, loadHeartbeat } from "$/config/index.js";
-import { getAgentCronJobs } from "$/db/cron.js";
-import colors from "$/output/colors.js";
-import { debug, warning } from "$/output/log.js";
-import { runHeartbeat } from "$/scheduler/heartbeat.js";
 import { Cron } from "croner";
 import * as vb from "valibot";
+
+import type { Agent } from "#agent/index.js";
+import { CronJobConfigSchema } from "#config/cron.js";
+import type { CronJobConfig } from "#config/cron.js";
+import type { HeartbeatConfig } from "#config/heartbeat.js";
+import { loadCron, loadHeartbeat } from "#config/index.js";
+import { getAgentCronJobs } from "#db/cron.js";
+import colors from "#output/colors.js";
+import { debug, warning } from "#output/log.js";
+import { runHeartbeat } from "#scheduler/heartbeat.js";
 
 // Uniform handle interface covering both setTimeout and croner jobs.
 interface StopHandle {
@@ -181,7 +182,7 @@ export class Scheduler {
       // oxlint-disable-next-line typescript/no-floating-promises
       (async (): Promise<void> => {
         try {
-          const { runCronJob } = await import("$/scheduler/cron.js");
+          const { runCronJob } = await import("#scheduler/cron.js");
           await runCronJob(agent, job);
         } catch (error: unknown) {
           warning(
@@ -219,7 +220,7 @@ export class Scheduler {
         return;
       }
       try {
-        const { runCronJob } = await import("$/scheduler/cron.js");
+        const { runCronJob } = await import("#scheduler/cron.js");
         await runCronJob(agent, job);
       } catch (error: unknown) {
         warning(

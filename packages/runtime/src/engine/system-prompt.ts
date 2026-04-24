@@ -1,16 +1,11 @@
 import { readFile, stat } from "node:fs/promises";
 
-import type { ConditionsConfig } from "$/config/schemas/conditions.js";
-import type { ChannelCapabilities } from "$/harness/channel-handler.js";
-import { InternalSession } from "$/harness/session.js";
-import type { Session } from "$/harness/session.js";
-import {
-  loadBlocks,
-  loadBaseInstructions,
-  loadConditionalBlocks,
-  loadSkills,
-} from "$/util/load.js";
-import { sandboxToReal } from "$/util/paths.js";
+import type { ConditionsConfig } from "#config/schemas/conditions.js";
+import type { ChannelCapabilities } from "#harness/channel-handler.js";
+import { InternalSession } from "#harness/session.js";
+import type { Session } from "#harness/session.js";
+import { loadBlocks, loadBaseInstructions, loadConditionalBlocks, loadSkills } from "#util/load.js";
+import { sandboxToReal } from "#util/paths.js";
 
 const NO_CAPABILITIES: ChannelCapabilities = {
   supportsAttachments: false,

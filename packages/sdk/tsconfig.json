@@ -19,9 +19,6 @@
     "noImplicitOverride": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "isolatedModules": true,
-    "paths": {
-      "$/*": ["./src/*"]
-    }
+    "isolatedModules": true
   }
 }

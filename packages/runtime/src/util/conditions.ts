@@ -1,5 +1,5 @@
-import type { BlockRule, Condition, PathRule } from "$/config/schemas/conditions.js";
-import type { Session } from "$/harness/session.js";
+import type { BlockRule, Condition, PathRule } from "#config/schemas/conditions.js";
+import type { Session } from "#harness/session.js";
 
 /**
  * Evaluate a single condition against the session context.

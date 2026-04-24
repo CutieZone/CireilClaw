@@ -2,10 +2,10 @@ import { existsSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, normalize, relative } from "node:path";
 import { env } from "node:process";
 
-import type { ConditionsConfig, PathRule } from "$/config/schemas/conditions.js";
-import type { Mount } from "$/config/schemas/sandbox.js";
-import type { Session } from "$/harness/session.js";
-import { checkPathAccess } from "$/util/conditions.js";
+import type { ConditionsConfig, PathRule } from "#config/schemas/conditions.js";
+import type { Mount } from "#config/schemas/sandbox.js";
+import type { Session } from "#harness/session.js";
+import { checkPathAccess } from "#util/conditions.js";
 
 function root(): string {
   const home = env["HOME"];
@@ -210,7 +210,7 @@ function sanitizeError(err: unknown, agentSlug: string): string {
  * Throws an error if access is denied by conditional rules.
  *
  * @param sandboxPath The sandbox path to check
- * @param _agentSlug The agent slug (unused but kept for API consistency)
+ * @param agentSlug The agent slug
  * @param conditions The conditions config
  * @param session The current session
  * @throws Error if access is denied

@@ -1,6 +1,7 @@
-import { ToolError } from "$/engine/errors.js";
-import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import * as vb from "valibot";
+
+import { ToolError } from "#engine/errors.js";
+import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
 
 const ReactSchema = vb.strictObject({
   emoji: vb.pipe(

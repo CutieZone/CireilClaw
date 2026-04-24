@@ -1,9 +1,9 @@
-import { loadTools } from "$/config/index.js";
-import type { ToolsConfig } from "$/config/schemas/tools.js";
-import type { Tool } from "$/engine/tool.js";
-import { getToolRegistry } from "$/engine/tools/index.js";
-import type { Session } from "$/harness/session.js";
-import colors from "$/output/colors.js";
+import { loadTools } from "#config/index.js";
+import type { ToolsConfig } from "#config/schemas/tools.js";
+import type { Tool } from "#engine/tool.js";
+import { getToolRegistry } from "#engine/tools/index.js";
+import type { Session } from "#harness/session.js";
+import colors from "#output/colors.js";
 
 export async function buildTools(
   agentSlug: string,

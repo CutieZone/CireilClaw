@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, rename } from "node:fs/promises";
 import { join } from "node:path";
 
-import type { ConfigMigration } from "$/config/migrations/index.js";
+import type { ConfigMigration } from "#config/migrations/index.js";
 
 const migration: ConfigMigration = {
   description: "Move HEARTBEAT.md from workspace/ to tasks/ directory",

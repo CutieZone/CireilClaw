@@ -1,8 +1,9 @@
-import { ToolError } from "$/engine/errors.js";
-import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
-import type { ChannelResolution } from "$/harness/channel-handler.js";
-import { checkConditionalAccess } from "$/util/paths.js";
 import * as vb from "valibot";
+
+import { ToolError } from "#engine/errors.js";
+import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
+import type { ChannelResolution } from "#harness/channel-handler.js";
+import { checkConditionalAccess } from "#util/paths.js";
 
 const RespondSchema = vb.strictObject({
   attachments: vb.pipe(

@@ -1,9 +1,10 @@
 import { stat } from "node:fs/promises";
 
-import { ToolError } from "$/engine/errors.js";
-import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
-import { checkConditionalAccess, sandboxToReal } from "$/util/paths.js";
 import * as vb from "valibot";
+
+import { ToolError } from "#engine/errors.js";
+import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
+import { checkConditionalAccess, sandboxToReal } from "#util/paths.js";
 
 const Schema = vb.strictObject({
   path: vb.pipe(

@@ -1,5 +1,6 @@
-import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import * as vb from "valibot";
+
+import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
 
 const Schema = vb.strictObject({
   path: vb.pipe(

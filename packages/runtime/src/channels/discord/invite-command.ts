@@ -1,7 +1,8 @@
-import type { HandlerCtx } from "$/channels/discord/handler-ctx.js";
-import { sanitizeError } from "$/util/paths.js";
 import type { CommandInteraction, CreateApplicationCommandOptions } from "oceanic.js";
 import { ApplicationCommandTypes, MessageFlags } from "oceanic.js";
+
+import type { HandlerCtx } from "#channels/discord/handler-ctx.js";
+import { sanitizeError } from "#util/paths.js";
 
 const definition: CreateApplicationCommandOptions = {
   description: "Generate an invite link for this bot",

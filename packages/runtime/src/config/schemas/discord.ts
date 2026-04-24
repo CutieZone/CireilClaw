@@ -1,5 +1,6 @@
-import { nonEmptyString } from "$/config/schemas/shared.js";
 import * as vb from "valibot";
+
+import { nonEmptyString } from "#config/schemas/shared.js";
 
 const DirectMessagesModeSchema = vb.pipe(
   vb.exactOptional(

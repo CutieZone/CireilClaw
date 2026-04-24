@@ -1,25 +1,26 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { nonEmptyString } from "$/config/schemas/shared.js";
-import { getDb } from "$/db/index.js";
-import { images, sessions } from "$/db/schema.js";
-import type { Content, ImageContent, ImageRef, VideoContent, VideoRef } from "$/engine/content.js";
-import { isVideoContent, isVideoRef } from "$/engine/content.js";
-import { isMessage } from "$/engine/message.js";
-import type { AssistantContent, Message, UserContent } from "$/engine/message.js";
-import type { Session } from "$/harness/session.js";
+import { blake3 } from "@noble/hashes/blake3.js";
+import { and, eq, inArray, notInArray } from "drizzle-orm";
+import * as vb from "valibot";
+
+import { nonEmptyString } from "#config/schemas/shared.js";
+import { getDb } from "#db/index.js";
+import { images, sessions } from "#db/schema.js";
+import type { Content, ImageContent, ImageRef, VideoContent, VideoRef } from "#engine/content.js";
+import { isVideoContent, isVideoRef } from "#engine/content.js";
+import { isMessage } from "#engine/message.js";
+import type { AssistantContent, Message, UserContent } from "#engine/message.js";
+import type { Session } from "#harness/session.js";
 import {
   DiscordSession,
   MatrixSession,
   NamedInternalSession,
   TuiSession,
-} from "$/harness/session.js";
-import { warning } from "$/output/log.js";
-import { agentRoot } from "$/util/paths.js";
-import { blake3 } from "@noble/hashes/blake3.js";
-import { and, eq, inArray, notInArray } from "drizzle-orm";
-import * as vb from "valibot";
+} from "#harness/session.js";
+import { warning } from "#output/log.js";
+import { agentRoot } from "#util/paths.js";
 
 // ---------------------------------------------------------------------------
 // Image file helpers

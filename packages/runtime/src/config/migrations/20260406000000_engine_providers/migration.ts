@@ -2,9 +2,10 @@ import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import type { ConfigMigration, MigrationContext } from "$/config/migrations/index.js";
 import type { TomlTable } from "smol-toml";
 import * as vb from "valibot";
+
+import type { ConfigMigration, MigrationContext } from "#config/migrations/index.js";
 
 interface OverrideInfo {
   id: string;
@@ -117,8 +118,8 @@ export const migration: ConfigMigration = {
 
     const updates = [...(dbUpdates.get("global") ?? []), ...(dbUpdates.get(agentSlug) ?? [])];
     if (updates.length > 0) {
-      const { initDb } = await import("$/db/index.js");
-      const { sessions } = await import("$/db/schema.js");
+      const { initDb } = await import("#db/index.js");
+      const { sessions } = await import("#db/schema.js");
       const { eq } = await import("drizzle-orm");
 
       const db = initDb(agentSlug);

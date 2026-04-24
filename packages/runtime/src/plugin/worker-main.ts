@@ -138,6 +138,17 @@ function buildCtx(rpc: RpcChannel, invocationId: string, data: CtxData): PluginT
     net: {
       fetch: globalThis.fetch.bind(globalThis),
     },
+    paths: {
+      checkConditionalAccess: async (sandboxPath: string): Promise<void> => {
+        await rpc.call("paths.checkConditionalAccess", [invocationId, sandboxPath]);
+      },
+      checkWriteAccess: async (sandboxPath: string): Promise<void> => {
+        await rpc.call("paths.checkWriteAccess", [invocationId, sandboxPath]);
+      },
+      // oxlint-disable-next-line typescript/require-await
+      resolve: async (sandboxPath: string): Promise<string> =>
+        rpc.call<string>("paths.resolve", [invocationId, sandboxPath]),
+    },
     reply: {
       react: async (emoji, messageId) => {
         await rpc.call("reply.react", [invocationId, emoji, messageId]);

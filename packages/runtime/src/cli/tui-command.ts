@@ -1,18 +1,19 @@
 import path from "node:path";
 
-import { Agent } from "$/agent/index.js";
-import { startTui } from "$/channels/tui/TuiApp.js";
-import { loadAgents, loadConditions } from "$/config/index.js";
-import { runMigrations } from "$/config/migrations/runner.js";
-import { initDb } from "$/db/index.js";
-import { flushAllSessions, loadSessions } from "$/db/sessions.js";
-import colors from "$/output/colors.js";
-import { error, config, setLogFile } from "$/output/log.js";
-import { destroyPlugins, initializePlugins } from "$/plugin/loader.js";
-import { root } from "$/util/paths.js";
-import { onShutdown, registerSigint } from "$/util/shutdown.js";
 import { input, select } from "@inquirer/prompts";
 import { buildCommand } from "@stricli/core";
+
+import { Agent } from "#agent/index.js";
+import { startTui } from "#channels/tui/TuiApp.js";
+import { loadAgents, loadConditions } from "#config/index.js";
+import { runMigrations } from "#config/migrations/runner.js";
+import { initDb } from "#db/index.js";
+import { flushAllSessions, loadSessions } from "#db/sessions.js";
+import colors from "#output/colors.js";
+import { error, config, setLogFile } from "#output/log.js";
+import { destroyPlugins, initializePlugins } from "#plugin/loader.js";
+import { root } from "#util/paths.js";
+import { onShutdown, registerSigint } from "#util/shutdown.js";
 
 // oxlint-disable-next-line typescript/ban-types, typescript/no-empty-object-type
 async function run(_noFlags: {}, agentSlug: string): Promise<void> {

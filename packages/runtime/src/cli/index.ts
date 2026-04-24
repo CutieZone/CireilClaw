@@ -1,7 +1,8 @@
-import { repairCommand } from "$/cli/repair-command.js";
-import { runCommand } from "$/cli/run-command.js";
-import { tuiCommand } from "$/cli/tui-command.js";
 import { buildApplication, buildRouteMap } from "@stricli/core";
+
+import { repairCommand } from "#cli/repair-command.js";
+import { runCommand } from "#cli/run-command.js";
+import { tuiCommand } from "#cli/tui-command.js";
 
 import { clearCommand } from "./clear-command.js";
 import { initCommand } from "./init-command.js";

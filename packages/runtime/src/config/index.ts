@@ -2,27 +2,28 @@ import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import type { CronConfig } from "$/config/cron.js";
-import { CronConfigSchema } from "$/config/cron.js";
-import type { HeartbeatConfig } from "$/config/heartbeat.js";
-import { HeartbeatConfigSchema } from "$/config/heartbeat.js";
-import type { ConditionsConfig } from "$/config/schemas/conditions.js";
-import { ConditionsConfigSchema } from "$/config/schemas/conditions.js";
-import { DiscordConfigSchema } from "$/config/schemas/discord.js";
-import type { DiscordConfig } from "$/config/schemas/discord.js";
-import { ProvidersConfigSchema } from "$/config/schemas/engine.js";
-import type { ProvidersConfig } from "$/config/schemas/engine.js";
-import { SandboxConfigSchema } from "$/config/schemas/sandbox.js";
-import type { SandboxConfig } from "$/config/schemas/sandbox.js";
-import { SystemConfigSchema } from "$/config/schemas/system.js";
-import { ToolsConfigSchema } from "$/config/schemas/tools.js";
-import type { ToolsConfig } from "$/config/schemas/tools.js";
-import type { ChannelType } from "$/harness/session.js";
-import colors from "$/output/colors.js";
-import { root } from "$/util/paths.js";
 import type { TomlTable } from "smol-toml";
 import { parse } from "smol-toml";
 import * as vb from "valibot";
+
+import type { ChannelType } from "../harness/session.js";
+import colors from "../output/colors.js";
+import { root } from "../util/paths.js";
+import type { CronConfig } from "./cron.js";
+import { CronConfigSchema } from "./cron.js";
+import type { HeartbeatConfig } from "./heartbeat.js";
+import { HeartbeatConfigSchema } from "./heartbeat.js";
+import type { ConditionsConfig } from "./schemas/conditions.js";
+import { ConditionsConfigSchema } from "./schemas/conditions.js";
+import { DiscordConfigSchema } from "./schemas/discord.js";
+import type { DiscordConfig } from "./schemas/discord.js";
+import { ProvidersConfigSchema } from "./schemas/engine.js";
+import type { ProvidersConfig } from "./schemas/engine.js";
+import { SandboxConfigSchema } from "./schemas/sandbox.js";
+import type { SandboxConfig } from "./schemas/sandbox.js";
+import { SystemConfigSchema } from "./schemas/system.js";
+import { ToolsConfigSchema } from "./schemas/tools.js";
+import type { ToolsConfig } from "./schemas/tools.js";
 
 async function loadTools(agentSlug: string): Promise<ToolsConfig> {
   const file = join(root(), "agents", agentSlug, "config", "tools.toml");

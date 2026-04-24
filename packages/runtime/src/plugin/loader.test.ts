@@ -1,8 +1,9 @@
-import { builtinToolRegistry, setToolRegistry } from "$/engine/tools/index.js";
-import type { ToolDef } from "$/engine/tools/tool-def.js";
-import { mergeToolRegistries } from "$/plugin/loader.js";
 import * as vb from "valibot";
 import { describe, it, expect } from "vitest";
+
+import { builtinToolRegistry, setToolRegistry } from "#engine/tools/index.js";
+import type { ToolDef } from "#engine/tools/tool-def.js";
+import { mergeToolRegistries } from "#plugin/loader.js";
 
 function makeTool(name: string): ToolDef {
   return {

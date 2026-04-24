@@ -2,8 +2,9 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import type { ConfigMigration } from "$/config/migrations/index.js";
 import { parse } from "smol-toml";
+
+import type { ConfigMigration } from "#config/migrations/index.js";
 
 function yamlQuote(str: string): string {
   return `"${str.replaceAll("\\", String.raw`\\`).replaceAll('"', String.raw`\"`)}"`;

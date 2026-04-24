@@ -1,11 +1,12 @@
-import type { ConditionsConfig } from "$/config/schemas/conditions.js";
-import type { SandboxConfig } from "$/config/schemas/sandbox.js";
-import type { ExecToolConfig } from "$/config/schemas/tools.js";
-import type { Database } from "$/db/index.js";
-import type { HistoryDirection, HistoryMessage } from "$/harness/channel-handler.js";
-import type { Session } from "$/harness/session.js";
-import type { Scheduler } from "$/scheduler/index.js";
 import type { PluginToolContext, Tool } from "@cireilclaw/sdk";
+
+import type { ConditionsConfig } from "#config/schemas/conditions.js";
+import type { SandboxConfig } from "#config/schemas/sandbox.js";
+import type { ExecToolConfig } from "#config/schemas/tools.js";
+import type { Database } from "#db/index.js";
+import type { HistoryDirection, HistoryMessage } from "#harness/channel-handler.js";
+import type { Session } from "#harness/session.js";
+import type { Scheduler } from "#scheduler/index.js";
 
 interface InternalToolContext extends PluginToolContext {
   db: Database;

@@ -1,14 +1,15 @@
+import { describe, expect, it, vi } from "vitest";
+
 // oxlint-disable require-await
 // oxlint-disable unicorn/no-useless-promise-resolve-reject
-import { DiscordSession } from "$/harness/session.js";
+import { DiscordSession } from "#harness/session.js";
 import {
   blockLabels,
   loadBaseInstructions,
   loadBlocks,
   loadConditionalBlocks,
   loadSkills,
-} from "$/util/load.js";
-import { describe, expect, it, vi } from "vitest";
+} from "#util/load.js";
 
 const mockFs = {
   existsSync: vi.fn(),

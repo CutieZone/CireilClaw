@@ -1,10 +1,11 @@
-import { loadAgents } from "$/config/index.js";
-import { initDb } from "$/db/index.js";
-import { deleteSession, loadSessions } from "$/db/sessions.js";
-import colors from "$/output/colors.js";
-import { info, warning } from "$/output/log.js";
 import { confirm, select } from "@inquirer/prompts";
 import { buildCommand } from "@stricli/core";
+
+import { loadAgents } from "#config/index.js";
+import { initDb } from "#db/index.js";
+import { deleteSession, loadSessions } from "#db/sessions.js";
+import colors from "#output/colors.js";
+import { info, warning } from "#output/log.js";
 
 interface Flags {
   agent?: string;

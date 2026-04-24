@@ -1,11 +1,12 @@
 import { join } from "node:path";
 
-import type { ConfigMigration } from "$/config/migrations/index.js";
-import { initDb } from "$/db/index.js";
-import { sessions } from "$/db/schema.js";
-import { isMessage } from "$/engine/message.js";
 import { eq } from "drizzle-orm";
 import * as vb from "valibot";
+
+import type { ConfigMigration } from "#config/migrations/index.js";
+import { initDb } from "#db/index.js";
+import { sessions } from "#db/schema.js";
+import { isMessage } from "#engine/message.js";
 
 // oxlint-disable sort-keys
 const migration: ConfigMigration = {

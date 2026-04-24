@@ -1,13 +1,3 @@
-import type { HandlerCtx } from "$/channels/discord/handler-ctx.js";
-import { loadEngine } from "$/config/index.js";
-import type { ProviderConfig } from "$/config/schemas/engine.js";
-import { nonEmptyString } from "$/config/schemas/shared.js";
-import { saveSession } from "$/db/sessions.js";
-import { DiscordSession } from "$/harness/session.js";
-import colors from "$/output/colors.js";
-import { debug, warning } from "$/output/log.js";
-import { getDefaultProviderAndModel } from "$/util/default-provider-and-model.js";
-import { sanitizeError } from "$/util/paths.js";
 import { ApplicationCommandOptionTypes, ApplicationCommandTypes, MessageFlags } from "oceanic.js";
 import type {
   AutocompleteInteraction,
@@ -15,6 +5,17 @@ import type {
   CreateApplicationCommandOptions,
 } from "oceanic.js";
 import * as vb from "valibot";
+
+import type { HandlerCtx } from "#channels/discord/handler-ctx.js";
+import { loadEngine } from "#config/index.js";
+import type { ProviderConfig } from "#config/schemas/engine.js";
+import { nonEmptyString } from "#config/schemas/shared.js";
+import { saveSession } from "#db/sessions.js";
+import { DiscordSession } from "#harness/session.js";
+import colors from "#output/colors.js";
+import { debug, warning } from "#output/log.js";
+import { getDefaultProviderAndModel } from "#util/default-provider-and-model.js";
+import { sanitizeError } from "#util/paths.js";
 
 const definition: CreateApplicationCommandOptions = {
   description: "Manage the agent's model overrides",

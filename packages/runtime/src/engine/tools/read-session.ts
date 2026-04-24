@@ -1,9 +1,10 @@
-import { sessions } from "$/db/schema.js";
-import { ToolError } from "$/engine/errors.js";
-import { isMessage } from "$/engine/message.js";
-import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
 import { eq } from "drizzle-orm";
 import * as vb from "valibot";
+
+import { sessions } from "#db/schema.js";
+import { ToolError } from "#engine/errors.js";
+import { isMessage } from "#engine/message.js";
+import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
 
 const Schema = vb.strictObject({
   id: vb.pipe(vb.string(), vb.nonEmpty(), vb.description("The session ID to read.")),

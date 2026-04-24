@@ -1,13 +1,14 @@
 import { readdir } from "node:fs/promises";
 
-import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
+import * as vb from "valibot";
+
+import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
 import {
   checkConditionalAccess,
   getMountEntriesAtPath,
   sandboxToReal,
   validateSystemPath,
-} from "$/util/paths.js";
-import * as vb from "valibot";
+} from "#util/paths.js";
 
 const AGENT_SANDBOX_PREFIXES = ["/workspace", "/memories", "/blocks", "/skills", "/tasks"] as const;
 

@@ -1,17 +1,18 @@
-import type { Agent } from "$/agent/index.js";
-import { createHandler } from "$/channels/tui.js";
-import { TuiBridge } from "$/channels/tui/bridge.js";
-import { MessageLine } from "$/channels/tui/MessageLine.js";
-import { StatusBar } from "$/channels/tui/StatusBar.js";
-import { createTuiMessage } from "$/channels/tui/tui-message.js";
-import type { TuiMessage } from "$/channels/tui/tui-message.js";
-import type { UserMessage } from "$/engine/message.js";
-import { NamedInternalSession, TuiSession } from "$/harness/session.js";
-import { sanitizeError } from "$/util/paths.js";
 import { Box, render, Static, Text, useApp, useInput } from "ink";
 import { MultilineInput } from "ink-multiline-input";
 import { useCallback, useEffect, useState } from "react";
 import type { ReactElement } from "react";
+
+import type { Agent } from "#agent/index.js";
+import { createHandler } from "#channels/tui.js";
+import { TuiBridge } from "#channels/tui/bridge.js";
+import { MessageLine } from "#channels/tui/MessageLine.js";
+import { StatusBar } from "#channels/tui/StatusBar.js";
+import { createTuiMessage } from "#channels/tui/tui-message.js";
+import type { TuiMessage } from "#channels/tui/tui-message.js";
+import type { UserMessage } from "#engine/message.js";
+import { NamedInternalSession, TuiSession } from "#harness/session.js";
+import { sanitizeError } from "#util/paths.js";
 
 interface AppProps {
   bridge: TuiBridge;

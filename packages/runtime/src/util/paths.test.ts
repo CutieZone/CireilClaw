@@ -1,8 +1,10 @@
 import { existsSync, realpathSync } from "node:fs";
 
-import type { ConditionsConfig } from "$/config/schemas/conditions.js";
-import type { Mount } from "$/config/schemas/sandbox.js";
-import { DiscordSession, TuiSession } from "$/harness/session.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { ConditionsConfig } from "#config/schemas/conditions.js";
+import type { Mount } from "#config/schemas/sandbox.js";
+import { DiscordSession, TuiSession } from "#harness/session.js";
 import {
   agentRoot,
   checkConditionalAccess,
@@ -12,8 +14,7 @@ import {
   sanitizeError,
   sandboxToReal,
   validateSystemPath,
-} from "$/util/paths.js";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+} from "#util/paths.js";
 
 vi.mock("node:fs", () => ({
   existsSync: vi.fn(() => true),

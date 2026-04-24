@@ -1,7 +1,8 @@
-import { ToolError } from "$/engine/errors.js";
-import type { ToolContext, ToolDef } from "$/engine/tools/tool-def.js";
-import { exec as sandboxExec } from "$/util/sandbox.js";
 import * as vb from "valibot";
+
+import { ToolError } from "#engine/errors.js";
+import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
+import { exec as sandboxExec } from "#util/sandbox.js";
 
 const SHELL_METACHAR_PATTERN = /[\s"'|&;$`\\]/;
 const Schema = vb.strictObject({

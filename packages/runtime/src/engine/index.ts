@@ -1,36 +1,43 @@
+import { KeyPoolManager } from "@cireilclaw/sdk";
+import * as vb from "valibot";
+
 import {
   loadAgentPluginConfig,
   loadEngine,
   loadGlobalPluginConfig,
   loadSandboxConfig,
   loadTools,
-} from "$/config/index.js";
-import type { ConditionsConfig } from "$/config/schemas/conditions.js";
-import { DefaultReasoningBudget, DefaultToolFailThreshold } from "$/config/schemas/engine.js";
-import { getDb } from "$/db/index.js";
-import { hashImage } from "$/db/sessions.js";
-import type { ToolCallContent } from "$/engine/content.js";
-import type { Context, UsageInfo } from "$/engine/context.js";
-import { GenerationNoToolCallsError, ToolError, ParseError } from "$/engine/errors.js";
-import { generate as generateAnthropicOauth } from "$/engine/provider/anthropic-oauth.js";
-import { generate as generateOai } from "$/engine/provider/oai.js";
-import { getToolRegistry } from "$/engine/tools/index.js";
-import type { ToolContext } from "$/engine/tools/tool-def.js";
+} from "#config/index.js";
+import type { ConditionsConfig } from "#config/schemas/conditions.js";
+import { DefaultReasoningBudget, DefaultToolFailThreshold } from "#config/schemas/engine.js";
+import { getDb } from "#db/index.js";
+import { hashImage } from "#db/sessions.js";
+import type { ToolCallContent } from "#engine/content.js";
+import type { Context, UsageInfo } from "#engine/context.js";
+import { GenerationNoToolCallsError, ToolError, ParseError } from "#engine/errors.js";
+import { generate as generateAnthropicOauth } from "#engine/provider/anthropic-oauth.js";
+import { generate as generateOai } from "#engine/provider/oai.js";
+import { getToolRegistry } from "#engine/tools/index.js";
+import type { ToolContext } from "#engine/tools/tool-def.js";
 import type {
   ChannelCapabilities,
   ChannelResolution,
   HistoryDirection,
   HistoryMessage,
-} from "$/harness/channel-handler.js";
-import type { Session } from "$/harness/session.js";
-import colors from "$/output/colors.js";
-import { debug, warning } from "$/output/log.js";
-import type { Scheduler } from "$/scheduler/index.js";
-import { formatDate } from "$/util/date.js";
-import { getDefaultProviderAndModel } from "$/util/default-provider-and-model.js";
-import { sanitizeError } from "$/util/paths.js";
-import { KeyPoolManager } from "@cireilclaw/sdk";
-import * as vb from "valibot";
+} from "#harness/channel-handler.js";
+import type { Session } from "#harness/session.js";
+import colors from "#output/colors.js";
+import { debug, warning } from "#output/log.js";
+import type { Scheduler } from "#scheduler/index.js";
+import { formatDate } from "#util/date.js";
+import { getDefaultProviderAndModel } from "#util/default-provider-and-model.js";
+import {
+  checkConditionalAccess,
+  checkMountWriteAccess,
+  sanitizeError,
+  sandboxToReal,
+} from "#util/paths.js";
+import { stripMediaForModel } from "#util/strip.js";
 
 import type { AssistantMessage, ToolMessage } from "./message.js";
 import { estimateSystemPrompt, pruneHistory, squashMessages } from "./prune.js";
@@ -69,6 +76,11 @@ function logUsage(
       `gen: ${colors.number(usage.completionTokens)} tokens`,
     );
   }
+}
+
+// oxlint-disable-next-line typescript/require-await
+async function resolveChannelUnsupported(_spec: string): Promise<ChannelResolution> {
+  return { error: "channel resolution not supported" };
 }
 
 export async function runTurn(
@@ -123,13 +135,7 @@ export async function runTurn(
     channel: {
       downloadAttachments,
       fetchHistory,
-      resolveChannel:
-        resolveChannel ??
-        // oxlint-disable-next-line typescript/require-await
-        (async () => {
-          const error = { error: "channel resolution not supported" };
-          return error;
-        }),
+      resolveChannel: resolveChannel ?? resolveChannelUnsupported,
     },
     conditions,
     createKeyPool: (keys, cooldownMs) => KeyPoolManager.getPool(keys, cooldownMs),
@@ -137,6 +143,21 @@ export async function runTurn(
     mounts: sandboxConfig.mounts,
     net: {
       fetch: globalThis.fetch.bind(globalThis),
+    },
+    paths: {
+      // oxlint-disable-next-line typescript/require-await
+      checkConditionalAccess: async (sandboxPath: string): Promise<void> => {
+        if (conditions !== undefined) {
+          checkConditionalAccess(sandboxPath, agentSlug, conditions, session);
+        }
+      },
+      // oxlint-disable-next-line typescript/require-await
+      checkWriteAccess: async (sandboxPath: string): Promise<void> => {
+        checkMountWriteAccess(sandboxPath, sandboxConfig.mounts);
+      },
+      // oxlint-disable-next-line typescript/require-await
+      resolve: async (sandboxPath: string): Promise<string> =>
+        sandboxToReal(sandboxPath, agentSlug, sandboxConfig.mounts),
     },
     reply: {
       react,
@@ -166,9 +187,12 @@ export async function runTurn(
 
   const modelCfg = selectedProvider.models?.[selectedModel] ??
     engineDefaults.model.config ?? {
+      contextBudget: 0.6,
+      contextHardBudget: 0.85,
       reasoning: true,
       reasoningBudget: DefaultReasoningBudget,
       supportsVideo: false,
+      supportsVision: true,
       toolFailThreshold: DefaultToolFailThreshold,
     };
 
@@ -218,9 +242,17 @@ export async function runTurn(
     const visibleHistory = session.history.slice(session.historyCursor);
     const messages = squashMessages([...visibleHistory, ...session.pendingToolMessages]);
 
+    // Blind models don't receive image/video blocks, but they still see attachment
+    // metadata via Discord's <attachment> tags and can choose to download them.
+    const filteredMessages = stripMediaForModel(
+      messages,
+      modelCfg.supportsVision,
+      modelCfg.supportsVideo,
+    );
+
     // Append an ephemeral date reminder so the LLM always sees the current time
     // at the very end of context, preventing date hallucination from stale history.
-    messages.push({
+    filteredMessages.push({
       content: { content: `Current date: ${await formatDate()}`, type: "text" },
       role: "user",
     });
@@ -228,8 +260,8 @@ export async function runTurn(
     const activeTools = tools.filter((tool) => !disabledTools.has(tool.name));
 
     const context: Context = {
-      cacheBreakpoints: messages.length > 1 ? [0, messages.length - 2] : [0],
-      messages,
+      cacheBreakpoints: filteredMessages.length > 1 ? [0, filteredMessages.length - 2] : [0],
+      messages: filteredMessages,
       sessionId: session.id(),
       systemPrompt: prompt,
       tools: activeTools,

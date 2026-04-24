@@ -1,6 +1,7 @@
-import type { TuiMessage } from "$/channels/tui/tui-message.js";
 import { Box, Text } from "ink";
 import type { ReactElement } from "react";
+
+import type { TuiMessage } from "#channels/tui/tui-message.js";
 
 function wordWrap(text: string, width: number): string[] {
   if (width <= 0) {

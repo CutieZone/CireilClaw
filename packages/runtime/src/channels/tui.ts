@@ -1,6 +1,6 @@
-import type { TuiBridge } from "$/channels/tui/bridge.js";
-import { createTuiMessage } from "$/channels/tui/tui-message.js";
-import type { ChannelHandler } from "$/harness/channel-handler.js";
+import type { TuiBridge } from "#channels/tui/bridge.js";
+import { createTuiMessage } from "#channels/tui/tui-message.js";
+import type { ChannelHandler } from "#harness/channel-handler.js";
 
 export function createHandler(bridge: TuiBridge): ChannelHandler {
   return {
