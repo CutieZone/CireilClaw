@@ -30,12 +30,12 @@ export class Scheduler {
   // keyed by job ID
   private readonly _cronHandles = new Map<string, StopHandle>();
 
-  constructor(agent: Agent, signal: AbortSignal) {
+  public constructor(agent: Agent, signal: AbortSignal) {
     this._agent = agent;
     this._signal = signal;
   }
 
-  async start(): Promise<void> {
+  public async start(): Promise<void> {
     if (this._signal.aborted) {
       return;
     }
@@ -74,7 +74,7 @@ export class Scheduler {
     }
   }
 
-  stop(): void {
+  public stop(): void {
     this._heartbeatHandle?.stop();
     this._heartbeatHandle = undefined;
 
@@ -85,14 +85,14 @@ export class Scheduler {
     this._cronHandles.clear();
   }
 
-  async reload(): Promise<void> {
+  public async reload(): Promise<void> {
     this.stop();
     await this.start();
     debug("Scheduler: reloaded for agent", colors.keyword(this._agent.slug));
   }
 
   // Register a runtime one-shot job created via the schedule tool.
-  scheduleDynamic(job: CronJobConfig): void {
+  public scheduleDynamic(job: CronJobConfig): void {
     this._scheduleCronJob(job);
   }
 

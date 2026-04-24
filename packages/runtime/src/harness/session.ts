@@ -6,37 +6,37 @@ const channelTypes = ["discord", "matrix", "internal", "tui"] as const;
 type ChannelType = (typeof channelTypes)[number];
 
 abstract class BaseSession {
-  abstract readonly channel: ChannelType;
-  readonly ephemeral: boolean = false;
+  public abstract readonly channel: ChannelType;
+  public readonly ephemeral: boolean = false;
 
-  selectedModel?: string;
-  selectedProvider?: string;
+  public selectedModel?: string;
+  public selectedProvider?: string;
 
-  history: Message[] = new Array<Message>();
+  public history: Message[] = new Array<Message>();
   // Index into history: messages from this index onward are sent to the LLM.
   // Pruning advances the cursor instead of mutating history, so tools like
   // read-session can still access the full conversation.
-  historyCursor = 0;
-  openedFiles: Set<string> = new Set<string>();
-  pendingToolMessages: Message[] = new Array<Message>();
+  public historyCursor = 0;
+  public openedFiles: Set<string> = new Set<string>();
+  public pendingToolMessages: Message[] = new Array<Message>();
   // Images queued by tools (e.g. read) to be injected as a user message before the next generation.
-  pendingImages: ImageContent[] = new Array<ImageContent>();
+  public pendingImages: ImageContent[] = new Array<ImageContent>();
   // Videos queued from Discord attachments to be injected alongside pending images.
-  pendingVideos: VideoContent[] = new Array<VideoContent>();
+  public pendingVideos: VideoContent[] = new Array<VideoContent>();
 
   // Concurrency gate — true while a turn (user or scheduled) is in progress.
-  busy = false;
+  public busy = false;
   // Timestamp (ms) of the last user-initiated message; used to resolve target = "last".
-  lastActivity = 0;
+  public lastActivity = 0;
   // Timestamp (ms) of the most recent heartbeat turn for this session.
-  lastHeartbeatAt?: number;
+  public lastHeartbeatAt?: number;
   // Optional hook checked by Harness.send() — return false to suppress delivery.
-  sendFilter?: (content: string) => boolean = undefined;
+  public sendFilter?: (content: string) => boolean = undefined;
 
-  abstract id(): string;
+  public abstract id(): string;
 
   /** Wipe conversation state while preserving session identity and user selections. */
-  reset(): void {
+  public reset(): void {
     this.history = [];
     this.historyCursor = 0;
     this.openedFiles = new Set();
@@ -47,16 +47,16 @@ abstract class BaseSession {
 }
 
 class DiscordSession extends BaseSession {
-  override readonly channel = "discord";
+  public override readonly channel = "discord";
 
-  readonly channelId: string;
-  readonly guildId?: string;
-  isNsfw: boolean;
+  public readonly channelId: string;
+  public readonly guildId?: string;
+  public isNsfw: boolean;
 
-  typingInterval?: NodeJS.Timeout = undefined;
-  lastMessageId?: string = undefined;
+  public typingInterval?: NodeJS.Timeout = undefined;
+  public lastMessageId?: string = undefined;
 
-  constructor(opts: {
+  public constructor(opts: {
     channelId: string;
     selectedProvider?: string;
     selectedModel?: string;
@@ -72,7 +72,7 @@ class DiscordSession extends BaseSession {
     this.isNsfw = opts.isNsfw ?? false;
   }
 
-  override id(): string {
+  public override id(): string {
     if (this.guildId !== undefined) {
       return `discord:${this.channelId}|${this.guildId}`;
     }
@@ -81,65 +81,65 @@ class DiscordSession extends BaseSession {
 }
 
 class MatrixSession extends BaseSession {
-  override readonly channel = "matrix";
+  public override readonly channel = "matrix";
 
-  readonly roomId: string;
+  public readonly roomId: string;
 
-  constructor(roomId: string) {
+  public constructor(roomId: string) {
     super();
     this.roomId = roomId;
   }
 
-  override id(): string {
+  public override id(): string {
     return `matrix:${this.roomId}`;
   }
 }
 
 // Ephemeral session for isolated cron job execution — never persisted to DB.
 class InternalSession extends BaseSession {
-  override readonly channel = "internal";
-  override readonly ephemeral = true;
+  public override readonly channel = "internal";
+  public override readonly ephemeral = true;
 
-  readonly jobId: string;
+  public readonly jobId: string;
 
-  constructor(jobId: string) {
+  public constructor(jobId: string) {
     super();
     this.jobId = jobId;
   }
 
-  override id(): string {
+  public override id(): string {
     return `cron:${this.jobId}`;
   }
 }
 
 // Persistent session for heartbeats and named internal automation.
 class NamedInternalSession extends BaseSession {
-  override readonly channel = "internal";
-  override readonly ephemeral = false;
+  public override readonly channel = "internal";
+  public override readonly ephemeral = false;
 
-  readonly name: string;
+  public readonly name: string;
 
-  constructor(name: string) {
+  public constructor(name: string) {
     super();
     this.name = name;
   }
 
-  override id(): string {
+  public override id(): string {
     return `internal:${this.name}`;
   }
 }
 
 class TuiSession extends BaseSession {
-  override readonly channel = "tui";
-  bridge?: TuiBridge;
+  public override readonly channel = "tui";
+  public bridge?: TuiBridge;
 
-  constructor(bridge?: TuiBridge) {
+  public constructor(bridge?: TuiBridge) {
     super();
     this.bridge = bridge;
   }
 
   // oxlint-disable-next-line class-methods-use-this
-  override id(): string {
+  public override id(): string {
     return "tui";
   }
 }

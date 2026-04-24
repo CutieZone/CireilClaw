@@ -140,7 +140,7 @@ interface EnvParseError {
 const ENV_VAR_PATTERN = /\$\{(\w+)(?::-([^}]*))?\}|\$(\w+)/g;
 
 class EnvResolutionError extends Error {
-  override name = "EnvResolutionError";
+  public override name = "EnvResolutionError";
 }
 
 function isEnvParseError(value: string | EnvParseError): value is EnvParseError {

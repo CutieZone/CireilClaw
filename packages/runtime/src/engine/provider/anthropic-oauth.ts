@@ -11,7 +11,7 @@ import type { Context, UsageInfo } from "$/engine/context.js";
 import { GenerationNoToolCallsError } from "$/engine/errors.js";
 import type { AssistantMessage, Message } from "$/engine/message.js";
 import type { Tool } from "$/engine/tool.js";
-import { debug } from "$/output/log.js";
+import { debug, warning } from "$/output/log.js";
 import { encode } from "$/util/base64.js";
 import { scaleForAnthropic } from "$/util/image.js";
 import type { KeyPool } from "@cireilclaw/sdk";
@@ -375,7 +375,8 @@ export async function generate(
     if (!resp.ok) {
       // Check for rate limit (429) - try next key
       if (resp.status === 429) {
-        debug(`Rate limited (429) on API key, trying next key...`);
+        const errorText = await resp.text();
+        warning(`Rate limited (429) on API key: ${errorText}`);
         keyPool.reportFailure(token);
         continue;
       }

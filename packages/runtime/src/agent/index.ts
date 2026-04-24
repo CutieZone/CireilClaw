@@ -22,7 +22,7 @@ export class Agent {
   private _ownerId?: string;
   private readonly _scheduler?: Scheduler;
 
-  constructor(
+  public constructor(
     slug: string,
     sessions: Map<string, Session>,
     signal?: AbortSignal,
@@ -37,49 +37,49 @@ export class Agent {
     }
   }
 
-  async updateConditions(): Promise<void> {
+  public async updateConditions(): Promise<void> {
     this._conditions = await loadConditions(this._slug);
   }
 
-  get conditions(): ConditionsConfig {
+  public get conditions(): ConditionsConfig {
     return this._conditions;
   }
 
-  get slug(): string {
+  public get slug(): string {
     return this._slug;
   }
 
-  get scheduler(): Scheduler | undefined {
+  public get scheduler(): Scheduler | undefined {
     return this._scheduler;
   }
 
-  get sessions(): Map<string, Session> {
+  public get sessions(): Map<string, Session> {
     return this._sessions;
   }
 
-  setDiscordClient(client: OceanicClient): void {
+  public setDiscordClient(client: OceanicClient): void {
     this._discordClient = client;
   }
 
-  get discordClient(): OceanicClient | undefined {
+  public get discordClient(): OceanicClient | undefined {
     return this._discordClient;
   }
 
-  setOwnerId(ownerId: string): void {
+  public setOwnerId(ownerId: string): void {
     this._ownerId = ownerId;
   }
 
-  get ownerId(): string | undefined {
+  public get ownerId(): string | undefined {
     return this._ownerId;
   }
 
-  registerChannel(channel: string, handler: ChannelHandler): void {
+  public registerChannel(channel: string, handler: ChannelHandler): void {
     this._channelHandlers.set(channel, handler);
   }
 
   // Resolve a scheduler target string to a session, auto-creating ephemeral
   // sessions (internal, TUI, Discord) when the target is valid but missing.
-  resolveTarget(target: string): Session | undefined {
+  public resolveTarget(target: string): Session | undefined {
     if (target === "none") {
       return undefined;
     }
@@ -133,7 +133,7 @@ export class Agent {
     return this._channelHandlers.get(session.channel) ?? MINIMAL_HANDLER;
   }
 
-  async send(
+  public async send(
     session: Session,
     content: string,
     attachments?: string[],
@@ -149,7 +149,7 @@ export class Agent {
   }
 
   // oxlint-disable-next-line require-await
-  async resolveChannel(spec: string, currentSession: Session): Promise<ChannelResolution> {
+  public async resolveChannel(spec: string, currentSession: Session): Promise<ChannelResolution> {
     // "current" returns the current session
     if (spec === "current") {
       return currentSession;
@@ -176,7 +176,7 @@ export class Agent {
     return this._sessions.get(spec) ?? { error: `session not found: ${spec}` };
   }
 
-  async runTurn(session: Session): Promise<void> {
+  public async runTurn(session: Session): Promise<void> {
     const handler = this._getHandler(session);
 
     const send = async (content: string, attachments?: string[]): Promise<void> => {

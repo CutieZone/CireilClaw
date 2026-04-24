@@ -74,13 +74,17 @@ class RpcChannel {
     this.onMessage(raw);
   };
 
-  constructor(port: PortLike) {
+  public constructor(port: PortLike) {
     this.port = port;
     port.on("message", this.listener);
   }
 
   // oxlint-disable-next-line eslint/id-length -- `call` mirrors JS-RPC convention
-  async call<T = unknown>(method: string, args: unknown[] = [], timeoutMs?: number): Promise<T> {
+  public async call<T = unknown>(
+    method: string,
+    args: unknown[] = [],
+    timeoutMs?: number,
+  ): Promise<T> {
     if (this.closed) {
       throw new Error("RPC channel closed");
     }
@@ -110,11 +114,11 @@ class RpcChannel {
     });
   }
 
-  handle(method: string, fn: Handler): void {
+  public handle(method: string, fn: Handler): void {
     this.handlers.set(method, fn);
   }
 
-  close(): void {
+  public close(): void {
     if (this.closed) {
       return;
     }

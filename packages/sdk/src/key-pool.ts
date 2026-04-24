@@ -18,7 +18,7 @@ class KeyPool {
   private readonly failures = new Map<string, KeyFailure>();
   private currentIndex = 0;
 
-  constructor(keys: string | string[], cooldownMs = DEFAULT_COOLDOWN_MS) {
+  public constructor(keys: string | string[], cooldownMs = DEFAULT_COOLDOWN_MS) {
     this.keys = Array.isArray(keys) ? keys : [keys];
     this.cooldownMs = cooldownMs;
 
@@ -27,7 +27,7 @@ class KeyPool {
     }
   }
 
-  getNextKey(): string {
+  public getNextKey(): string {
     const now = Date.now();
     for (const [key, failure] of this.failures) {
       if (now - failure.timestamp >= this.cooldownMs) {
@@ -75,15 +75,15 @@ class KeyPool {
     return fallback;
   }
 
-  reportFailure(key: string): void {
+  public reportFailure(key: string): void {
     this.failures.set(key, { timestamp: Date.now() });
   }
 
-  reuseLastKey(): void {
+  public reuseLastKey(): void {
     this.currentIndex = (this.currentIndex - 1 + this.keys.length) % this.keys.length;
   }
 
-  get availableCount(): number {
+  public get availableCount(): number {
     const now = Date.now();
     return this.keys.filter((key) => {
       const failure = this.failures.get(key);
@@ -91,7 +91,7 @@ class KeyPool {
     }).length;
   }
 
-  get totalCount(): number {
+  public get totalCount(): number {
     return this.keys.length;
   }
 }
@@ -99,7 +99,7 @@ class KeyPool {
 class KeyPoolManagerClass {
   private readonly pools = new Map<string, KeyPool>();
 
-  getPool(keys: string | string[], cooldownMs = DEFAULT_COOLDOWN_MS): KeyPool {
+  public getPool(keys: string | string[], cooldownMs = DEFAULT_COOLDOWN_MS): KeyPool {
     const key = poolKeyForKeys(keys);
     let pool = this.pools.get(key);
 
@@ -111,11 +111,11 @@ class KeyPoolManagerClass {
     return pool;
   }
 
-  clear(): void {
+  public clear(): void {
     this.pools.clear();
   }
 
-  get size(): number {
+  public get size(): number {
     return this.pools.size;
   }
 }

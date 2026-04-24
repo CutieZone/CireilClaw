@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@cireilclaw/sdk": "workspace:*",
-    "@inquirer/prompts": "^8.4.1",
+    "@inquirer/prompts": "^8.4.2",
     "@noble/hashes": "^2.2.0",
     "@stricli/core": "^1.2.6",
     "@valibot/to-json-schema": "^1.6.0",
@@ -21,12 +21,12 @@
     "croner": "^10.0.1",
     "drizzle-orm": "1.0.0-beta.20",
     "heic-decode": "^2.1.0",
-    "ink": "^7.0.0",
+    "ink": "^7.0.1",
     "ink-multiline-input": "^0.1.0",
     "ink-spinner": "^5.0.0",
     "oceanic.js": "^1.14.0",
     "openai": "^6.34.0",
-    "ora": "^9.3.0",
+    "ora": "^9.4.0",
     "react": "^19.2.5",
     "sharp": "^0.34.5",
     "smol-toml": "^1.6.1",
@@ -40,7 +40,7 @@
     "@types/react": "^19.2.14",
     "drizzle-kit": "1.0.0-beta.20",
     "tsx": "^4.21.0",
-    "typescript": "^6.0.2",
-    "vitest": "^4.1.4"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
   }
 }

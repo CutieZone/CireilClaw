@@ -137,14 +137,14 @@ interface PluginLoadResult {
 }
 
 class PluginProcess {
-  readonly id: string;
-  readonly ready: Promise<ManifestPayload>;
+  public readonly id: string;
+  public readonly ready: Promise<ManifestPayload>;
   private readonly worker: Worker;
   private readonly rpc: RpcChannel;
   private readonly pending = new Map<string, ToolContext>();
   private nextInvocation = 1;
 
-  constructor(id: string, worker: Worker, rpc: RpcChannel) {
+  public constructor(id: string, worker: Worker, rpc: RpcChannel) {
     this.id = id;
     this.worker = worker;
     this.rpc = rpc;
@@ -182,7 +182,7 @@ class PluginProcess {
     this.registerCallbackHandlers();
   }
 
-  buildStubs(manifest: ManifestPayload, allowOverride: boolean): PluginLoadResult {
+  public buildStubs(manifest: ManifestPayload, allowOverride: boolean): PluginLoadResult {
     const tools: Record<string, ToolDef> = {};
     for (const entry of manifest.tools) {
       const toolName = entry.name;
@@ -225,7 +225,7 @@ class PluginProcess {
     return { allowOverride, name: manifest.pluginName, tools };
   }
 
-  async terminate(): Promise<void> {
+  public async terminate(): Promise<void> {
     this.rpc.close();
     await this.worker.terminate();
   }

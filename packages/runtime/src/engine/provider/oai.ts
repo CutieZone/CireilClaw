@@ -390,11 +390,15 @@ export async function generate(
       }
 
       if (choice.message.tool_calls === undefined) {
-        throw new Error("Expected tool calls, but got undefined");
+        const rawText =
+          typeof choice.message.content === "string" ? choice.message.content : undefined;
+        throw new GenerationNoToolCallsError(rawText, "undefined tool_calls");
       }
 
       if (choice.message.tool_calls.length === 0) {
-        throw new Error("Expected at least one tool call, but got empty array");
+        const rawText =
+          typeof choice.message.content === "string" ? choice.message.content : undefined;
+        throw new GenerationNoToolCallsError(rawText, "empty tool_calls");
       }
 
       const toolCallBlocks: ToolCallContent[] = choice.message.tool_calls.map((it) => {

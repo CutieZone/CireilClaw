@@ -9,35 +9,35 @@ export class Harness {
     this._agents = agents;
   }
 
-  static init(agents: Map<string, Agent>): Harness {
+  public static init(agents: Map<string, Agent>): Harness {
     Harness._instance = new Harness(agents);
     return Harness._instance;
   }
 
-  static get(): Harness {
+  public static get(): Harness {
     if (Harness._instance === undefined) {
       throw new Error("Harness.get() called before Harness.init()");
     }
     return Harness._instance;
   }
 
-  get agents(): Map<string, Agent> {
+  public get agents(): Map<string, Agent> {
     return this._agents;
   }
 
-  async startSchedulers(): Promise<void> {
+  public async startSchedulers(): Promise<void> {
     for (const agent of this._agents.values()) {
       await agent.scheduler?.start();
     }
   }
 
-  stopSchedulers(): void {
+  public stopSchedulers(): void {
     for (const agent of this.agents.values()) {
       agent.scheduler?.stop();
     }
   }
 
-  async reloadScheduler(agentSlug: string): Promise<void> {
+  public async reloadScheduler(agentSlug: string): Promise<void> {
     const scheduler = this.agents.get(agentSlug)?.scheduler;
     if (scheduler !== undefined) {
       await scheduler.reload();
