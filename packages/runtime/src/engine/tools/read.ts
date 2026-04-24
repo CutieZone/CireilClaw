@@ -6,7 +6,6 @@ import * as vb from "valibot";
 import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
 import { IMAGE_EXT_TO_MEDIA_TYPE } from "#supports.js";
 import { toWebp } from "#util/image.js";
-import { checkConditionalAccess, sandboxToReal } from "#util/paths.js";
 
 const Schema = vb.strictObject({
   path: vb.pipe(
@@ -30,12 +29,9 @@ export const read: ToolDef = {
     "- For files you plan to edit repeatedly — use `open-file` to pin them to context.",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     const data = vb.parse(Schema, input);
-    const realPath = sandboxToReal(data.path, ctx.agentSlug, ctx.mounts);
+    const realPath = await ctx.paths.resolve(data.path);
 
-    // Check conditional access rules if conditions are available
-    if (ctx.conditions !== undefined) {
-      checkConditionalAccess(data.path, ctx.agentSlug, ctx.conditions, ctx.session);
-    }
+    await ctx.paths.checkConditionalAccess(data.path);
 
     const { size } = await stat(realPath);
 

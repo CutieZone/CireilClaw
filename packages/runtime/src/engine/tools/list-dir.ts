@@ -3,12 +3,7 @@ import { readdir } from "node:fs/promises";
 import * as vb from "valibot";
 
 import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
-import {
-  checkConditionalAccess,
-  getMountEntriesAtPath,
-  sandboxToReal,
-  validateSystemPath,
-} from "#util/paths.js";
+import { getMountEntriesAtPath, validateSystemPath } from "#util/paths.js";
 
 const AGENT_SANDBOX_PREFIXES = ["/workspace", "/memories", "/blocks", "/skills", "/tasks"] as const;
 
@@ -49,12 +44,12 @@ export const listDir: ToolDef = {
     );
 
     const realPath: string = isAgentPath
-      ? sandboxToReal(data.path, ctx.agentSlug, ctx.mounts)
+      ? await ctx.paths.resolve(data.path)
       : validateSystemPath(data.path);
 
     // Check conditional access rules for agent sandbox paths only
-    if (isAgentPath && ctx.conditions !== undefined) {
-      checkConditionalAccess(data.path, ctx.agentSlug, ctx.conditions, ctx.session);
+    if (isAgentPath) {
+      await ctx.paths.checkConditionalAccess(data.path);
     }
 
     const items: { name: string; type: "directory" | "symlink" | "file" }[] = [];

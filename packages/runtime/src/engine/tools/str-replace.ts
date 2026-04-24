@@ -5,7 +5,6 @@ import * as vb from "valibot";
 
 import { ToolError } from "#engine/errors.js";
 import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
-import { checkConditionalAccess, checkMountWriteAccess, sandboxToReal } from "#util/paths.js";
 
 const Schema = vb.strictObject({
   new_text: vb.pipe(
@@ -44,16 +43,10 @@ export const strReplace: ToolDef = {
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     const data = vb.parse(Schema, input);
 
-    const path = sandboxToReal(data.path, ctx.agentSlug, ctx.mounts);
+    const path = await ctx.paths.resolve(data.path);
 
-    // Check conditional access rules if conditions are available
-    if (ctx.conditions !== undefined) {
-      checkConditionalAccess(data.path, ctx.agentSlug, ctx.conditions, ctx.session);
-    }
-
-    if (ctx.mounts !== undefined && ctx.mounts.length > 0) {
-      checkMountWriteAccess(data.path, ctx.mounts);
-    }
+    await ctx.paths.checkConditionalAccess(data.path);
+    await ctx.paths.checkWriteAccess(data.path);
 
     if (!existsSync(path)) {
       throw new ToolError(

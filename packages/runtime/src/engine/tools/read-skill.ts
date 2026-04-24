@@ -2,8 +2,6 @@ import { readFile } from "node:fs/promises";
 
 import * as vb from "valibot";
 
-import { sandboxToReal } from "#util/paths.js";
-
 import type { ToolContext, ToolDef } from "./tool-def.js";
 
 const SkillSchema = vb.strictObject({
@@ -22,7 +20,7 @@ const readSkill: ToolDef = {
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     const data = vb.parse(SkillSchema, input);
     const sandboxPath = `/skills/${data.slug}/SKILL.md`;
-    const realPath = sandboxToReal(sandboxPath, ctx.agentSlug);
+    const realPath = await ctx.paths.resolve(sandboxPath);
     const content = await readFile(realPath, "utf8");
     return { content, slug: data.slug, success: true };
   },

@@ -4,7 +4,6 @@ import * as vb from "valibot";
 
 import { ToolError } from "#engine/errors.js";
 import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
-import { checkConditionalAccess, sandboxToReal } from "#util/paths.js";
 
 const Schema = vb.strictObject({
   path: vb.pipe(
@@ -25,12 +24,9 @@ export const openFile: ToolDef = {
     "Note that paths used here *must* be absolute.",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     const data = vb.parse(Schema, input);
-    const realPath = sandboxToReal(data.path, ctx.agentSlug, ctx.mounts);
+    const realPath = await ctx.paths.resolve(data.path);
 
-    // Check conditional access rules if conditions are available
-    if (ctx.conditions !== undefined) {
-      checkConditionalAccess(data.path, ctx.agentSlug, ctx.conditions, ctx.session);
-    }
+    await ctx.paths.checkConditionalAccess(data.path);
 
     // Verify the file actually exists before pinning it.
     const stats = await stat(realPath);

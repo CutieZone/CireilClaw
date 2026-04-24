@@ -4,7 +4,6 @@ import { dirname } from "node:path";
 import * as vb from "valibot";
 
 import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
-import { checkConditionalAccess, checkMountWriteAccess, sandboxToReal } from "#util/paths.js";
 
 const Schema = vb.strictObject({
   content: vb.pipe(
@@ -41,16 +40,10 @@ export const write: ToolDef = {
     "- Making small, targeted changes to an existing file — use `str-replace` instead, which is safer and preserves surrounding content.",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     const data = vb.parse(Schema, input);
-    const realPath = sandboxToReal(data.path, ctx.agentSlug, ctx.mounts);
+    const realPath = await ctx.paths.resolve(data.path);
 
-    // Check conditional access rules if conditions are available
-    if (ctx.conditions !== undefined) {
-      checkConditionalAccess(data.path, ctx.agentSlug, ctx.conditions, ctx.session);
-    }
-
-    if (ctx.mounts !== undefined && ctx.mounts.length > 0) {
-      checkMountWriteAccess(data.path, ctx.mounts);
-    }
+    await ctx.paths.checkConditionalAccess(data.path);
+    await ctx.paths.checkWriteAccess(data.path);
 
     await mkdir(dirname(realPath), { recursive: true });
     await writeFile(realPath, data.content, "utf8");

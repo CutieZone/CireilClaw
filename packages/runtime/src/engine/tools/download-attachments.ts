@@ -6,7 +6,6 @@ import * as vb from "valibot";
 
 import { ToolError } from "#engine/errors.js";
 import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
-import { checkConditionalAccess, sandboxToReal } from "#util/paths.js";
 
 const Schema = vb.strictObject({
   message_id: vb.pipe(
@@ -38,11 +37,9 @@ const downloadAttachments: ToolDef = {
     for (const { filename, data } of files) {
       const sandboxPath = join(to, `${message_id}-${filename}`).replaceAll("\\", "/");
 
-      if (ctx.conditions !== undefined) {
-        checkConditionalAccess(sandboxPath, ctx.agentSlug, ctx.conditions, ctx.session);
-      }
+      await ctx.paths.checkConditionalAccess(sandboxPath);
 
-      const realPath = sandboxToReal(sandboxPath, ctx.agentSlug);
+      const realPath = await ctx.paths.resolve(sandboxPath);
 
       if (existsSync(realPath)) {
         throw new ToolError(

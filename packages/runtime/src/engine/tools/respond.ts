@@ -3,7 +3,6 @@ import * as vb from "valibot";
 import { ToolError } from "#engine/errors.js";
 import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
 import type { ChannelResolution } from "#harness/channel-handler.js";
-import { checkConditionalAccess } from "#util/paths.js";
 
 const RespondSchema = vb.strictObject({
   attachments: vb.pipe(
@@ -48,9 +47,9 @@ const respond: ToolDef = {
     // Channel is always a string after the transform (defaults to "current")
     const channel = parsed.channel ?? "current";
 
-    if (attachments !== undefined && ctx.conditions !== undefined) {
+    if (attachments !== undefined) {
       for (const attachment of attachments) {
-        checkConditionalAccess(attachment, ctx.agentSlug, ctx.conditions, ctx.session);
+        await ctx.paths.checkConditionalAccess(attachment);
       }
     }
 
