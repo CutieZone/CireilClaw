@@ -5,6 +5,8 @@
 # Mounts override the default workspace directory for their target path.
 # Changes are picked up on the next agent turn (no restart required).
 
+mounts = []
+
 # --- Mount entries ---
 # Each mount maps a host directory into the sandbox.
 # source: Absolute path on the host, or ~/ for home-relative paths.

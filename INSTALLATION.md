@@ -84,7 +84,7 @@ You will be prompted for:
 4. **API endpoint** — Base URL of any OpenAI-compatible API (e.g. `https://api.openai.com/v1`).
 5. **Model name** — The model identifier to use.
 6. **API key** — Leave blank if the endpoint doesn't require one.
-7. **Brave Search key** — Optional. Required if the `brave-search` tool is enabled.
+7. **Brave Search key** — Optional. Required if the `brave-search` plugin is enabled.
 8. **Channel** — `none` or `discord`. Discord requires a bot token and your user ID.
 
 This creates the full directory tree at `~/.cireilclaw/agents/{slug}/`:
@@ -108,11 +108,13 @@ All configuration lives under `~/.cireilclaw/`. Global configs apply to all agen
 <summary><code>config/engine.toml</code> (per-agent, required)</summary>
 
 ```toml
-[provider.openai]
+[default]
 apiBase = "https://api.openai.com/v1"   # OpenAI-compatible base URL
-defaultModel = "gpt-4o"                       # Model identifier
-isGlobalDefault = true
-apiKey  = "sk-..."                       # Optional, defaults to "not-needed"
+apiKey = "sk-..."                       # Optional, defaults to "not-needed"
+defaultModel = "gpt-4o"                 # Model identifier
+isGlobalDefault = true                  # One provider must have this set to true
+kind = "openai"                         # "openai" or "anthropic-oauth"
+maxTurns = 30                           # Conversation turns sent to the API
 ```
 
 Per-guild model overrides are supported:
@@ -125,11 +127,11 @@ Per-guild model overrides are supported:
 </details>
 
 <details>
-<summary><code>config/integrations.toml</code> (global, optional)</summary>
+<summary><code>config/plugins.toml</code> (global, optional)</summary>
 
 ```toml
-[brave]
-apiKey = "BSA..."
+[[plugins]]
+package = "@cireilclaw/plugin-brave-search"
 ```
 
 </details>
@@ -137,27 +139,19 @@ apiKey = "BSA..."
 <details>
 <summary><code>config/tools.toml</code> (per-agent, required)</summary>
 
-Each key is a tool name; value is `true`/`false`. Unspecified tools default to enabled.
+Each key is a tool name; value is `true`/`false`. Core tools (`respond`, `read`, `open-file`, etc.) are always enabled and do not need to be listed.
 
 ```toml
-respond       = true
-read          = true
 write         = true
-open-file     = true
-close-file    = true
-list-dir      = true
 str-replace   = true
-brave-search  = true
-read-skill    = true
 schedule      = true
-session-info  = true
 react         = true
-no-response   = true
 
 [exec]
 enabled  = true
 binaries = ["git", "python3"]    # Allowed commands whitelist
 timeout  = 60000                 # ms, minimum 1000
+hostEnvPassthrough = []          # Host env vars to pass through
 ```
 
 </details>
@@ -166,8 +160,16 @@ timeout  = 60000                 # ms, minimum 1000
 <summary><code>config/channels/discord.toml</code> (per-agent, required for Discord)</summary>
 
 ```toml
-token   = "your-bot-token"
+token = "your-bot-token"
 ownerId = "your-discord-user-id"
+
+[access]
+mode = "disabled"             # "disabled", "allowlist", or "denylist"
+users = []                    # Array of Discord user IDs
+
+[directMessages]
+mode = "owner"                # "owner", "public", "allowlist", or "denylist"
+users = []                    # Array of Discord user IDs
 ```
 
 </details>
@@ -178,17 +180,18 @@ ownerId = "your-discord-user-id"
 Runs a periodic checklist from `workspace/HEARTBEAT.md`:
 
 ```toml
-enabled  = false
+enabled = false
 interval = 1800           # Seconds between pulses, minimum 60
+target = "last"           # "last", "none", or a session ID
 
 [activeHours]
-start    = "08:00"
-end      = "22:00"
+start = "08:00"
+end = "22:00"
 timezone = "America/New_York"
 
 [visibility]
-showAlerts   = true       # Send non-OK results to channel
-showOk       = false      # Send OK results to channel
+showAlerts = true         # Send non-OK results to channel
+showOk = false            # Send OK results to channel
 useIndicator = true       # Show typing indicator
 ```
 
@@ -199,16 +202,17 @@ useIndicator = true       # Show typing indicator
 
 ```toml
 [[jobs]]
-id        = "daily-summary"
-prompt    = "Generate a daily summary"
+id = "daily-summary"
+prompt = "Generate a daily summary"
+enabled = true
 execution = "isolated"     # "main" or "isolated"
-delivery  = "announce"     # "announce", "webhook", or "none"
-target    = "last"         # Session target for announce delivery
+delivery = "announce"      # "announce", "webhook", or "none"
+target = "last"            # Session target for announce delivery
 
 # Schedule — pick one:
-every = 86400              # Every N seconds
-# cron  = "0 9 * * *"     # Cron expression
-# at    = "2026-03-05T09:00:00Z"   # One-shot
+schedule = { every = 86400 }
+# schedule = { cron = "0 9 * * *" }
+# schedule = { at = "2026-03-05T09:00:00Z" }
 ```
 
 </details>

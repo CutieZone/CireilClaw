@@ -21,8 +21,10 @@ schedule = true
 react = true
 
 # --- Exec tool (sandboxed command execution) ---
-# To simply disable, use `exec = false`,
-# Otherwise,
+# To disable, use `exec = false`.
+# To enable, uncomment the section below and list allowed binaries.
+exec = false
+
 # [exec]
 # enabled = true
 # binaries = ["curl", "jq", "grep"]     # (required) Whitelisted binaries (best-effort)
