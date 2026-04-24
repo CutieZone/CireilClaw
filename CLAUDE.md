@@ -9,7 +9,7 @@ An opinionated, security-focused agent system for running sandboxed AI assistant
 ## Commands
 
 ```bash
-pnpm start              # Run via tsx (tsx ./src/entrypoint.ts)
+pnpm start              # Run via tsx
 pnpm start tui <agent>  # Run interactive TUI session with a single agent
 pnpm start migrate      # Apply pending config migrations
 pnpm start repair       # Repair Discord media attachments for a session
@@ -40,8 +40,8 @@ CLI (`@stricli/core`) → Config (TOML) → Harness (multi-channel) → Agent (p
 
 ### API Providers
 
-- **`openai`** (default) — OpenAI-compatible API via `src/engine/provider/oai.ts`. Supports any OAI-compatible endpoint.
-- **`anthropic-oauth`** — Anthropic API with OAuth authentication via `src/engine/provider/anthropic-oauth.ts`. Supports Anthropic-specific features like prompt caching and extended thinking.
+- **`openai`** (default) — OpenAI-compatible API. Supports any OAI-compatible endpoint.
+- **`anthropic-oauth`** — Anthropic API with OAuth authentication. Supports Anthropic-specific features like prompt caching and extended thinking.
 
 ### Channel Support
 
@@ -65,7 +65,7 @@ Each agent turn:
 ```
 blocks/          # Memory blocks (person.md, identity.md, long-term.md, soul.md, style-notes.md)
   conditional/   # Conditional blocks loaded based on conditions.toml rules
-config/          # engine.toml (API config), tools.toml (tool toggles, exec config), heartbeat.toml, cron.toml, conditions.toml
+config/          # engine.toml, tools.toml, heartbeat.toml, cron.toml, conditions.toml, sandbox.toml
 core.md          # Base system instructions
 skills/          # Reusable skill documents (markdown with TOML frontmatter)
 tasks/           # Scheduled task checklists (HEARTBEAT.md) and related data
@@ -75,7 +75,7 @@ memories/        # Session-specific memory (persisted across turns)
 
 ### Persistence
 
-Session history and state are persisted to `~/.cireilclaw/agents/{slug}/sessions.db` (SQLite with WAL mode) — one database per agent — via Drizzle ORM migrations. Session saves are debounced (2 seconds) with `flushAllSessions()` for graceful shutdown. Images are stored as files using blake3 hash filenames with DB index for deduplication across sessions. Cron jobs (one-shot) are also persisted for recovery after restart.
+Session history and state are persisted to SQLite (WAL mode) — one database per agent — via Drizzle ORM migrations. Session saves are debounced (2 seconds) with `flushAllSessions()` for graceful shutdown. Images are stored as files using blake3 hash filenames with DB index for deduplication across sessions. Cron jobs (one-shot) are also persisted for recovery after restart.
 
 ### Validation
 

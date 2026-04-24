@@ -123,6 +123,11 @@ interface PluginToolContext {
   addImage(data: Uint8Array, mediaType: string): void;
   addVideo(data: Uint8Array, mediaType: string): void;
   addToolMessage(content: string): void;
+  paths: {
+    resolve(sandboxPath: string): Promise<string>;
+    checkWriteAccess(sandboxPath: string): Promise<void>;
+    checkConditionalAccess(sandboxPath: string): Promise<void>;
+  };
 }
 ```
 
@@ -131,6 +136,9 @@ Notes:
 - `session` is deliberately narrow. Plugins do not see conversation history, opened files, or channel-specific internals.
 - `reply.react` is optional, since not every channel supports it. Calling it on a channel that lacks reaction support (e.g., TUI or internal) will throw a `ToolError`. Always guard the call or let the runtime surface the failure.
 - `createKeyPool` returns a per-worker instance (see caveats below).
+- `paths.resolve` converts a sandbox path (e.g. `/workspace/file.txt`) to the real filesystem path, applying mount mappings. Use this when you need to interact with files outside the RPC boundary.
+- `paths.checkWriteAccess` validates whether a sandbox path is writable under the current mount configuration. Throws if the path is read-only or outside allowed mounts.
+- `paths.checkConditionalAccess` validates whether a sandbox path is accessible in the current session context according to `conditions.toml` rules. Throws if access is denied. No-op when no conditions are configured.
 
 ## SDK Exports
 

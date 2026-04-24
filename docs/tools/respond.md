@@ -15,12 +15,12 @@ The `respond` tool is the primary way for agents to communicate with users. It s
 
 The `channel` parameter allows agents to send messages to different conversation contexts. The channel generally must be prefixed with the session type (for example, `discord:owner`):
 
-| Value                 | Description                                                                |
-| --------------------- | -------------------------------------------------------------------------- | ------------ |
-| `"current"` (default) | Send to the current conversation                                           |
-| `"last"`              | Send to the most recently active session across all channels               |
-| `"owner"`             | Send a DM to the bot owner (requires `ownerId` to be configured)           |
-| Explicit session ID   | Send to a specific channel using its session ID (e.g., `"discord:123456789 | 987654321"`) |
+| Value                 | Description                                                                              |
+| --------------------- | ---------------------------------------------------------------------------------------- |
+| `"current"` (default) | Send to the current conversation                                                         |
+| `"last"`              | Send to the most recently active session across all channels                             |
+| `"owner"`             | Send a DM to the bot owner (requires `ownerId` to be configured)                         |
+| Explicit session ID   | Send to a specific channel using its session ID (e.g., `"discord:123456789\|987654321"`) |
 
 ## Important Notes
 

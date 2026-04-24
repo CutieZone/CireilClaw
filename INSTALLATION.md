@@ -91,7 +91,7 @@ This creates the full directory tree at `~/.cireilclaw/agents/{slug}/`:
 
 ```
 blocks/              # Memory blocks (person.md, identity.md, long-term.md, soul.md, style-notes.md)
-config/              # engine.toml, tools.toml, heartbeat.toml, cron.toml, channels/discord.toml
+config/              # engine.toml, tools.toml, heartbeat.toml, cron.toml, sandbox.toml, conditions.toml, channels/discord.toml
 core.md              # Base system instructions
 skills/              # Reusable skill documents
 workspace/           # Sandboxed working directory
@@ -210,6 +210,27 @@ every = 86400              # Every N seconds
 # cron  = "0 9 * * *"     # Cron expression
 # at    = "2026-03-05T09:00:00Z"   # One-shot
 ```
+
+</details>
+
+<details>
+<summary><code>config/sandbox.toml</code> (per-agent, optional)</summary>
+
+Defines custom bind mounts that appear under `/workspace/` in the sandbox.
+
+```toml
+[[mounts]]
+source = "/home/user/projects/my-app"
+target = "project"
+mode = "rw"
+```
+
+</details>
+
+<details>
+<summary><code>config/conditions.toml</code> (per-agent, optional)</summary>
+
+Controls conditional block loading and path access based on session context. See <a href="docs/conditions.md">docs/conditions.md</a> for the full reference.
 
 </details>
 
