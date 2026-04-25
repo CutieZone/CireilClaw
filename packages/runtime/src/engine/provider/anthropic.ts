@@ -292,39 +292,15 @@ export async function generate(
   model: string,
   { reasoning = true, reasoningBudget = DefaultReasoningBudget, customHeaders }: Options,
 ): Promise<{ message: AssistantMessage; usage?: UsageInfo }> {
-  // Required preamble for the claude-code-20250219 beta — the model checks for this.
-
-  const useClaudeCodeWorkaround = apiBase.includes("api.anthropic.com");
-  const system = `You are Claude Code, Anthropic's official CLI for Claude.`;
-
-  const initialMessage = useClaudeCodeWorkaround
-    ? [
-        {
-          content: [
-            {
-              cache_control: {
-                type: "ephemeral",
-              },
-              text: context.systemPrompt,
-              type: "text",
-            },
-          ],
-          role: "assistant",
-        } satisfies AnthropicMessage,
-      ]
-    : [];
-
   const cacheBreakpoints = context.cacheBreakpoints
     ? new Set(context.cacheBreakpoints)
     : new Set<number>();
 
   const body: Record<string, unknown> = {
     max_tokens: 64_000,
-    messages: [...initialMessage, ...(await translateMessages(context.messages, cacheBreakpoints))],
+    messages: await translateMessages(context.messages, cacheBreakpoints),
     model,
-    system: useClaudeCodeWorkaround
-      ? system
-      : [{ cache_control: { type: "ephemeral" }, text: context.systemPrompt, type: "text" }],
+    system: [{ cache_control: { type: "ephemeral" }, text: context.systemPrompt, type: "text" }],
     tool_choice: { type: "any" },
     tools: context.tools.map((tool, idx, arr) => {
       const translated = translateTool(tool);
@@ -365,7 +341,7 @@ export async function generate(
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
-        "anthropic-beta": "oauth-2025-04-20,claude-code-20250219,interleaved-thinking-2025-05-14",
+        "anthropic-beta": "oauth-2025-04-20,interleaved-thinking-2025-05-14",
         "anthropic-version": "2023-06-01",
         ...customHeaders,
       },
@@ -472,7 +448,7 @@ export async function generate(
       const usage: UsageInfo = {
         completionTokens: data.usage.output_tokens,
         promptTokens: data.usage.input_tokens,
-        systemPromptTokensEst: Math.round(system.length / 4),
+        systemPromptTokensEst: Math.round(context.systemPrompt.length / 4),
       };
 
       return { message, usage };

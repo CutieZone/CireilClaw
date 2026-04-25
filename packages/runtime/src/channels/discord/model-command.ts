@@ -91,12 +91,12 @@ async function fetchModelListFor(
 
       return list.data.map((it) => ({ id: it.id, name: it.name ?? it.id }));
     }
-    case "anthropic-oauth": {
+    case "anthropic": {
       const modelList = await fetch(`${selected.apiBase}/models`, {
         headers: {
           Authorization: `Bearer ${key}`,
           "Content-Type": "application/json",
-          "anthropic-beta": "oauth-2025-04-20,claude-code-20250219,interleaved-thinking-2025-05-14",
+          "anthropic-beta": "oauth-2025-04-20,interleaved-thinking-2025-05-14",
           "anthropic-version": "2023-06-01",
         },
       });

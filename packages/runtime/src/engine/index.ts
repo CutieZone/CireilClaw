@@ -15,7 +15,7 @@ import { hashImage } from "#db/sessions.js";
 import type { ToolCallContent } from "#engine/content.js";
 import type { Context, UsageInfo } from "#engine/context.js";
 import { GenerationNoToolCallsError, ToolError, ParseError } from "#engine/errors.js";
-import { generate as generateAnthropicOauth } from "#engine/provider/anthropic-oauth.js";
+import { generate as generateAnthropic } from "#engine/provider/anthropic.js";
 import { generate as generateOai } from "#engine/provider/oai.js";
 import { getToolRegistry } from "#engine/tools/index.js";
 import type { ToolContext } from "#engine/tools/tool-def.js";
@@ -290,8 +290,8 @@ export async function runTurn(
           break;
         }
 
-        case "anthropic-oauth": {
-          ({ message: assistantMsg, usage } = await generateAnthropicOauth(
+        case "anthropic": {
+          ({ message: assistantMsg, usage } = await generateAnthropic(
             context,
             selectedProvider.apiBase,
             keyPool,

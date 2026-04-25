@@ -16,7 +16,7 @@ isGlobalDefault = true
 # apiKey                (optional)  String or array of strings for key pooling. Default: "not-needed"
 # defaultModel          (required)  The default model identifier
 # isGlobalDefault       (optional)  One provider must have this set to true. Default: false
-# kind                  (optional)  "openai" or "anthropic-oauth". Default: "openai"
+# kind                  (optional)  "openai" or "anthropic". Default: "openai"
 # availableModels       (optional)  List of model names, or "analyze" for auto-resolution. Default: "analyze"
 # maxGenerationRetries  (optional)  How many times generation can fail before crashing. Default: 2
 # maxTurns              (optional)  Number of conversation turns sent to the API. Default: 30

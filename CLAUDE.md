@@ -41,7 +41,7 @@ CLI (`@stricli/core`) → Config (TOML) → Harness (multi-channel) → Agent (p
 ### API Providers
 
 - **`openai`** (default) — OpenAI-compatible API. Supports any OAI-compatible endpoint.
-- **`anthropic-oauth`** — Anthropic API with OAuth authentication. Supports Anthropic-specific features like prompt caching and extended thinking.
+- **`anthropic`** — Anthropic API with OAuth authentication. Supports Anthropic-specific features like prompt caching and extended thinking.
 
 ### Channel Support
 

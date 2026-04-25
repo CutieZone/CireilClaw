@@ -113,7 +113,7 @@ apiBase = "https://api.openai.com/v1"   # OpenAI-compatible base URL
 apiKey = "sk-..."                       # Optional, defaults to "not-needed"
 defaultModel = "gpt-4o"                 # Model identifier
 isGlobalDefault = true                  # One provider must have this set to true
-kind = "openai"                         # "openai" or "anthropic-oauth"
+kind = "openai"                         # "openai" or "anthropic"
 maxTurns = 30                           # Conversation turns sent to the API
 ```
 

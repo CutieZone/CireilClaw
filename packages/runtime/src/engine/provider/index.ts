@@ -1,6 +1,6 @@
 import * as vb from "valibot";
 
-const ProviderKindSchema = vb.picklist(["openai", "anthropic-oauth"]);
+const ProviderKindSchema = vb.picklist(["openai", "anthropic"]);
 type ProviderKind = vb.InferOutput<typeof ProviderKindSchema>;
 
 export { ProviderKindSchema };
