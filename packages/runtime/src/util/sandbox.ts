@@ -405,6 +405,13 @@ async function buildNixBindings(args: string[], binaries: string[]): Promise<boo
     args.push("--symlink", data.itself, `/bin/${key}`);
   }
 
+  args.push("--ro-bind", "/lib64", "/lib64");
+  args.push(
+    "--ro-bind",
+    "/run/current-system/sw/share/nix-ld/lib/ld.so",
+    "/run/current-system/sw/share/nix-ld/lib/ld.so",
+  );
+
   // Bind /usr/bin/env for shebang compatibility — many scripts hardcode this path.
   const envBinPath = locate("env", ["/run/current-system/sw/bin"]);
   if (envBinPath !== undefined) {
@@ -486,7 +493,10 @@ async function buildBwrap(
 
   if (home === undefined) {
     warning("Could not locate $HOME");
-    return { message: "Could not locate $HOME environment variable", type: "error" };
+    return {
+      message: "Could not locate $HOME environment variable",
+      type: "error",
+    };
   }
 
   if (!isAbsolute(home)) {
