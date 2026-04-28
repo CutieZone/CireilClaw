@@ -1,14 +1,31 @@
-import { describe, expect, it, vi } from "vitest";
+import type { ChildProcess } from "node:child_process";
+
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // oxlint-disable no-template-curly-in-string
-import { locate, parseEnvFile, SHELL_METACHAR_PATTERN } from "#util/sandbox.js";
+import { exec, locate, parseEnvFile, SHELL_METACHAR_PATTERN } from "#util/sandbox.js";
 
 vi.mock("node:fs", {
   spy: true,
 });
 
+vi.mock("node:child_process", {
+  spy: true,
+});
+
+vi.mock("#output/log.js", () => ({
+  debug: vi.fn(),
+  warning: vi.fn(),
+}));
+
+vi.mock("#util/paths.js", () => ({
+  root: vi.fn().mockReturnValue("/home/test/.cireilclaw"),
+}));
+
+const mockedSpawn = vi.mocked(await import("node:child_process").then((mod) => mod.spawn));
 const mockedReadFileSync = vi.mocked(await import("node:fs").then((mod) => mod.readFileSync));
 const mockedExistsSync = vi.mocked(await import("node:fs").then((mod) => mod.existsSync));
+const mockedWarning = vi.mocked(await import("#output/log.js").then((mod) => mod.warning));
 
 describe("parseEnvFile", () => {
   it("returns empty array when file does not exist", () => {
@@ -156,4 +173,120 @@ describe("SHELL_METACHAR_PATTERN", () => {
       expect(SHELL_METACHAR_PATTERN.test(input)).toBe(false);
     });
   }
+});
+
+function fakeChildProcess(stdout = "", stderr = "", exitCode = 0): ChildProcess {
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return {
+    kill: vi.fn(),
+    on: vi.fn((event: string, cb: (arg?: unknown) => void) => {
+      if (event === "close") {
+        cb(exitCode);
+      }
+    }),
+    stderr: {
+      on: vi.fn((_event: string, cb: (data: Buffer) => void) => {
+        cb(Buffer.from(stderr));
+      }),
+    },
+    stdout: {
+      on: vi.fn((_event: string, cb: (data: Buffer) => void) => {
+        cb(Buffer.from(stdout));
+      }),
+    },
+  } as unknown as ChildProcess;
+}
+
+describe("exec", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.unstubAllEnvs();
+    vi.stubEnv("PATH", "/usr/bin");
+  });
+
+  it("rejects commands with shell metacharacters", async () => {
+    const result = await exec({
+      agentSlug: "test",
+      binaries: ["ls"],
+      command: "ls -la",
+      hostEnvPassthrough: [],
+      timeout: 5000,
+    });
+    expect(result.type).toBe("error");
+  });
+
+  it("rejects commands not in allowed binaries list", async () => {
+    const result = await exec({
+      agentSlug: "test",
+      binaries: ["ls"],
+      command: "rm",
+      hostEnvPassthrough: [],
+      timeout: 5000,
+    });
+    expect(result.type).toBe("error");
+  });
+
+  it("bypasses sandbox when insecure env var is set to i-am-in-a-container", async () => {
+    vi.stubEnv(
+      "CIREILCLAW_RUNTIME_INSECURE_DISABLE_SANDBOX_I_AM_100_PERCENT_SURE",
+      "i-am-in-a-container",
+    );
+    mockedExistsSync.mockImplementation((path) => path === "/usr/bin/echo");
+    mockedSpawn.mockReturnValue(fakeChildProcess("hello", "", 0));
+
+    const result = await exec({
+      agentSlug: "test",
+      args: ["hello"],
+      binaries: ["echo"],
+      command: "echo",
+      hostEnvPassthrough: [],
+      timeout: 5000,
+    });
+
+    expect(mockedWarning).toHaveBeenCalled();
+    expect(mockedSpawn).toHaveBeenCalledWith(
+      "/usr/bin/echo",
+      ["hello"],
+      expect.objectContaining({ stdio: ["ignore", "pipe", "pipe"] }),
+    );
+    expect(result).toEqual({ exitCode: 0, stderr: "", stdout: "hello", type: "output" });
+  });
+
+  it("bypasses sandbox with alternative undocumented value", async () => {
+    vi.stubEnv(
+      "CIREILCLAW_RUNTIME_INSECURE_DISABLE_SANDBOX_I_AM_100_PERCENT_SURE",
+      "babe-i-brought-protection",
+    );
+    mockedExistsSync.mockImplementation((path) => path === "/usr/bin/whoami");
+    mockedSpawn.mockReturnValue(fakeChildProcess("root", "", 0));
+
+    const result = await exec({
+      agentSlug: "test",
+      binaries: ["whoami"],
+      command: "whoami",
+      hostEnvPassthrough: [],
+      timeout: 5000,
+    });
+
+    expect(result).toEqual({ exitCode: 0, stderr: "", stdout: "root", type: "output" });
+  });
+
+  it("bypasses sandbox with we-are-literally-transbians-what value", async () => {
+    vi.stubEnv(
+      "CIREILCLAW_RUNTIME_INSECURE_DISABLE_SANDBOX_I_AM_100_PERCENT_SURE",
+      "we-are-literally-transbians-what",
+    );
+    mockedExistsSync.mockImplementation((path) => path === "/usr/bin/id");
+    mockedSpawn.mockReturnValue(fakeChildProcess("uid=0", "", 0));
+
+    const result = await exec({
+      agentSlug: "test",
+      binaries: ["id"],
+      command: "id",
+      hostEnvPassthrough: [],
+      timeout: 5000,
+    });
+
+    expect(result).toEqual({ exitCode: 0, stderr: "", stdout: "uid=0", type: "output" });
+  });
 });

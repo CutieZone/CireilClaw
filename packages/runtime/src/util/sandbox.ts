@@ -556,26 +556,17 @@ async function buildBwrap(
   return { args, type: "success" };
 }
 
-async function runInSandbox(
-  bwrapArgs: string[],
-  commandPath: string,
-  cmdArgs: string[],
-  timeout: number,
-): Promise<ExecOutput> {
-  const prom = new Promise<ExecOutput>((resolve) => {
-    const proc = spawn("bwrap", [...bwrapArgs.slice(1), commandPath, ...cmdArgs], {
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-
+async function captureExec(proc: ReturnType<typeof spawn>, timeout: number): Promise<ExecOutput> {
+  return await new Promise<ExecOutput>((resolve) => {
     let stdout = "";
     let stderr = "";
     let settled = false;
 
-    proc.stdout.on("data", (data: Buffer) => {
+    proc.stdout?.on("data", (data: Buffer) => {
       stdout += data.toString("utf8");
     });
 
-    proc.stderr.on("data", (data: Buffer) => {
+    proc.stderr?.on("data", (data: Buffer) => {
       stderr += data.toString("utf8");
     });
 
@@ -623,10 +614,43 @@ async function runInSandbox(
       });
     });
   });
+}
 
-  const result = await prom;
+// oxlint-disable-next-line eslint/require-await
+async function runInSandbox(
+  bwrapArgs: string[],
+  commandPath: string,
+  cmdArgs: string[],
+  timeout: number,
+): Promise<ExecOutput> {
+  const proc = spawn("bwrap", [...bwrapArgs.slice(1), commandPath, ...cmdArgs], {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  return captureExec(proc, timeout);
+}
 
-  return result;
+// oxlint-disable-next-line eslint/require-await
+async function runRaw(
+  commandPath: string,
+  cmdArgs: string[],
+  timeout: number,
+  envVars?: EnvVar[],
+): Promise<ExecOutput> {
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined) {
+      env[key] = value;
+    }
+  }
+  for (const { key, value } of envVars ?? []) {
+    env[key] = value;
+  }
+
+  const proc = spawn(commandPath, cmdArgs, {
+    env,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  return captureExec(proc, timeout);
 }
 
 const SHELL_METACHAR_PATTERN = /[\s"'|&;$`\\]/;
@@ -647,6 +671,51 @@ async function exec(cfg: ExecConfig): Promise<ExecResult> {
       error: `Command '${command}' is not in the allowed binaries list.`,
       type: "error",
     };
+  }
+
+  const bypassValue =
+    process.env["CIREILCLAW_RUNTIME_INSECURE_DISABLE_SANDBOX_I_AM_100_PERCENT_SURE"];
+  const bypassSandbox =
+    bypassValue === "i-am-in-a-container" ||
+    bypassValue === "babe-i-brought-protection" ||
+    bypassValue === "we-are-literally-transbians-what";
+
+  if (bypassSandbox) {
+    warning(
+      { command },
+      "CIREILCLAW_RUNTIME_INSECURE_DISABLE_SANDBOX_I_AM_100_PERCENT_SURE is set; running raw without sandbox",
+    );
+
+    const commandPath = locate(command);
+    if (commandPath === undefined || !existsSync(commandPath)) {
+      return {
+        error: `Command '${command}' could not be located on this system.`,
+        type: "error",
+      };
+    }
+
+    const envPath = join(root(), "agents", agentSlug, "workspace", ".env");
+    const envResult = parseEnvFile(envPath);
+
+    if (!Array.isArray(envResult)) {
+      return {
+        error:
+          envResult.hint !== undefined && envResult.hint.length > 0
+            ? `${envResult.message}\n\nHint: ${envResult.hint}`
+            : envResult.message,
+        type: "error",
+      };
+    }
+
+    const envVars: EnvVar[] = [...envResult];
+    for (const key of hostEnvPassthrough) {
+      const value = process.env[key];
+      if (value !== undefined) {
+        envVars.push({ key, value });
+      }
+    }
+
+    return runRaw(commandPath, args ?? [], timeout, envVars);
   }
 
   const bwrap = await buildBwrap(binaries, hostEnvPassthrough, agentSlug, mounts);

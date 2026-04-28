@@ -57,6 +57,19 @@ npm install -g pnpm
 
 </details>
 
+<details>
+<summary>Running in a container (advanced)</summary>
+
+If you are running CireilClaw inside a container that already provides isolation, you can disable the bubblewrap sandbox and run commands directly in the container environment:
+
+```sh
+CIREILCLAW_RUNTIME_INSECURE_DISABLE_SANDBOX_I_AM_100_PERCENT_SURE=i-am-in-a-container pnpm start
+```
+
+This bypasses `bwrap` entirely. Only use this when the container itself is the security boundary.
+
+</details>
+
 ## Clone and install
 
 ```sh
