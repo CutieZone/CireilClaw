@@ -8,10 +8,7 @@ const ConfigSchema = vb.strictObject({
   ]),
 });
 
-const UnitsSchema = vb.exactOptional(
-  vb.union([vb.literal("metric"), vb.literal("imperial"), vb.literal("standard")]),
-  "metric",
-);
+const UnitsSchema = vb.exactOptional(vb.picklist(["metric", "imperial", "standard"]), "metric");
 
 async function loadConfig(ctx: PluginToolContext): Promise<{ apiKey: string | string[] }> {
   const rawConfig = await ctx.cfg.globalPlugin("openweather");

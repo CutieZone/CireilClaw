@@ -22,10 +22,7 @@ const Schema = vb.strictObject({
     0,
   ),
   order: vb.optional(
-    vb.pipe(
-      vb.union([vb.literal("asc"), vb.literal("desc")]),
-      vb.description("Sort order (asc or desc)."),
-    ),
+    vb.pipe(vb.picklist(["asc", "desc"]), vb.description("Sort order (asc or desc).")),
     "desc",
   ),
   since: vb.optional(

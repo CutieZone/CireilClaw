@@ -17,7 +17,7 @@ const Schema = vb.strictObject({
   ),
   mode: vb.optional(
     vb.pipe(
-      vb.union([vb.literal("raw"), vb.literal("glob"), vb.literal("regex")]),
+      vb.picklist(["raw", "glob", "regex"]),
       vb.description("Search mode (raw, glob, regex)."),
     ),
     "glob",
@@ -27,10 +27,7 @@ const Schema = vb.strictObject({
     0,
   ),
   order: vb.optional(
-    vb.pipe(
-      vb.union([vb.literal("asc"), vb.literal("desc")]),
-      vb.description("Sort order (asc or desc)."),
-    ),
+    vb.pipe(vb.picklist(["asc", "desc"]), vb.description("Sort order (asc or desc).")),
     "desc",
   ),
   origin: vb.optional(

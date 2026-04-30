@@ -3,15 +3,7 @@ import * as vb from "valibot";
 import { nonEmptyString } from "#config/schemas/shared.js";
 
 const DirectMessagesModeSchema = vb.pipe(
-  vb.exactOptional(
-    vb.union([
-      vb.literal("owner"),
-      vb.literal("public"),
-      vb.literal("allowlist"),
-      vb.literal("denylist"),
-    ]),
-    "owner",
-  ),
+  vb.exactOptional(vb.picklist(["owner", "public", "allowlist", "denylist"]), "owner"),
   vb.description("Who's allowed to use direct messages with this agent"),
 );
 
@@ -26,10 +18,7 @@ const DirectMessagesSchema = vb.exactOptional(
 );
 
 const AccessModeSchema = vb.pipe(
-  vb.exactOptional(
-    vb.union([vb.literal("disabled"), vb.literal("allowlist"), vb.literal("denylist")]),
-    "disabled",
-  ),
+  vb.exactOptional(vb.picklist(["disabled", "allowlist", "denylist"]), "disabled"),
   vb.description(
     "What kind of access restriction to apply; 'disabled' means there's no restriction",
   ),

@@ -3,7 +3,7 @@ import { isAbsolute } from "node:path";
 import * as vb from "valibot";
 
 const MountSchema = vb.object({
-  mode: vb.union([vb.literal("ro"), vb.literal("rw")]),
+  mode: vb.picklist(["ro", "rw"]),
   source: vb.pipe(
     vb.string(),
     vb.minLength(1),

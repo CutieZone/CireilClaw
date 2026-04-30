@@ -25,11 +25,11 @@ const WhenSchema = vb.union([
   vb.pipe(vb.array(ConditionStringSchema), vb.minLength(1)),
 ]);
 
-const LogicModeSchema = vb.exactOptional(vb.union([vb.literal("and"), vb.literal("or")]), "or");
+const LogicModeSchema = vb.exactOptional(vb.picklist(["and", "or"]), "or");
 
 const BlockActionSchema = vb.literal("load");
 
-const PathActionSchema = vb.union([vb.literal("allow"), vb.literal("deny")]);
+const PathActionSchema = vb.picklist(["allow", "deny"]);
 
 const BlockRuleSchema = vb.strictObject({
   action: BlockActionSchema,
