@@ -3,7 +3,7 @@ import type { ChildProcess } from "node:child_process";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // oxlint-disable no-template-curly-in-string
-import { exec, locate, parseEnvFile, SHELL_METACHAR_PATTERN } from "#util/sandbox.js";
+import { buildBwrap, exec, locate, parseEnvFile, SHELL_METACHAR_PATTERN } from "#util/sandbox.js";
 
 vi.mock("node:fs", {
   spy: true,
@@ -25,6 +25,7 @@ vi.mock("#util/paths.js", () => ({
 const mockedSpawn = vi.mocked(await import("node:child_process").then((mod) => mod.spawn));
 const mockedReadFileSync = vi.mocked(await import("node:fs").then((mod) => mod.readFileSync));
 const mockedExistsSync = vi.mocked(await import("node:fs").then((mod) => mod.existsSync));
+const mockedRealpathSync = vi.mocked(await import("node:fs").then((mod) => mod.realpathSync));
 const mockedWarning = vi.mocked(await import("#output/log.js").then((mod) => mod.warning));
 
 describe("parseEnvFile", () => {
@@ -249,7 +250,12 @@ describe("exec", () => {
       ["hello"],
       expect.objectContaining({ stdio: ["ignore", "pipe", "pipe"] }),
     );
-    expect(result).toEqual({ exitCode: 0, stderr: "", stdout: "hello", type: "output" });
+    expect(result).toEqual({
+      exitCode: 0,
+      stderr: "",
+      stdout: "hello",
+      type: "output",
+    });
   });
 
   it("bypasses sandbox with alternative undocumented value", async () => {
@@ -268,7 +274,12 @@ describe("exec", () => {
       timeout: 5000,
     });
 
-    expect(result).toEqual({ exitCode: 0, stderr: "", stdout: "root", type: "output" });
+    expect(result).toEqual({
+      exitCode: 0,
+      stderr: "",
+      stdout: "root",
+      type: "output",
+    });
   });
 
   it("bypasses sandbox with we-are-literally-transbians-what value", async () => {
@@ -287,6 +298,151 @@ describe("exec", () => {
       timeout: 5000,
     });
 
-    expect(result).toEqual({ exitCode: 0, stderr: "", stdout: "uid=0", type: "output" });
+    expect(result).toEqual({
+      exitCode: 0,
+      stderr: "",
+      stdout: "uid=0",
+      type: "output",
+    });
+  });
+});
+
+describe("buildBwrap", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.unstubAllEnvs();
+    mockedRealpathSync.mockImplementation(String);
+    vi.stubEnv("PATH", "/usr/bin");
+  });
+  it("includes --dev-bind when devices.usb is true and /dev/bus/usb exists", async () => {
+    vi.stubEnv("HOME", "/home/test");
+    mockedExistsSync.mockImplementation((path) => {
+      const stringPath = String(path);
+      return [
+        "/home/test",
+        "/usr",
+        "/bin",
+        "/lib",
+        "/dev/bus/usb",
+        "/etc/passwd",
+        "/etc/group",
+        "/etc/nsswitch.conf",
+        "/etc/resolv.conf",
+        "/usr/bin/echo",
+      ].includes(stringPath);
+    });
+
+    const result = await buildBwrap(["echo"], [], "test-agent", [], {
+      usb: true,
+    });
+    expect(result.type).toBe("success");
+    if (result.type === "success") {
+      const idx = result.args.indexOf("--dev-bind");
+      expect(idx).toBeGreaterThan(-1);
+      expect(result.args[idx + 1]).toBe("/dev/bus/usb");
+      expect(result.args[idx + 2]).toBe("/dev/bus/usb");
+    }
+  });
+
+  it("omits --dev-bind when devices.usb is true but /dev/bus/usb is missing", async () => {
+    vi.stubEnv("HOME", "/home/test");
+    mockedExistsSync.mockImplementation((path) => {
+      const stringPath = String(path);
+      return [
+        "/home/test",
+        "/usr",
+        "/bin",
+        "/lib",
+        "/etc/passwd",
+        "/etc/group",
+        "/etc/nsswitch.conf",
+        "/etc/resolv.conf",
+        "/usr/bin/echo",
+      ].includes(stringPath);
+    });
+
+    const result = await buildBwrap(["echo"], [], "test-agent", [], {
+      usb: true,
+    });
+    expect(result.type).toBe("success");
+    if (result.type === "success") {
+      expect(result.args).not.toContain("--dev-bind");
+    }
+  });
+
+  it("omits --dev-bind when devices is undefined even if /dev/bus/usb exists", async () => {
+    vi.stubEnv("HOME", "/home/test");
+    mockedExistsSync.mockImplementation((path) => {
+      const stringPath = String(path);
+      return [
+        "/home/test",
+        "/usr",
+        "/bin",
+        "/lib",
+        "/etc/passwd",
+        "/etc/group",
+        "/etc/nsswitch.conf",
+        "/etc/resolv.conf",
+        "/usr/bin/echo",
+        "/dev/bus/usb",
+      ].includes(stringPath);
+    });
+
+    const result = await buildBwrap(["echo"], [], "test-agent");
+    expect(result.type).toBe("success");
+    if (result.type === "success") {
+      expect(result.args).not.toContain("--dev-bind");
+    }
+  });
+  it("includes --dev-bind /dev when devices.all is true", async () => {
+    vi.stubEnv("HOME", "/home/test");
+    mockedExistsSync.mockImplementation((path) => {
+      const stringPath = String(path);
+      return [
+        "/home/test",
+        "/usr",
+        "/bin",
+        "/lib",
+        "/etc/passwd",
+        "/etc/group",
+        "/etc/nsswitch.conf",
+        "/etc/resolv.conf",
+        "/usr/bin/echo",
+        "/dev",
+      ].includes(stringPath);
+    });
+
+    const result = await buildBwrap(["echo"], [], "test-agent", [], { all: true });
+    expect(result.type).toBe("success");
+    if (result.type === "success") {
+      const idx = result.args.indexOf("--dev-bind");
+      expect(idx).toBeGreaterThan(-1);
+      expect(result.args[idx + 1]).toBe("/dev");
+      expect(result.args[idx + 2]).toBe("/dev");
+    }
+  });
+
+  it("omits --dev-bind /dev when devices.all is true but /dev is missing", async () => {
+    vi.stubEnv("HOME", "/home/test");
+    mockedExistsSync.mockImplementation((path) => {
+      const stringPath = String(path);
+      return [
+        "/home/test",
+        "/usr",
+        "/bin",
+        "/lib",
+        "/etc/passwd",
+        "/etc/group",
+        "/etc/nsswitch.conf",
+        "/etc/resolv.conf",
+        "/usr/bin/echo",
+      ].includes(stringPath);
+    });
+
+    const result = await buildBwrap(["echo"], [], "test-agent", [], { all: true });
+    expect(result.type).toBe("success");
+    if (result.type === "success") {
+      expect(result.args).not.toContain("--dev-bind");
+    }
   });
 });

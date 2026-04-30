@@ -22,3 +22,10 @@ mounts = []
 # source = "~/data/reference-docs"
 # target = "docs/reference"
 # mode = "ro"
+
+# --- Device passthrough ---
+# Grant the sandbox access to host device nodes. Use with caution.
+#
+# [devices]
+# usb = true   # Bind-mount /dev/bus/usb into the sandbox (for ST-Link, etc.)
+# all = true   # Replace mini-/dev with full host /dev (covers ttyACM*, ttyUSB*, etc.)

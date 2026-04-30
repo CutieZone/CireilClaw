@@ -20,9 +20,15 @@ const MountSchema = vb.object({
   ),
 });
 
+const DevicesConfigSchema = vb.object({
+  all: vb.optional(vb.boolean()),
+  usb: vb.optional(vb.boolean()),
+});
+
 type Mount = vb.InferOutput<typeof MountSchema>;
 
 const SandboxConfigSchema = vb.object({
+  devices: vb.optional(DevicesConfigSchema),
   mounts: vb.array(MountSchema),
 });
 

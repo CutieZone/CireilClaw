@@ -83,5 +83,59 @@ describe("SandboxConfigSchema", () => {
       };
       expect(vb.parse(SandboxConfigSchema, input)).toEqual(input);
     });
+    it("accepts devices with usb enabled", () => {
+      const input = {
+        devices: { usb: true },
+        mounts: [],
+      };
+      expect(vb.parse(SandboxConfigSchema, input)).toEqual(input);
+    });
+
+    it("accepts devices with usb disabled", () => {
+      const input = {
+        devices: { usb: false },
+        mounts: [],
+      };
+      expect(vb.parse(SandboxConfigSchema, input)).toEqual(input);
+    });
+
+    it("accepts missing devices field", () => {
+      expect(vb.parse(SandboxConfigSchema, { mounts: [] })).toEqual({ mounts: [] });
+    });
+
+    it("accepts devices without usb key", () => {
+      const input = {
+        devices: {},
+        mounts: [],
+      };
+      expect(vb.parse(SandboxConfigSchema, input)).toEqual({
+        devices: {},
+        mounts: [],
+      });
+    });
+
+    it("accepts devices with all enabled", () => {
+      const input = {
+        devices: { all: true },
+        mounts: [],
+      };
+      expect(vb.parse(SandboxConfigSchema, input)).toEqual(input);
+    });
+
+    it("rejects non-boolean all value", () => {
+      const input = {
+        devices: { all: "yes" },
+        mounts: [],
+      };
+      expect(() => vb.parse(SandboxConfigSchema, input)).toThrow();
+    });
+
+    it("rejects non-boolean usb value", () => {
+      const input = {
+        devices: { usb: "yes" },
+        mounts: [],
+      };
+      expect(() => vb.parse(SandboxConfigSchema, input)).toThrow();
+    });
   });
 });

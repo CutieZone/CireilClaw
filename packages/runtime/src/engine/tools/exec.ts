@@ -61,6 +61,7 @@ export const exec: ToolDef = {
       args: data.args,
       binaries: execConfig.binaries,
       command: data.command,
+      devices: ctx.cfg.sandbox.devices,
       hostEnvPassthrough: execConfig.hostEnvPassthrough,
       mounts: ctx.cfg.sandbox.mounts,
       timeout: execConfig.timeout,
