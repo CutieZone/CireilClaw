@@ -769,7 +769,8 @@ async function handleMessageCreate(
 
     const supportsVideo = models === undefined ? false : (modelSupportsVideo ?? false);
     const videoContents = supportsVideo ? await fetchAttachmentVideos(msg) : [];
-    const mediaContents = [...imageContents, ...videoContents];
+    session.pendingVideos.push(...videoContents);
+    const mediaContents = [...imageContents];
     const historyLengthBeforeTurn = session.history.length;
     session.history.push({
       content: mediaContents.length > 0 ? [textContent, ...mediaContents] : textContent,
@@ -958,7 +959,8 @@ async function handleMessageUpdate(
 
     const supportsVideo = models === undefined ? false : (modelSupportsVideo ?? false);
     const videos = supportsVideo ? await fetchAttachmentVideos(realMsg) : [];
-    const media = [...images, ...videos];
+    session.pendingVideos.push(...videos);
+    const media = [...images];
 
     entry.content = media.length > 0 ? [textContent, ...media] : textContent;
 

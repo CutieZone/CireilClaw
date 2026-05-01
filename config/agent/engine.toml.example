@@ -20,6 +20,7 @@ isGlobalDefault = true
 # availableModels       (optional)  List of model names, or "analyze" for auto-resolution. Default: "analyze"
 # maxGenerationRetries  (optional)  How many times generation can fail before crashing. Default: 2
 # maxTurns              (optional)  Number of conversation turns sent to the API. Default: 30
+# useFilesApi           (optional)  Use provider files API for media. "kimi" or false. Default: false
 # useJpegForImages      (optional)  Force JPEG over WEBP for images. Default: false
 # useToolChoiceAuto     (optional)  Prefer tool_choice: auto over required. Default: false
 # customHeaders         (optional)  Custom headers for generation requests

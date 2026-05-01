@@ -43,12 +43,67 @@ async function prepareMedia(messages: Message[], useJpeg: boolean): Promise<void
   }
 }
 
+async function uploadKimiFile(
+  apiBase: string,
+  apiKey: string,
+  data: Uint8Array,
+  mediaType: string,
+): Promise<string> {
+  const extension = mediaType.split("/")[1] ?? "bin";
+  const filename = `upload.${extension}`;
+  const blob = new Blob([Buffer.from(data)], { type: mediaType });
+  const formData = new FormData();
+  formData.append("file", blob, filename);
+  formData.append("purpose", "video");
+
+  const resp = await fetch(`${apiBase}/files`, {
+    body: formData,
+    headers: { Authorization: `Bearer ${apiKey}` },
+    method: "POST",
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`Kimi file upload failed (${resp.status}): ${text}`);
+  }
+
+  const json = vb.parse(vb.object({ id: vb.string() }), await resp.json());
+  return json.id;
+}
+
+async function uploadMedia(
+  messages: Message[],
+  apiBase: string,
+  keyPool: KeyPool,
+  useFilesApi: "kimi" | false,
+): Promise<void> {
+  if (useFilesApi === false) {
+    return;
+  }
+
+  for (const msg of messages) {
+    const parts = Array.isArray(msg.content) ? msg.content : [msg.content];
+    for (const part of parts) {
+      if (part.type !== "video") {
+        continue;
+      }
+      if (part.filesApiMemoized?.mode === useFilesApi) {
+        continue;
+      }
+
+      const apiKey = keyPool.getNextKey();
+      const fileId = await uploadKimiFile(apiBase, apiKey, part.data, part.mediaType);
+      part.filesApiMemoized = { fileId, mode: useFilesApi };
+    }
+  }
+}
+
 function translateContent(
   content: Content,
 ):
   | ChatCompletionContentPartImage
   | ChatCompletionContentPartText
-  | { type: "video_url"; video_url: { url: string }; fps: number } {
+  | { type: "video_url"; video_url: { url: string }; fps?: number } {
   switch (content.type) {
     case "text":
       return {
@@ -65,6 +120,12 @@ function translateContent(
       };
     }
     case "video": {
+      if (content.filesApiMemoized?.fileId !== undefined) {
+        return {
+          type: "video_url",
+          video_url: { url: `ms://${content.filesApiMemoized.fileId}` },
+        };
+      }
       const encoded = content.memoized?.data ?? encode(content.data);
       content.memoized = { data: encoded };
       return {
@@ -85,8 +146,13 @@ function translateContent(
       );
     case "image_ref":
       throw new Error("Content type 'image_ref' should never end up here. How did it?");
-    case "video_ref":
-      throw new Error("Content type 'video_ref' should never end up here. How did it?");
+    case "video_ref": {
+      // Video_ref has no data — it was serialized to disk. Fall back to URL reference.
+      return {
+        type: "video_url",
+        video_url: { url: content.url },
+      };
+    }
     default:
       throw new Error("Unreachable");
   }
@@ -108,7 +174,31 @@ function translateMsg(message: Message): ChatCompletionMessageParam {
         role: "user",
       } as unknown as ChatCompletionMessageParam;
 
-    case "toolResponse":
+    case "toolResponse": {
+      if (
+        typeof message.content.output === "object" &&
+        message.content.output !== null &&
+        "_media" in message.content.output
+      ) {
+        debug(
+          `useFilesApi=kimi: translating _media tool response (${message.content.name}) with ${vb.parse(vb.array(vb.unknown()), (message.content.output as Record<string, unknown>)["_media"]).length} part(s)`,
+        );
+        const media = vb.parse(
+          vb.array(vb.unknown()),
+          (message.content.output as Record<string, unknown>)["_media"],
+        );
+
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        return {
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+          content: media.map((it) =>
+            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+            translateContent(it as Content),
+          ) as unknown as ChatCompletionMessageParam["content"],
+          role: "tool",
+          tool_call_id: message.content.id,
+        } as unknown as ChatCompletionMessageParam;
+      }
       if (typeof message.content.output === "object") {
         return {
           content: JSON.stringify({
@@ -127,6 +217,7 @@ function translateMsg(message: Message): ChatCompletionMessageParam {
         role: "tool",
         tool_call_id: message.content.id,
       };
+    }
 
     case "assistant": {
       if (Array.isArray(message.content)) {
@@ -218,6 +309,7 @@ interface Options {
   forceJpeg?: boolean;
   customHeaders?: Record<string, string | string[]>;
   useToolChoiceAuto?: boolean;
+  useFilesApi?: "kimi" | false;
 }
 
 const knownKimiOffenders = ["2.5", "-for-code"];
@@ -227,10 +319,37 @@ export async function generate(
   apiBase: string,
   keyPool: KeyPool,
   model: string,
-  { forceJpeg = false, customHeaders, useToolChoiceAuto = false }: Options,
+  { forceJpeg = false, customHeaders, useToolChoiceAuto = false, useFilesApi = false }: Options,
 ): Promise<{ message: AssistantMessage; usage?: UsageInfo }> {
   let useJpeg = forceJpeg || jpegRequiredEndpoints.has(apiBase);
   await prepareMedia(context.messages, useJpeg);
+  await uploadMedia(context.messages, apiBase, keyPool, useFilesApi);
+
+  if (useFilesApi === "kimi") {
+    for (const msg of context.messages) {
+      if (msg.role === "user") {
+        const userMsg = msg;
+        if (Array.isArray(userMsg.content)) {
+          const hadVideo = userMsg.content.some(
+            (it) => it.type === "video" || it.type === "video_ref",
+          );
+          const filtered = userMsg.content.filter(
+            (it) => it.type !== "video" && it.type !== "video_ref",
+          );
+          if (hadVideo) {
+            debug(
+              `useFilesApi=kimi: stripped ${userMsg.content.length - filtered.length} video(s) from user message`,
+            );
+          }
+          userMsg.content =
+            filtered.length > 0 ? filtered : { content: "[video removed]", type: "text" };
+        } else if (userMsg.content.type === "video" || userMsg.content.type === "video_ref") {
+          debug("useFilesApi=kimi: stripped 1 video from user message");
+          userMsg.content = { content: "[video removed]", type: "text" };
+        }
+      }
+    }
+  }
 
   const params: ChatCompletionCreateParamsNonStreaming = {
     messages: [

@@ -221,8 +221,40 @@ export async function runTurn(
     session.pendingImages = dedupedImages;
 
     if (session.pendingImages.length > 0 || session.pendingVideos.length > 0) {
-      const media = [...session.pendingImages.splice(0), ...session.pendingVideos.splice(0)];
-      session.pendingToolMessages.push({ content: media, role: "user" });
+      const images = session.pendingImages.splice(0);
+      const videos = session.pendingVideos.splice(0);
+
+      if (selectedProvider.useFilesApi === "kimi" && videos.length > 0) {
+        // Kimi's coding endpoint rejects video_url in user messages.
+        // Fake a tool call + response so the video lives in a tool message.
+        const fakeId = `recv-video-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        debug(
+          `useFilesApi=kimi: faking receive_video tool call (${fakeId}) for ${videos.length} video(s), ${images.length} image(s)`,
+        );
+        session.pendingToolMessages.push({
+          content: [
+            {
+              id: fakeId,
+              input: {},
+              name: "receive_video",
+              type: "toolCall",
+            },
+          ],
+          role: "assistant",
+        });
+        session.pendingToolMessages.push({
+          content: {
+            id: fakeId,
+            name: "receive_video",
+            output: { _media: [...images, ...videos] },
+            type: "toolResponse",
+          },
+          role: "toolResponse",
+        });
+      } else {
+        const media = [...images, ...videos];
+        session.pendingToolMessages.push({ content: media, role: "user" });
+      }
     }
 
     const prompt = await buildSystemPrompt(agentSlug, session, capabilities, conditions);
@@ -284,6 +316,7 @@ export async function runTurn(
             {
               customHeaders: selectedProvider.customHeaders,
               forceJpeg: selectedProvider.useJpegForImages,
+              useFilesApi: selectedProvider.useFilesApi,
               useToolChoiceAuto: selectedProvider.useToolChoiceAuto,
             },
           ));

@@ -10,6 +10,8 @@ interface ImageContent {
   // Cached base64 encoding. Stored with the format it was encoded in so that
   // a JPEG-mode provider can detect and skip a WebP-encoded cache entry.
   memoized?: { data: string; kind: "webp" | "jpeg" };
+  // Cached file-upload ID from a provider-specific files API (e.g. Kimi ms://).
+  filesApiMemoized?: { fileId: string; mode: string };
 }
 
 interface ImageRef {
@@ -32,6 +34,8 @@ interface VideoContent {
   mediaType: string;
   // Cached base64 encoding.
   memoized?: { data: string };
+  // Cached file-upload ID from a provider-specific files API (e.g. Kimi ms://).
+  filesApiMemoized?: { fileId: string; mode: string };
 }
 
 interface VideoRef {

@@ -74,6 +74,12 @@ const ProviderConfigSchema = vb.strictObject({
     vb.exactOptional(ModelConfigSchema, undefined),
     vb.description("Model-specific overrides; default values used otherwise"),
   ),
+  useFilesApi: vb.pipe(
+    vb.exactOptional(vb.union([vb.picklist(["kimi"]), vb.literal(false)]), false),
+    vb.description(
+      "Use a provider-specific files API instead of base64 for media. 'kimi' uploads videos via /v1/files and references them with ms://",
+    ),
+  ),
   useJpegForImages: vb.pipe(
     vb.exactOptional(vb.boolean(), false),
     vb.description("Whether to force the use of JPEG over WEBP for images"),
