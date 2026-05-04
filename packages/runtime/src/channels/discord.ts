@@ -30,6 +30,7 @@ import type { HandlerCtx } from "#channels/discord/handler-ctx.js";
 import * as inviteCommand from "#channels/discord/invite-command.js";
 import * as modelCommand from "#channels/discord/model-command.js";
 import * as repairCommand from "#channels/discord/repair-command.js";
+import * as stopCommand from "#channels/discord/stop-command.js";
 import { loadChannel, loadEngine } from "#config/index.js";
 import { saveSession } from "#db/sessions.js";
 import type { ImageContent, TextContent, VideoContent } from "#engine/content.js";
@@ -65,6 +66,7 @@ const SLASH_COMMANDS = [
   inviteCommand.definition,
   modelCommand.definition,
   repairCommand.definition,
+  stopCommand.definition,
 ];
 
 type SlashHandler = (interaction: CommandInteraction, ctx: HandlerCtx) => Promise<void>;
@@ -74,9 +76,10 @@ const SLASH_HANDLERS = new Map<string, SlashHandler>([
   ["invite", inviteCommand.handle],
   ["model", modelCommand.handleCommand],
   ["repair", repairCommand.handle],
+  ["stop", stopCommand.handle],
 ]);
 
-const SILENT_COMMANDS = new Set(["model", "invite", "close"]);
+const SILENT_COMMANDS = new Set(["model", "invite", "close", "stop"]);
 
 type AutocompleteHandler = (interaction: AutocompleteInteraction, ctx: HandlerCtx) => Promise<void>;
 const AUTOCOMPLETE_HANDLERS = new Map<string, AutocompleteHandler>([

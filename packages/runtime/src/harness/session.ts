@@ -26,6 +26,10 @@ abstract class BaseSession {
 
   // Concurrency gate — true while a turn (user or scheduled) is in progress.
   public busy = false;
+  // Set to true to request graceful termination of the current turn.
+  // Checked after each generation completes; the assistant message is
+  // committed to history (minus any unexecuted tool calls) and the loop exits.
+  public stopRequested = false;
   // Timestamp (ms) of the last user-initiated message; used to resolve target = "last".
   public lastActivity = 0;
   // Timestamp (ms) of the most recent heartbeat turn for this session.
@@ -43,6 +47,7 @@ abstract class BaseSession {
     this.pendingToolMessages = [];
     this.pendingImages = [];
     this.pendingVideos = [];
+    this.stopRequested = false;
   }
 }
 

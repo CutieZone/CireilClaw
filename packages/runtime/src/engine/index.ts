@@ -389,6 +389,35 @@ export async function runTurn(
     assistantMsg.timestamp = Date.now();
     session.history.push(assistantMsg);
 
+    // Graceful stop: if the user requested a stop, filter out unexecuted tool
+    // calls so history stays consistent (no orphaned tool_use blocks), then
+    // exit the turn.
+    if (session.stopRequested) {
+      const nonToolContent = (
+        Array.isArray(assistantMsg.content) ? assistantMsg.content : [assistantMsg.content]
+      ).filter((content) => content.type !== "toolCall");
+
+      if (nonToolContent.length > 0) {
+        const lastIdx = session.history.length - 1;
+        if (lastIdx >= 0) {
+          session.history[lastIdx] = { ...assistantMsg, content: nonToolContent };
+        }
+      } else {
+        session.history.pop();
+      }
+
+      session.stopRequested = false;
+      session.pendingToolMessages.length = 0;
+      session.history = session.history.filter((msg) => {
+        if (msg.role === "user" || msg.role === "assistant") {
+          return msg.persist !== false;
+        }
+        return true;
+      });
+      debug("Turn stopped gracefully", colors.keyword(agentSlug), colors.keyword(session.id()));
+      return;
+    }
+
     const toolCalls = (
       Array.isArray(assistantMsg.content) ? assistantMsg.content : [assistantMsg.content]
     ).filter((it): it is ToolCallContent => it.type === "toolCall");
