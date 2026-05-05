@@ -119,7 +119,10 @@ export async function runTurn(
       session.pendingImages.push({ data, mediaType, type: "image" });
     },
     addToolMessage: (content: string): void => {
-      session.pendingToolMessages.push({ content: { content, type: "text" }, role: "user" });
+      session.pendingToolMessages.push({
+        content: { content, type: "text" },
+        role: "user",
+      });
     },
     addVideo: (data: Uint8Array, mediaType: string): void => {
       session.pendingVideos.push({
@@ -382,7 +385,10 @@ export async function runTurn(
           });
         }
         session.pendingToolMessages.push({
-          content: { content: "Now use your tools to properly respond.", type: "text" },
+          content: {
+            content: "Now call the respond tool with the message content you tried to send.",
+            type: "text",
+          },
           role: "user",
         });
         continue;
@@ -413,7 +419,10 @@ export async function runTurn(
       if (nonToolContent.length > 0) {
         const lastIdx = session.history.length - 1;
         if (lastIdx >= 0) {
-          session.history[lastIdx] = { ...assistantMsg, content: nonToolContent };
+          session.history[lastIdx] = {
+            ...assistantMsg,
+            content: nonToolContent,
+          };
         }
       } else {
         session.history.pop();
@@ -455,9 +464,17 @@ export async function runTurn(
         result = await def.execute(call.input, ctx);
       } catch (error: unknown) {
         if (error instanceof vb.ValiError) {
-          result = { error: error.message, issues: error.issues, success: false };
+          result = {
+            error: error.message,
+            issues: error.issues,
+            success: false,
+          };
         } else if (error instanceof ParseError) {
-          result = { error: error.message, issues: error.issues, success: false };
+          result = {
+            error: error.message,
+            issues: error.issues,
+            success: false,
+          };
         } else if (error instanceof ToolError) {
           result = { error: error.message, hint: error.hint, success: false };
         } else {
