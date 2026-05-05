@@ -3,6 +3,7 @@ import { extname } from "node:path";
 
 import * as vb from "valibot";
 
+import { generateOutline } from "#engine/outline.js";
 import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
 import { IMAGE_EXT_TO_MEDIA_TYPE } from "#supports.js";
 import { toWebp } from "#util/image.js";
@@ -53,6 +54,13 @@ export const read: ToolDef = {
     }
 
     const content = await readFile(realPath, "utf8");
+
+    // If the file is large, return an outline instead of full content.
+    const outline = await generateOutline(data.path, ctx.agentSlug, content);
+    if (outline !== undefined) {
+      return { outline, path: data.path, size, success: true };
+    }
+
     return { content, path: data.path, size, success: true };
   },
   name: "read",

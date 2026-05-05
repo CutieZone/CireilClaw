@@ -14,6 +14,7 @@ import * as vb from "valibot";
 import type { PluginEntry } from "#config/schemas/plugins.js";
 import { PluginsConfigSchema } from "#config/schemas/plugins.js";
 import { ToolError } from "#engine/errors.js";
+import { registerExtractor } from "#engine/outline.js";
 import { builtinToolRegistry, setToolRegistry } from "#engine/tools/index.js";
 import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
 import colors from "#output/colors.js";
@@ -140,6 +141,7 @@ interface PluginLoadResult {
 class PluginProcess {
   public readonly id: string;
   public readonly ready: Promise<ManifestPayload>;
+  public extractorEntries: { glob: string; priority: number }[] = [];
   private readonly worker: Worker;
   private readonly rpc: RpcChannel;
   private readonly pending = new Map<string, ToolContext>();
@@ -333,6 +335,12 @@ async function loadPlugins(): Promise<PluginLoadResult[]> {
     const proc = await spawnPluginProcess(entry);
     try {
       const manifest = await proc.ready;
+      if (manifest.extractors !== undefined) {
+        proc.extractorEntries = manifest.extractors.map((e) => ({
+          glob: e.glob,
+          priority: e.priority ?? 0,
+        }));
+      }
       activePlugins.push(proc);
       results.push(proc.buildStubs(manifest, entry.allowOverride));
     } catch (error) {
@@ -385,6 +393,21 @@ async function initializePlugins(): Promise<void> {
       "tools:",
       toolNames.join(", "),
     );
+
+    // Register plugin extractors — these are metadata-only registrations.
+    // The actual extraction code runs in the worker and communicates via RPC.
+    for (const proc of activePlugins) {
+      for (const extractor of proc.extractorEntries) {
+        // Plugin extractors are registered as stubs — the extraction code
+        // must be reached via RPC. For now, built-in extractors cover
+        // markdown and XML; plugin extractors are a future extension.
+        registerExtractor({
+          extract: (_filePath: string, _content: string) => [],
+          glob: extractor.glob,
+          priority: extractor.priority ?? 0,
+        });
+      }
+    }
   }
 }
 

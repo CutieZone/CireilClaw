@@ -7,12 +7,13 @@ import * as vb from "valibot";
 
 import { nonEmptyString } from "#config/schemas/shared.js";
 import { getDb } from "#db/index.js";
-import { images, sessions } from "#db/schema.js";
+import { images, sessions, summaries as summariesTable } from "#db/schema.js";
 import type { Content, ImageContent, ImageRef, VideoContent, VideoRef } from "#engine/content.js";
 import { isVideoContent, isVideoRef } from "#engine/content.js";
 import { isMessage } from "#engine/message.js";
 import type { AssistantContent, Message, UserContent } from "#engine/message.js";
 import type { Session } from "#harness/session.js";
+import type { Summary } from "#harness/session.js";
 import {
   DiscordSession,
   MatrixSession,
@@ -283,9 +284,16 @@ function _flushSession(agentSlug: string, session: Session): void {
   const lastActivity =
     session.lastActivity > 0 ? new Date(session.lastActivity).toISOString() : undefined;
 
+  // Serialize activeFileSections: Map<string, Set<string>> → Record<string, string[]>
+  const activeFileSections: Record<string, string[]> = {};
+  for (const [path, sections] of session.activeFileSections) {
+    activeFileSections[path] = [...sections];
+  }
+
   // Upsert the session row first so that the images FK constraint is satisfied.
   db.insert(sessions)
     .values({
+      activeFileSections: JSON.stringify(activeFileSections),
       channel: session.channel,
       history: historyJson,
       historyCursor: session.historyCursor,
@@ -296,6 +304,7 @@ function _flushSession(agentSlug: string, session: Session): void {
     })
     .onConflictDoUpdate({
       set: {
+        activeFileSections: JSON.stringify(activeFileSections),
         history: historyJson,
         historyCursor: session.historyCursor,
         lastActivity,
@@ -330,6 +339,18 @@ async function loadSessions(agentSlug: string): Promise<Map<string, Session>> {
   for (const row of rows) {
     const history = await deserializeHistory(row.history, agentSlug);
     const openedFiles = new Set(vb.parse(vb.array(vb.string()), JSON.parse(row.openedFiles)));
+
+    // Parse activeFileSections: JSON {path: [section_ids]} → Map<string, Set<string>>
+    const activeFileSectionsRaw = vb.safeParse(
+      vb.record(vb.string(), vb.array(vb.string())),
+      JSON.parse(row.activeFileSections),
+    );
+    const activeFileSections = new Map<string, Set<string>>();
+    if (activeFileSectionsRaw.success) {
+      for (const [path, sections] of Object.entries(activeFileSectionsRaw.output)) {
+        activeFileSections.set(path, new Set(sections));
+      }
+    }
 
     const metaJson: unknown = JSON.parse(row.meta);
 
@@ -376,9 +397,30 @@ async function loadSessions(agentSlug: string): Promise<Map<string, Session>> {
     session.history = history;
     session.historyCursor = row.historyCursor;
     session.openedFiles = openedFiles;
+    session.activeFileSections = activeFileSections;
 
     session.lastActivity = row.lastActivity === null ? 0 : Date.parse(row.lastActivity);
     map.set(row.id, session);
+  }
+
+  // Load all summaries and attach them to their sessions.
+  const summaryRows = db.select().from(summariesTable).all();
+  for (const sumRow of summaryRows) {
+    const session = map.get(sumRow.sessionId);
+    if (session === undefined) {
+      continue;
+    }
+    const preserve = vb.safeParse(vb.array(vb.string()), JSON.parse(sumRow.preserve));
+    session.summaries.push({
+      createdAt: sumRow.createdAt,
+      displayName: sumRow.displayName,
+      endMessageId: sumRow.endMessageId,
+      id: sumRow.id,
+      preserve: preserve.success ? preserve.output : [],
+      slug: sumRow.slug,
+      startMessageId: sumRow.startMessageId,
+      summary: sumRow.summary,
+    });
   }
 
   return map;
@@ -422,6 +464,7 @@ function deleteSession(agentSlug: string, sessionId: string): void {
   }
 
   db.delete(images).where(eq(images.sessionId, sessionId)).run();
+  db.delete(summariesTable).where(eq(summariesTable.sessionId, sessionId)).run();
   db.delete(sessions).where(eq(sessions.id, sessionId)).run();
 }
 
@@ -463,8 +506,9 @@ function resetSession(agentSlug: string, sessionId: string): void {
   }
 
   db.delete(images).where(eq(images.sessionId, sessionId)).run();
+  db.delete(summariesTable).where(eq(summariesTable.sessionId, sessionId)).run();
   db.update(sessions)
-    .set({ history: "[]", openedFiles: "[]" })
+    .set({ activeFileSections: "{}", history: "[]", openedFiles: "[]" })
     .where(eq(sessions.id, sessionId))
     .run();
 }
@@ -652,6 +696,33 @@ function updateSessionVideoRefs(
   db.update(sessions).set({ history: updatedHistory }).where(eq(sessions.id, sessionId)).run();
 }
 
+// Persists a new summary to the database and returns the assigned ID.
+function saveSummary(agentSlug: string, sessionId: string, summary: Summary): number {
+  const db = getDb(agentSlug);
+  const result = db
+    .insert(summariesTable)
+    .values({
+      createdAt: summary.createdAt,
+      displayName: summary.displayName,
+      endMessageId: summary.endMessageId,
+      preserve: JSON.stringify(summary.preserve),
+      sessionId,
+      slug: summary.slug,
+      startMessageId: summary.startMessageId,
+      summary: summary.summary,
+    })
+    .run();
+  return Number(result.lastInsertRowid);
+}
+
+// Deletes a summary by session and slug.
+function deleteSummary(agentSlug: string, sessionId: string, slug: string): void {
+  const db = getDb(agentSlug);
+  db.delete(summariesTable)
+    .where(and(eq(summariesTable.sessionId, sessionId), eq(summariesTable.slug, slug)))
+    .run();
+}
+
 export {
   flushAllSessions,
   hashImage,
@@ -659,6 +730,8 @@ export {
   saveSession,
   deleteSession,
   resetSession,
+  saveSummary,
+  deleteSummary,
   updateSessionImages,
   updateSessionVideoRefs,
 };

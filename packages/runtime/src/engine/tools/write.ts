@@ -47,6 +47,10 @@ export const write: ToolDef = {
 
     await mkdir(dirname(realPath), { recursive: true });
     await writeFile(realPath, data.content, "utf8");
+
+    // Invalidate section cache — file content changed
+    ctx.session.activeFileSections.delete(data.path);
+
     return { path: data.path, success: true };
   },
   name: "write",

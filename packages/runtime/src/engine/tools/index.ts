@@ -5,9 +5,11 @@ import { listDir } from "#engine/tools/list-dir.js";
 import { listSessions } from "#engine/tools/list-sessions.js";
 import { noResponse } from "#engine/tools/no-response.js";
 import { openFile } from "#engine/tools/open-file.js";
+import { pruneBoundaries } from "#engine/tools/prune-boundaries.js";
 import { querySessions } from "#engine/tools/query-sessions.js";
 import { react } from "#engine/tools/react.js";
 import { readHistory } from "#engine/tools/read-history.js";
+import { readSections } from "#engine/tools/read-sections.js";
 import { readSession } from "#engine/tools/read-session.js";
 import { skill as readSkill } from "#engine/tools/read-skill.js";
 import { read } from "#engine/tools/read.js";
@@ -26,10 +28,12 @@ const builtinToolRegistry: Record<string, ToolDef> = {
   "list-sessions": listSessions,
   "no-response": noResponse,
   "open-file": openFile,
+  "prune-boundaries": pruneBoundaries,
   "query-sessions": querySessions,
   react,
   read,
   "read-history": readHistory,
+  "read-sections": readSections,
   "read-session": readSession,
   "read-skill": readSkill,
   respond,

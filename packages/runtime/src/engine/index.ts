@@ -40,7 +40,12 @@ import {
 import { stripMediaForModel } from "#util/strip.js";
 
 import type { AssistantMessage, ToolMessage } from "./message.js";
-import { estimateSystemPrompt, pruneHistory, squashMessages } from "./prune.js";
+import {
+  applyTopicSubstitution,
+  estimateSystemPrompt,
+  pruneHistory,
+  squashMessages,
+} from "./prune.js";
 import { buildSystemPrompt } from "./system-prompt.js";
 import { buildTools } from "./tools.js";
 
@@ -279,7 +284,15 @@ export async function runTurn(
     session.historyCursor = newCursor;
 
     const visibleHistory = session.history.slice(session.historyCursor);
-    const messages = squashMessages([...visibleHistory, ...session.pendingToolMessages]);
+
+    // Step 2: Topic substitution — replace closed topic ranges with summaries.
+    // Summaries are applied to the visible history before squashing/pruning.
+    let topicSubstituted = visibleHistory;
+    if (session.summaries.length > 0) {
+      topicSubstituted = applyTopicSubstitution(visibleHistory, session.summaries);
+    }
+
+    const messages = squashMessages([...topicSubstituted, ...session.pendingToolMessages]);
 
     // Blind models don't receive image/video blocks, but they still see attachment
     // metadata via Discord's <attachment> tags and can choose to download them.

@@ -18,6 +18,7 @@ export const closeFile: ToolDef = {
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     const data = vb.parse(Schema, input);
     const removed = ctx.session.openedFiles.delete(data.path);
+    ctx.session.activeFileSections.delete(data.path);
     return { open: [...ctx.session.openedFiles], path: data.path, removed, success: true };
   },
   name: "close-file",

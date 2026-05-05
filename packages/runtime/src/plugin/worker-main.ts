@@ -35,9 +35,15 @@ interface ToolManifestEntry {
   jsonSchema: Record<string, unknown>;
 }
 
+interface ExtractorManifestEntry {
+  glob: string;
+  priority?: number;
+}
+
 interface ManifestPayload {
   pluginName: string;
   tools: ToolManifestEntry[];
+  extractors?: ExtractorManifestEntry[];
 }
 
 interface InvokeArgs {
@@ -207,7 +213,11 @@ async function main(parent: NonNullable<typeof parentPort>, init: WorkerInit): P
     return await def.execute(raw.input, ctx);
   });
 
-  const manifest: ManifestPayload = { pluginName: plugin.name, tools: manifestEntries };
+  const manifest: ManifestPayload = {
+    extractors: plugin.extractors?.map((e) => ({ glob: e.glob, priority: e.priority })),
+    pluginName: plugin.name,
+    tools: manifestEntries,
+  };
   await rpc.call("manifest", [manifest]);
 }
 
@@ -231,4 +241,11 @@ try {
   process.exit(1);
 }
 
-export type { CtxData, InvokeArgs, ManifestPayload, ToolManifestEntry, WorkerInit };
+export type {
+  CtxData,
+  ExtractorManifestEntry,
+  InvokeArgs,
+  ManifestPayload,
+  ToolManifestEntry,
+  WorkerInit,
+};

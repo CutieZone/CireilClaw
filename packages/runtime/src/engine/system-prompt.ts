@@ -13,6 +13,71 @@ const NO_CAPABILITIES: ChannelCapabilities = {
   supportsReactions: false,
 };
 
+// Extracts the content of a named section from a file by finding the heading
+// or XML element with a matching id and returning lines until the next
+// same-or-higher-level boundary.
+function extractSectionContent(content: string, sectionId: string): string {
+  const lines = content.split("\n");
+
+  // Try markdown heading match first (slugified id)
+  const headingRegex = /^(#{1,6})\s+(.+)$/;
+  let inSection = false;
+  let currentLevel = 0;
+  const result: string[] = [];
+
+  for (const line of lines) {
+    const headingMatch = headingRegex.exec(line);
+    if (headingMatch !== null) {
+      const level = headingMatch[1]?.length ?? 1;
+      const text = headingMatch[2] ?? "";
+      const id = text
+        .toLowerCase()
+        .replaceAll(/[^a-z0-9]+/g, "-")
+        .replaceAll(/^-+|-+$/g, "");
+
+      if (id === sectionId) {
+        inSection = true;
+        currentLevel = level;
+        result.push(line);
+        continue;
+      }
+
+      if (inSection && level <= currentLevel) {
+        // Next heading at same or higher level — section ends
+        break;
+      }
+
+      if (inSection) {
+        result.push(line);
+      }
+      continue;
+    }
+
+    if (inSection) {
+      result.push(line);
+    }
+  }
+
+  if (result.length > 0) {
+    return result.join("\n");
+  }
+
+  // Fallback: try XML element with matching id or name attribute
+  const xmlRegex = new RegExp(
+    `<\\w+[^>]*?(?:\\sid\\s*=\\s*"${sectionId.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}"|\\sname\\s*=\\s*"${sectionId.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}")[^>]*>`,
+    "i",
+  );
+  const xmlMatch = xmlRegex.exec(content);
+  if (xmlMatch !== null) {
+    // Return the rest of the file from this point — XML is harder to boundary-detect without a parser
+    const startIdx = content.indexOf(xmlMatch[0]);
+    return content.slice(startIdx);
+  }
+
+  // If no section found, return a placeholder so the agent knows something is wrong
+  return `[Section "${sectionId}" not found in file content — outline may be stale. Re-read the file to refresh.]`;
+}
+
 async function buildSystemPrompt(
   agentSlug: string,
   session: Session,
@@ -100,7 +165,22 @@ async function buildSystemPrompt(
       const content = await readFile(realPath, "utf8");
       const { size } = await stat(realPath);
 
-      lines.push(`<file path="${file}" size="${size}">`, content, "</file>", "");
+      const activeSections = session.activeFileSections.get(file);
+      if (activeSections !== undefined && activeSections.size > 0) {
+        // Render only the open sections with their IDs as labels
+        lines.push(
+          `<file path="${file}" size="${size}" sections="${[...activeSections].join(", ")}">`,
+        );
+
+        for (const sectionId of activeSections) {
+          // Extract just the lines for this section by finding the heading/XML element
+          const sectionContent = extractSectionContent(content, sectionId);
+          lines.push(`<section id="${sectionId}">`, sectionContent, "</section>", "");
+        }
+      } else {
+        // No section filter — render the entire file
+        lines.push(`<file path="${file}" size="${size}">`, content, "</file>", "");
+      }
     }
 
     lines.push("</opened_files>");

@@ -2,6 +2,17 @@ import type { TuiBridge } from "#channels/tui/bridge.js";
 import type { ImageContent, VideoContent } from "#engine/content.js";
 import type { Message } from "#engine/message.js";
 
+interface Summary {
+  id: number;
+  slug: string;
+  displayName: string;
+  startMessageId: string;
+  endMessageId: string;
+  preserve: string[];
+  summary: string;
+  createdAt: number;
+}
+
 const channelTypes = ["discord", "matrix", "internal", "tui"] as const;
 type ChannelType = (typeof channelTypes)[number];
 
@@ -18,6 +29,10 @@ abstract class BaseSession {
   // read-session can still access the full conversation.
   public historyCursor = 0;
   public openedFiles: Set<string> = new Set<string>();
+  // Active section filters for pinned files: path → set of section IDs.
+  public activeFileSections = new Map<string, Set<string>>();
+  // Topic compaction summaries for the session.
+  public summaries: Summary[] = new Array<Summary>();
   public pendingToolMessages: Message[] = new Array<Message>();
   // Images queued by tools (e.g. read) to be injected as a user message before the next generation.
   public pendingImages: ImageContent[] = new Array<ImageContent>();
@@ -44,6 +59,8 @@ abstract class BaseSession {
     this.history = [];
     this.historyCursor = 0;
     this.openedFiles = new Set();
+    this.activeFileSections = new Map();
+    this.summaries = [];
     this.pendingToolMessages = [];
     this.pendingImages = [];
     this.pendingVideos = [];
@@ -159,4 +176,4 @@ export {
   TuiSession,
   channelTypes as channelTypeList,
 };
-export type { Session, ChannelType };
+export type { Session, ChannelType, Summary };

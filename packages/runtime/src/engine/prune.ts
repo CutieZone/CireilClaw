@@ -2,6 +2,15 @@ import type { Message } from "#engine/message.js";
 
 import type { Content } from "./content.js";
 
+interface Summary {
+  slug: string;
+  displayName: string;
+  startMessageId: string;
+  endMessageId: string;
+  preserve: string[];
+  summary: string;
+}
+
 function truncateToTurns(messages: Message[], maxTurns: number): Message[] {
   const turns: Message[][] = [];
 
@@ -148,6 +157,7 @@ function evictToolResponses(messages: Message[], budget: number): Message[] {
     "read-session",
     "read-history",
     "read-skill",
+    "read-sections",
     "download-attachments",
     "schedule",
     "react",
@@ -370,8 +380,100 @@ function pruneHistory(
   };
 }
 
+// Replaces closed topic ranges with summary messages. Messages in the
+// `preserve` list are kept verbatim within the summary envelope.
+function applyTopicSubstitution(messages: Message[], summaries: Summary[]): Message[] {
+  if (summaries.length === 0) {
+    return messages;
+  }
+
+  // Build a map of message IDs to be preserved
+  const preservedIds = new Set<string>();
+  for (const summary of summaries) {
+    for (const id of summary.preserve) {
+      preservedIds.add(id);
+    }
+  }
+
+  // Collect all message IDs that fall within any summary range
+  const compactedIds = new Set<string>();
+  for (const summary of summaries) {
+    let inRange = false;
+    for (const msg of messages) {
+      if (msg.id === summary.startMessageId) {
+        inRange = true;
+      }
+      if (inRange && msg.id !== undefined && !preservedIds.has(msg.id)) {
+        compactedIds.add(msg.id);
+      }
+      if (msg.id === summary.endMessageId) {
+        inRange = false;
+      }
+    }
+  }
+
+  // Build the result by replacing each summary range
+  const result: Message[] = [];
+  let i = 0;
+
+  while (i < messages.length) {
+    const msg = messages[i];
+    if (msg === undefined) {
+      i++;
+      continue;
+    }
+
+    // Check if this message starts any summary range
+    const summary = summaries.find((s) => s.startMessageId === msg.id);
+    if (summary === undefined) {
+      // Not the start of a summary — include normally
+      result.push(msg);
+      i++;
+      continue;
+    }
+
+    // Collect preserved messages within this range
+    const preserved: Message[] = [];
+    let j = i;
+    while (j < messages.length) {
+      const rangeMsg = messages[j];
+      if (rangeMsg === undefined) {
+        j++;
+        continue;
+      }
+      if (rangeMsg.id !== undefined && preservedIds.has(rangeMsg.id)) {
+        preserved.push(rangeMsg);
+      }
+      if (rangeMsg.id === summary.endMessageId) {
+        break;
+      }
+      j++;
+    }
+
+    // Emit the summary message
+    result.push({
+      content: {
+        content: `<topic-summary slug="${summary.slug}" display-name="${summary.displayName}">${summary.summary}</topic-summary>`,
+        type: "text",
+      },
+      role: "user",
+    });
+
+    // Emit preserved messages
+    for (const preservedMsg of preserved) {
+      result.push(preservedMsg);
+    }
+
+    // Skip to after the end of this summary range
+    i = j + 1;
+  }
+
+  return result;
+}
+
 export {
   applyReadSupersession,
+  applyTopicSubstitution,
   estimateSystemPrompt,
   estimateTokens,
   pruneHistory,

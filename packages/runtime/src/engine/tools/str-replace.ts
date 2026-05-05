@@ -79,6 +79,9 @@ export const strReplace: ToolDef = {
     const newContent = content.replace(data.old_text, () => data.new_text);
     await writeFile(path, newContent, "utf8");
 
+    // Invalidate section cache — file content changed
+    ctx.session.activeFileSections.delete(data.path);
+
     // Find line numbers for context (from new content)
     // Use the position of old_text in the original content to find the right spot
     const oldTextPos = content.indexOf(data.old_text);
