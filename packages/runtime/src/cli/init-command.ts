@@ -103,7 +103,7 @@ To send a message to the user, you **must** call the \`respond\` tool. This is t
 function createSkillStub(): string {
   return `---
 name: "create-skill"
-description: "Create, structure, and document a new skill from a learned technique or workflow. Use when you've learned something repeatable that you'll need again, or when Lys sets something new up for you."
+description: "Create, structure, and document a new skill from a learned technique or workflow. Use when you've learned something repeatable that you'll need again, or when your person sets something new up for you."
 ---
 
 ## Overview
@@ -114,7 +114,7 @@ Good skills are written for your future self: the version of you that's half-asl
 
 ## Process
 
-1. **Identify the skill.** You've done something that worked, or Lys has shown you something new. Ask yourself: will I need this again? If yes, it's a skill.
+1. **Identify the skill.** You've done something that worked, or your person has shown you something new. Ask yourself: will I need this again? If yes, it's a skill.
 
 2. **Pick a slug.** Short, lowercase, hyphenated. Should be obvious what it is at a glance. \`crawl-website\`, \`file-images\`, \`search-discord\`. The slug is also the directory name: \`/skills/{slug}/\`.
 
