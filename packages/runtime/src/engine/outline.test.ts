@@ -9,7 +9,7 @@ import { generateOutlineFromContent, registerExtractor, getExtractors } from "#e
 
 describe("outline", () => {
   describe("markdown extractor", () => {
-    test("extracts ATX headings from a document", () => {
+    test("extracts ATX headings from a document", async () => {
       const content = `# Overview
 Some text here.
 
@@ -26,7 +26,7 @@ Install steps here.
 Final section.
 ${"padding\n".repeat(1200)}`;
 
-      const outline = generateOutlineFromContent("/workspace/test.md", content);
+      const outline = await generateOutlineFromContent("/workspace/test.md", content);
 
       expect(outline).toBeDefined();
       expect(outline?.path).toBe("/workspace/test.md");
@@ -40,23 +40,23 @@ ${"padding\n".repeat(1200)}`;
       expect(ids).toContain("appendix");
     });
 
-    test("returns undefined for small files", () => {
+    test("returns undefined for small files", async () => {
       const content = "# Tiny\nJust a small file.";
-      const outline = generateOutlineFromContent("/workspace/tiny.md", content);
+      const outline = await generateOutlineFromContent("/workspace/tiny.md", content);
 
       // File is under the 2000-token threshold
       expect(outline).toBeUndefined();
     });
 
-    test("returns undefined for non-markdown files without extractor", () => {
+    test("returns undefined for non-markdown files without extractor", async () => {
       const content = "function foo() {\n  return 1;\n}".repeat(500);
-      const outline = generateOutlineFromContent("/workspace/code.ts", content);
+      const outline = await generateOutlineFromContent("/workspace/code.ts", content);
 
       // No extractor registered for .ts files
       expect(outline).toBeUndefined();
     });
 
-    test("sections have correct line numbers", () => {
+    test("sections have correct line numbers", async () => {
       const content = `line 1
 # First
 line 3
@@ -67,7 +67,7 @@ line 7
 # Third
 line 9\n${"padding\n".repeat(1200)}`;
 
-      const outline = generateOutlineFromContent("/workspace/lines.md", content);
+      const outline = await generateOutlineFromContent("/workspace/lines.md", content);
 
       expect(outline).toBeDefined();
       if (outline === undefined) {
@@ -84,9 +84,9 @@ line 9\n${"padding\n".repeat(1200)}`;
       expect(third?.line).toBe(8);
     });
 
-    test("strips markdown links from heading text", () => {
+    test("strips markdown links from heading text", async () => {
       const content = `# [Installation Guide](docs/install.md)\n\nContent here.\n${"padding\n".repeat(1200)}`;
-      const outline = generateOutlineFromContent("/workspace/links.md", content);
+      const outline = await generateOutlineFromContent("/workspace/links.md", content);
 
       expect(outline).toBeDefined();
       const heading = outline?.sections.find((section) => section.id === "installation-guide");
@@ -96,7 +96,7 @@ line 9\n${"padding\n".repeat(1200)}`;
   });
 
   describe("XML extractor", () => {
-    test("extracts top-level elements with id attributes", () => {
+    test("extracts top-level elements with id attributes", async () => {
       const content = `<root>
   <section id="intro">
     Introduction content here.
@@ -109,7 +109,7 @@ line 9\n${"padding\n".repeat(1200)}`;
   </section>
 </root>`.repeat(50); // Make it large enough to trigger outline
 
-      const outline = generateOutlineFromContent("/workspace/doc.xml", content);
+      const outline = await generateOutlineFromContent("/workspace/doc.xml", content);
 
       expect(outline).toBeDefined();
       const ids = outline?.sections.map((section) => section.id);

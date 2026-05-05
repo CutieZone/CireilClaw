@@ -1,22 +1,12 @@
 import { readFile } from "node:fs/promises";
 
+import type { Section } from "@cireilclaw/sdk";
+
 import { sandboxToReal } from "#util/paths.js";
 
 // Sections carry no content — they identify a named span within a file that
 // can be selectively loaded. The agent sees an outline and chooses which
 // sections to open, trading precision for context budget.
-interface Section {
-  // Stable identifier within the file (e.g. header slug, XML id attribute).
-  id: string;
-  // 1-indexed line number where the section starts.
-  line: number;
-  // Semantic type (e.g. "h1", "h2", "function", "xml-element").
-  type: string;
-  // Human-readable label for display in the outline.
-  label: string;
-  // Approximate line count (used for sizing estimates).
-  lines: number;
-}
 
 interface FileOutline {
   path: string;
@@ -32,7 +22,7 @@ interface Extractor {
   glob: string;
   // Higher priority extractors are tried first.
   priority: number;
-  extract(filePath: string, content: string): Section[];
+  extract(filePath: string, content: string): Section[] | Promise<Section[]>;
 }
 
 // Token estimation heuristic — same as prune.ts CHARS_PER_TOKEN.
@@ -217,7 +207,10 @@ function estimateTokens(content: string): number {
 
 // Generates an outline directly from content without touching the filesystem.
 // Used for testing and when content is already in memory.
-function generateOutlineFromContent(sandboxPath: string, content: string): FileOutline | undefined {
+async function generateOutlineFromContent(
+  sandboxPath: string,
+  content: string,
+): Promise<FileOutline | undefined> {
   const lines = content.split("\n").length;
   const estTokens = estimateTokens(content);
 
@@ -230,7 +223,7 @@ function generateOutlineFromContent(sandboxPath: string, content: string): FileO
   // Try registered extractors in priority order
   for (const extractor of extractors) {
     if (matchesGlob(fileName, extractor.glob)) {
-      const sections = extractor.extract(sandboxPath, content);
+      const sections = await extractor.extract(sandboxPath, content);
       if (sections.length > 0) {
         return { estTokens, lines, path: sandboxPath, sections };
       }
@@ -248,7 +241,7 @@ async function generateOutline(
 ): Promise<FileOutline | undefined> {
   const realPath = sandboxToReal(sandboxPath, agentSlug);
   const text = content ?? (await readFile(realPath, "utf8"));
-  return generateOutlineFromContent(sandboxPath, text);
+  return await generateOutlineFromContent(sandboxPath, text);
 }
 
 export type { Section, FileOutline, Extractor };

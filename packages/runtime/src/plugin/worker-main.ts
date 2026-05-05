@@ -57,6 +57,14 @@ interface PluginModule {
   default?: PluginFactory;
 }
 
+function matchesGlob(filename: string, glob: string): boolean {
+  if (glob.startsWith("*.")) {
+    const ext = glob.slice(1);
+    return filename.endsWith(ext);
+  }
+  return filename === glob;
+}
+
 function isPluginModule(value: unknown): value is PluginModule {
   return typeof value === "object" && value !== null && "default" in value;
 }
@@ -211,6 +219,20 @@ async function main(parent: NonNullable<typeof parentPort>, init: WorkerInit): P
     const ctx = buildCtx(rpc, raw.invocationId, raw.ctx);
     // Plugin tools accept PluginToolContext; ctx built above matches that shape exactly.
     return await def.execute(raw.input, ctx);
+  });
+
+  rpc.handle("extract", async (args) => {
+    const [filePath, content] = args;
+    if (typeof filePath !== "string" || typeof content !== "string") {
+      throw new TypeError("extract called with invalid args");
+    }
+    const fileName = filePath.split("/").pop() ?? filePath;
+    for (const extractor of plugin.extractors ?? []) {
+      if (matchesGlob(fileName, extractor.glob)) {
+        return await extractor.extract(filePath, content);
+      }
+    }
+    return [];
   });
 
   const manifest: ManifestPayload = {

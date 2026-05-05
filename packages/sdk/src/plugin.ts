@@ -1,8 +1,10 @@
+import type { Section } from "#outline.js";
 import type { ToolDef } from "#tool.js";
 
 interface ExtractorDef {
   glob: string;
   priority?: number;
+  extract(filePath: string, content: string): Section[] | Promise<Section[]>;
 }
 
 interface Plugin {
@@ -19,3 +21,4 @@ function definePlugin(factory: PluginFactory): PluginFactory {
 
 export { definePlugin };
 export type { Plugin, PluginFactory, ExtractorDef };
+export type { Section } from "#outline.js";

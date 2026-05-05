@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Worker } from "node:worker_threads";
 
+import type { Section } from "@cireilclaw/sdk";
 import { parse } from "smol-toml";
 import * as vb from "valibot";
 
@@ -228,6 +229,10 @@ class PluginProcess {
     return { allowOverride, name: manifest.pluginName, tools };
   }
 
+  public async extract(filePath: string, content: string): Promise<Section[]> {
+    return await this.rpc.call<Section[]>("extract", [filePath, content]);
+  }
+
   public async terminate(): Promise<void> {
     this.rpc.close();
     await this.worker.terminate();
@@ -394,15 +399,12 @@ async function initializePlugins(): Promise<void> {
       toolNames.join(", "),
     );
 
-    // Register plugin extractors — these are metadata-only registrations.
-    // The actual extraction code runs in the worker and communicates via RPC.
+    // Register plugin extractors — forward extraction calls to the worker via RPC.
     for (const proc of activePlugins) {
       for (const extractor of proc.extractorEntries) {
-        // Plugin extractors are registered as stubs — the extraction code
-        // must be reached via RPC. For now, built-in extractors cover
-        // markdown and XML; plugin extractors are a future extension.
         registerExtractor({
-          extract: (_filePath: string, _content: string) => [],
+          extract: async (filePath: string, content: string) =>
+            await proc.extract(filePath, content),
           glob: extractor.glob,
           priority: extractor.priority ?? 0,
         });

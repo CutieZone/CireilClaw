@@ -44,7 +44,7 @@ Or start from scratch with the minimal `package.json`:
 }
 ```
 
-The `publishConfig` swap is the trick that keeps dev easy: you author in TypeScript under `src/`, but the published tarball advertises `dist/index.mjs` + `.d.mts` so consumers get prebuilt JS without a tsx runtime. `tsdown` emits both on `prepublishOnly`.
+The `publishConfig` swap is the trick that keeps dev easy: you author in TypeScript under `src/`, but the published tarball advertises `dist/index.mjs` + `.d.mts` so consumers get prebuilt JS without a `tsx` runtime. `tsdown` emits both on `prepublishOnly`.
 
 ### The `@cireilclaw` Scope
 
@@ -88,8 +88,73 @@ export default definePlugin(() => ({
       },
     },
   },
+  extractors: [{ glob: "*.txt", priority: 10 }],
 }));
 ```
+
+## Extractors
+
+Plugins may register **extractors** to provide structure for context-management outlines. An extractor matches files by glob and returns an array of sections (heading-like boundaries) that the runtime uses for token-budget pruning.
+
+```typescript
+interface ExtractorDef {
+  glob: string; // e.g. "*.md", "*.xml", "*.custom"
+  priority?: number; // higher = tried first (default 0)
+  extract(filePath: string, content: string): Section[] | Promise<Section[]>;
+}
+
+interface Section {
+  id: string; // stable identifier within the file
+  line: number; // 1-indexed start line
+  type: string; // semantic type (e.g. "function", "class")
+  label: string; // human-readable label
+  lines: number; // approximate line count
+}
+```
+
+Add them to your `Plugin` definition:
+
+```typescript
+import { definePlugin, type Section } from "@cireilclaw/sdk";
+
+export default definePlugin(() => ({
+  name: "example",
+  tools: { ... },
+  extractors: [
+    {
+      glob: "*.custom",
+      priority: 10,
+      extract(_filePath, content) {
+        const sections: Section[] = [];
+        const lines = content.split("\n");
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          if (line?.startsWith("## ")) {
+            const label = line.slice(3).trim();
+            sections.push({
+              id: label.toLowerCase().replace(/\s+/g, "-"),
+              label,
+              line: i + 1,
+              type: "h2",
+              lines: 0,
+            });
+          }
+        }
+        // Compute line counts for each section
+        for (let i = 0; i < sections.length; i++) {
+          const nextLine = sections[i + 1]?.line ?? lines.length + 1;
+          sections[i].lines = nextLine - sections[i].line;
+        }
+        return sections;
+      },
+    },
+  ],
+}));
+```
+
+The runtime orders extractors by priority (highest first) and uses the first one whose glob matches the filepath. Built-in extractors cover `*.md`, `*.xml`, and `*.html` at priority `0`.
+
+Extraction runs inside the plugin's worker. If your extractor throws, the runtime falls through to the next matching extractor or returns no outline for that file.
 
 Conventions:
 
@@ -145,7 +210,7 @@ Notes:
 From `@cireilclaw/sdk`:
 
 - `definePlugin(factory)`: an identity helper; gives you type inference.
-- `Plugin`, `PluginFactory`: the factory's return shape.
+- `Plugin`, `PluginFactory`, `ExtractorDef`: the factory's return shape.
 - `ToolDef`, `Tool`, `ToolResult`, `ToolErrorResult`: tool definition types.
 - `PluginToolContext`, `BasicSession`, `ChannelResolution`, `Mount`: context types.
 - `KeyPool`, `KeyPoolManager`: API key rotation with cooldown.
@@ -174,7 +239,7 @@ Each plugin runs in a dedicated Node worker thread. The runtime talks to it over
 
 **Fire-and-forget callbacks (`addImage`/`addVideo`/`addToolMessage`) don't await.** The RPC fires, you move on. If delivery matters, call them early in `execute`, not in a `finally`.
 
-**`instanceof ToolError` does not cross the boundary.** Every module has its own copy of SDK classes inside the worker's module cache (even at the same realpath, Node workers have separate module state). Throw a `ToolError` inside `execute`; the runtime decodes the serialized form on the other side. Don't build logic on `err instanceof ToolError` in plugin code that catches its own errors. Instead, check `err.name === "ToolError"` if you must, or just rethrow.
+**`instanceof ToolError` does not cross the boundary.** Every module has its own copy of SDK classes inside the worker's module cache (even at the same real path, Node workers have separate module state). Throw a `ToolError` inside `execute`; the runtime decodes the serialized form on the other side. Don't build logic on `err instanceof ToolError` in plugin code that catches its own errors. Instead, check `err.name === "ToolError"` if you must, or just re-throw.
 
 ## Publishing a Plugin
 
@@ -193,13 +258,13 @@ pnpm publish --dry-run --no-git-checks     # inspect the tarball
 pnpm publish --access public --otp=XXXXXX
 ```
 
-`prepublishOnly` runs `tsdown` automatically; pnpm applies `publishConfig` to swap `main`/`exports` → `dist/` at publish time.
+`prepublishOnly` runs `tsdown` automatically; `pnpm` applies `publishConfig` to swap `main`/`exports` → `dist/` at publish time.
 
 ### Semver Policy During 0.X
 
-The SDK is `0.x`, only bump **minor** on any breaking change. Plugins pin peerDep to `^0.x.0` (compatible with any `0.x.y`). When the SDK bumps to `0.(x+1).0`, you update your peerDep range and publish a new plugin version.
+The SDK is `0.x`, only bump **minor** on any breaking change. Plugins pin `peerDep` to `^0.x.0` (compatible with any `0.x.y`). When the SDK bumps to `0.(x+1).0`, you update your `peerDep` range and publish a new plugin version.
 
-There is _no compatibility bridge_: the runtime's realpath check forbids two SDK copies even at the same version. Operators might need `pnpm dedupe` after your update; document this in your plugin's changelog.
+There is _no compatibility bridge_: the runtime's real path check forbids two SDK copies even at the same version. Operators might need `pnpm dedupe` after your update; document this in your plugin's changelog.
 
 ## Debugging
 
@@ -211,9 +276,9 @@ There is _no compatibility bridge_: the runtime's realpath check forbids two SDK
 
 ## Known Limitations
 
-- No plugin lifecycle hooks (`onStart`, `onShutdown`).
+- No plugin life cycle hooks (`onStart`, `onShutdown`).
 - No crash recovery, so if a worker dies, the plugin is dead until process restart.
 - No per-plugin sandboxing (network, filesystem).
-- `ctx.net.fetch` is a local passthrough today.
+- `ctx.net.fetch` is a local pass through today.
 
-Want any of these? File an issue. Subprocess+bubblewrap OR WASM is the natural next step and covers most of them.
+Want any of these? File an issue. Subprocess+`bubblewrap` OR WASM is the natural next step and covers most of them.
