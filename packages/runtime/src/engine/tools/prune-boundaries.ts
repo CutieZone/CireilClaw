@@ -40,6 +40,7 @@ export const pruneBoundaries: ToolDef = {
     "- preserve: message IDs to keep verbatim (exact outputs, schemas, config)\n" +
     "- summary: concise summary preserving decisions, constraints, and file changes\n" +
     "- identifier: short name for this topic (e.g. 'auth-refactor')",
+  // oxlint-disable-next-line typescript/require-await
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     const data = vb.parse(Schema, input);
 

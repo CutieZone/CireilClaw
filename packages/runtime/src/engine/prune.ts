@@ -414,31 +414,31 @@ function applyTopicSubstitution(messages: Message[], summaries: Summary[]): Mess
 
   // Build the result by replacing each summary range
   const result: Message[] = [];
-  let i = 0;
+  let idx = 0;
 
-  while (i < messages.length) {
-    const msg = messages[i];
+  while (idx < messages.length) {
+    const msg = messages[idx];
     if (msg === undefined) {
-      i++;
+      idx++;
       continue;
     }
 
     // Check if this message starts any summary range
-    const summary = summaries.find((s) => s.startMessageId === msg.id);
+    const summary = summaries.find((summ) => summ.startMessageId === msg.id);
     if (summary === undefined) {
       // Not the start of a summary — include normally
       result.push(msg);
-      i++;
+      idx++;
       continue;
     }
 
     // Collect preserved messages within this range
     const preserved: Message[] = [];
-    let j = i;
-    while (j < messages.length) {
-      const rangeMsg = messages[j];
+    let secondaryIdx = idx;
+    while (secondaryIdx < messages.length) {
+      const rangeMsg = messages[secondaryIdx];
       if (rangeMsg === undefined) {
-        j++;
+        secondaryIdx++;
         continue;
       }
       if (rangeMsg.id !== undefined && preservedIds.has(rangeMsg.id)) {
@@ -447,7 +447,7 @@ function applyTopicSubstitution(messages: Message[], summaries: Summary[]): Mess
       if (rangeMsg.id === summary.endMessageId) {
         break;
       }
-      j++;
+      secondaryIdx++;
     }
 
     // Emit the summary message
@@ -465,7 +465,7 @@ function applyTopicSubstitution(messages: Message[], summaries: Summary[]): Mess
     }
 
     // Skip to after the end of this summary range
-    i = j + 1;
+    idx = secondaryIdx + 1;
   }
 
   return result;

@@ -61,7 +61,8 @@ function markdownExtractor(_filePath: string, content: string): Section[] {
   const lines = content.split("\n");
 
   // ATX headings
-  let match: RegExpExecArray | null;
+  // oxlint-disable-next-line unicorn/no-null
+  let match: RegExpExecArray | null = null;
   HEADING_RE.lastIndex = 0;
   while ((match = HEADING_RE.exec(content)) !== null) {
     const level = match[1]?.length ?? 1;
@@ -116,11 +117,14 @@ function markdownExtractor(_filePath: string, content: string): Section[] {
   }
 
   // Sort by line number and compute line counts
-  sections.sort((a, b) => a.line - b.line);
+  sections.sort((lhs, rhs) => lhs.line - rhs.line);
 
-  for (let i = 0; i < sections.length; i++) {
-    const section = sections[i]!;
-    const nextLine = sections[i + 1]?.line ?? lines.length + 1;
+  for (let idx = 0; idx < sections.length; idx++) {
+    const section = sections[idx];
+    if (section === undefined) {
+      throw new TypeError("Unable to find section");
+    }
+    const nextLine = sections[idx + 1]?.line ?? lines.length + 1;
     section.lines = nextLine - section.line;
   }
 
@@ -134,15 +138,14 @@ const XML_TAG_RE = /<(\w+)[^>]*?(?:\sid\s*=\s*"([^"]+)"|\sname\s*=\s*"([^"]+)")[
 function xmlExtractor(_filePath: string, content: string): Section[] {
   const sections: Section[] = [];
   const lines = content.split("\n");
-  let match: RegExpExecArray | null;
+  // oxlint-disable-next-line unicorn/no-null
+  let match: RegExpExecArray | null = null;
 
   XML_TAG_RE.lastIndex = 0;
   while ((match = XML_TAG_RE.exec(content)) !== null) {
-    const tagName = match[1] ?? "element";
-    const idAttr = match[2];
-    const nameAttr = match[3];
-    const id = idAttr ?? nameAttr ?? tagName;
-    const label = idAttr !== undefined ? `${tagName}#${idAttr}` : tagName;
+    const [, tagName, idAttr, nameAttr] = match;
+    const id = idAttr ?? nameAttr ?? tagName ?? "element";
+    const label = idAttr === undefined ? (tagName ?? "element") : `${tagName}#${idAttr}`;
     const lineNum = content.slice(0, match.index).split("\n").length;
 
     sections.push({
@@ -154,11 +157,14 @@ function xmlExtractor(_filePath: string, content: string): Section[] {
     });
   }
 
-  sections.sort((a, b) => a.line - b.line);
+  sections.sort((lhs, rhs) => lhs.line - rhs.line);
 
-  for (let i = 0; i < sections.length; i++) {
-    const section = sections[i]!;
-    const nextLine = sections[i + 1]?.line ?? lines.length + 1;
+  for (let idx = 0; idx < sections.length; idx++) {
+    const section = sections[idx];
+    if (section === undefined) {
+      throw new TypeError("Section was undefined");
+    }
+    const nextLine = sections[idx + 1]?.line ?? lines.length + 1;
     section.lines = nextLine - section.line;
   }
 
@@ -177,7 +183,7 @@ const extractors: Extractor[] = [
 
 function registerExtractor(extractor: Extractor): void {
   // Insert sorted by priority (highest first)
-  const idx = extractors.findIndex((e) => e.priority < extractor.priority);
+  const idx = extractors.findIndex((ext) => ext.priority < extractor.priority);
   if (idx === -1) {
     extractors.push(extractor);
   } else {

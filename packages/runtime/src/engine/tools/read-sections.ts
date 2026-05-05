@@ -54,7 +54,7 @@ export const readSections: ToolDef = {
       };
     }
 
-    const validIds = new Set(outline.sections.map((s) => s.id));
+    const validIds = new Set(outline.sections.map((section) => section.id));
     const invalid = data.sections.filter((id) => !validIds.has(id));
     if (invalid.length > 0) {
       return {

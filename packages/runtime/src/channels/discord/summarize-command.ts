@@ -1,6 +1,5 @@
-import type { CommandInteraction } from "oceanic.js";
 import { ApplicationCommandOptionTypes, ApplicationCommandTypes, MessageFlags } from "oceanic.js";
-import type { CreateApplicationCommandOptions } from "oceanic.js";
+import type { CommandInteraction, CreateApplicationCommandOptions } from "oceanic.js";
 
 import { saveSession } from "#db/sessions.js";
 import { sanitizeError } from "#util/paths.js";
@@ -78,7 +77,7 @@ async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): 
     }
 
     // Check if a summary with this slug already exists
-    const existing = session.summaries.find((s) => s.slug === slug);
+    const existing = session.summaries.find((summary) => summary.slug === slug);
     if (existing !== undefined) {
       await interaction.createFollowup({
         content: `A summary named "${existing.displayName}" already exists. Use \`/unsummarize ${name}\` to remove it first, or choose a different name.`,

@@ -5,7 +5,6 @@ import { parse } from "smol-toml";
 import * as vb from "valibot";
 
 import { loadEngine } from "#config/index.js";
-import type { ProvidersConfig } from "#config/schemas/engine.js";
 import type { SummarizationConfig } from "#config/schemas/summarization.js";
 import { SummarizationConfigSchema } from "#config/schemas/summarization.js";
 import { deleteSummary, saveSummary } from "#db/sessions.js";
@@ -68,14 +67,13 @@ async function loadSummarizationConfig(agentSlug: string): Promise<Summarization
 async function runSummarizer(
   request: SummarizeRequest,
 ): Promise<SummarizeResult | { error: string }> {
-  const engineCfg = await loadEngine(request.agentSlug);
-  const providers = engineCfg as unknown as ProvidersConfig;
+  const providers = await loadEngine(request.agentSlug);
 
   const sumCfg = await loadSummarizationConfig(request.agentSlug);
 
   // Resolve provider: summarization.toml > engine default
   const providerName = sumCfg.provider;
-  const selectedProvider = providerName !== undefined ? providers[providerName] : undefined;
+  const selectedProvider = providerName === undefined ? undefined : providers[providerName];
 
   if (selectedProvider === undefined && providerName !== undefined) {
     return {
@@ -108,7 +106,7 @@ async function runSummarizer(
 // Commits a summary to storage and updates the session's in-memory state.
 function commitSummary(agentSlug: string, session: Session, result: SummarizeResult): void {
   // Remove any existing summary with the same slug
-  const existingIdx = session.summaries.findIndex((s) => s.slug === result.slug);
+  const existingIdx = session.summaries.findIndex((summary) => summary.slug === result.slug);
   if (existingIdx !== -1) {
     session.summaries.splice(existingIdx, 1);
     deleteSummary(agentSlug, session.id(), result.slug);
@@ -139,7 +137,7 @@ function commitSummary(agentSlug: string, session: Session, result: SummarizeRes
 
 // Removes a summary by slug from storage and in-memory state.
 function removeSummary(agentSlug: string, session: Session, slug: string): boolean {
-  const idx = session.summaries.findIndex((s) => s.slug === slug);
+  const idx = session.summaries.findIndex((summary) => summary.slug === slug);
   if (idx === -1) {
     return false;
   }

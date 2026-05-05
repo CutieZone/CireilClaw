@@ -1,6 +1,5 @@
-import type { CommandInteraction } from "oceanic.js";
 import { ApplicationCommandOptionTypes, ApplicationCommandTypes, MessageFlags } from "oceanic.js";
-import type { CreateApplicationCommandOptions } from "oceanic.js";
+import type { CommandInteraction, CreateApplicationCommandOptions } from "oceanic.js";
 
 import { saveSession } from "#db/sessions.js";
 import { removeSummary } from "#engine/summarizer.js";
@@ -68,7 +67,7 @@ async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): 
     if (!removed) {
       // Try to find by display name
       const match = session.summaries.find(
-        (s) => s.displayName.toLowerCase() === name.toLowerCase(),
+        (summary) => summary.displayName.toLowerCase() === name.toLowerCase(),
       );
       if (match !== undefined) {
         removed = removeSummary(ctx.agentSlug, session, match.slug);

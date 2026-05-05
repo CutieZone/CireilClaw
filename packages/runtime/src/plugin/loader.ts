@@ -141,7 +141,7 @@ interface PluginLoadResult {
 class PluginProcess {
   public readonly id: string;
   public readonly ready: Promise<ManifestPayload>;
-  public extractorEntries: { glob: string; priority: number }[] = [];
+  public extractorEntries: { glob: string; priority?: number }[] = [];
   private readonly worker: Worker;
   private readonly rpc: RpcChannel;
   private readonly pending = new Map<string, ToolContext>();
@@ -336,9 +336,9 @@ async function loadPlugins(): Promise<PluginLoadResult[]> {
     try {
       const manifest = await proc.ready;
       if (manifest.extractors !== undefined) {
-        proc.extractorEntries = manifest.extractors.map((e) => ({
-          glob: e.glob,
-          priority: e.priority ?? 0,
+        proc.extractorEntries = manifest.extractors.map((ext) => ({
+          glob: ext.glob,
+          priority: ext.priority ?? 0,
         }));
       }
       activePlugins.push(proc);

@@ -214,7 +214,7 @@ async function main(parent: NonNullable<typeof parentPort>, init: WorkerInit): P
   });
 
   const manifest: ManifestPayload = {
-    extractors: plugin.extractors?.map((e) => ({ glob: e.glob, priority: e.priority })),
+    extractors: plugin.extractors?.map((ext) => ({ glob: ext.glob, priority: ext.priority })),
     pluginName: plugin.name,
     tools: manifestEntries,
   };

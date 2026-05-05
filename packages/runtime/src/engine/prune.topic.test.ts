@@ -9,6 +9,7 @@ function isTextContent(ct: unknown): ct is { content: string; type: "text" } {
 
 describe("applyTopicSubstitution", () => {
   function makeMsg(id: string, role: "user" | "assistant" | "toolResponse" = "user"): Message {
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     return {
       content: { content: `message ${id}`, type: "text" },
       id,
@@ -39,10 +40,13 @@ describe("applyTopicSubstitution", () => {
     const result = applyTopicSubstitution(messages, summaries);
 
     expect(result).toHaveLength(3); // a, summary, d
-    expect(result[0]!.id).toBe("a");
+    expect(result[0]?.id).toBe("a");
 
     // Summary message
-    const summaryMsg = result[1]!;
+    const [, summaryMsg] = result;
+    if (summaryMsg === undefined) {
+      throw new TypeError("Summary message is undefined");
+    }
     expect(summaryMsg.role).toBe("user");
     expect(isTextContent(summaryMsg.content)).toBe(true);
     if (isTextContent(summaryMsg.content)) {
@@ -50,7 +54,7 @@ describe("applyTopicSubstitution", () => {
       expect(summaryMsg.content.content).toContain("Messages b and c summarized.");
     }
 
-    expect(result[2]!.id).toBe("d");
+    expect(result[2]?.id).toBe("d");
   });
 
   test("preserves explicitly marked messages", () => {
@@ -70,15 +74,16 @@ describe("applyTopicSubstitution", () => {
 
     // a, summary, c (preserved), e
     expect(result).toHaveLength(4);
-    expect(result[0]!.id).toBe("a");
+    expect(result[0]?.id).toBe("a");
 
-    const summaryMsg = result[1]!;
+    const [, summaryMsg] = result;
+    if (summaryMsg === undefined) {
+      throw new TypeError("Summary message is undefined");
+    }
     expect(summaryMsg.role).toBe("user");
 
-    const preserved = result[2]!;
-    expect(preserved.id).toBe("c");
-
-    expect(result[3]!.id).toBe("e");
+    expect(result[2]?.id).toBe("c");
+    expect(result[3]?.id).toBe("e");
   });
 
   test("handles multiple summary ranges", () => {
@@ -114,12 +119,12 @@ describe("applyTopicSubstitution", () => {
 
     // summary1, c, summary2, f
     expect(result).toHaveLength(4);
-    const c0 = result[0]!.content;
+    const c0 = result[0]?.content;
     expect(isTextContent(c0) && c0.content).toContain("first");
-    expect(result[1]!.id).toBe("c");
-    const c2 = result[2]!.content;
+    expect(result[1]?.id).toBe("c");
+    const c2 = result[2]?.content;
     expect(isTextContent(c2) && c2.content).toContain("second");
-    expect(result[3]!.id).toBe("f");
+    expect(result[3]?.id).toBe("f");
   });
 
   test("summary with no matching start is ignored", () => {
@@ -138,12 +143,12 @@ describe("applyTopicSubstitution", () => {
     const result = applyTopicSubstitution(messages, summaries);
     // Neither message starts the summary, so both are kept
     expect(result).toHaveLength(2);
-    expect(result[0]!.id).toBe("a");
-    expect(result[1]!.id).toBe("b");
+    expect(result[0]?.id).toBe("a");
+    expect(result[1]?.id).toBe("b");
   });
 
   test("preserve can span across multiple summary ranges", () => {
-    const messages = Array.from({ length: 6 }, (_, i) => makeMsg(String(i)));
+    const messages = Array.from({ length: 6 }, (_unused, idx) => makeMsg(String(idx)));
     const summaries = [
       {
         displayName: "combined",
@@ -159,8 +164,8 @@ describe("applyTopicSubstitution", () => {
 
     // 0, summary, 2 (preserved), 5
     expect(result).toHaveLength(4);
-    expect(result[0]!.id).toBe("0");
-    expect(result[2]!.id).toBe("2");
-    expect(result[3]!.id).toBe("5");
+    expect(result[0]?.id).toBe("0");
+    expect(result[2]?.id).toBe("2");
+    expect(result[3]?.id).toBe("5");
   });
 });

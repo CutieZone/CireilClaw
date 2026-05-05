@@ -12,8 +12,7 @@ import type { Content, ImageContent, ImageRef, VideoContent, VideoRef } from "#e
 import { isVideoContent, isVideoRef } from "#engine/content.js";
 import { isMessage } from "#engine/message.js";
 import type { AssistantContent, Message, UserContent } from "#engine/message.js";
-import type { Session } from "#harness/session.js";
-import type { Summary } from "#harness/session.js";
+import type { Session, Summary } from "#harness/session.js";
 import {
   DiscordSession,
   MatrixSession,

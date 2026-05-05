@@ -29,10 +29,10 @@ ${"padding\n".repeat(1200)}`;
       const outline = generateOutlineFromContent("/workspace/test.md", content);
 
       expect(outline).toBeDefined();
-      expect(outline!.path).toBe("/workspace/test.md");
-      expect(outline!.sections).toHaveLength(5);
+      expect(outline?.path).toBe("/workspace/test.md");
+      expect(outline?.sections).toHaveLength(5);
 
-      const ids = outline!.sections.map((s) => s.id);
+      const ids = outline?.sections.map((section) => section.id);
       expect(ids).toContain("overview");
       expect(ids).toContain("prerequisites");
       expect(ids).toContain("system-requirements");
@@ -40,7 +40,7 @@ ${"padding\n".repeat(1200)}`;
       expect(ids).toContain("appendix");
     });
 
-    test("returns undefined for small files", async () => {
+    test("returns undefined for small files", () => {
       const content = "# Tiny\nJust a small file.";
       const outline = generateOutlineFromContent("/workspace/tiny.md", content);
 
@@ -48,7 +48,7 @@ ${"padding\n".repeat(1200)}`;
       expect(outline).toBeUndefined();
     });
 
-    test("returns undefined for non-markdown files without extractor", async () => {
+    test("returns undefined for non-markdown files without extractor", () => {
       const content = "function foo() {\n  return 1;\n}".repeat(500);
       const outline = generateOutlineFromContent("/workspace/code.ts", content);
 
@@ -70,11 +70,14 @@ line 9\n${"padding\n".repeat(1200)}`;
       const outline = generateOutlineFromContent("/workspace/lines.md", content);
 
       expect(outline).toBeDefined();
-      const { sections } = outline!;
+      if (outline === undefined) {
+        throw new TypeError("Outline is undefined");
+      }
+      const { sections } = outline;
 
-      const first = sections.find((s) => s.id === "first");
-      const second = sections.find((s) => s.id === "second");
-      const third = sections.find((s) => s.id === "third");
+      const first = sections.find((section) => section.id === "first");
+      const second = sections.find((section) => section.id === "second");
+      const third = sections.find((section) => section.id === "third");
 
       expect(first?.line).toBe(2);
       expect(second?.line).toBe(5);
@@ -86,14 +89,14 @@ line 9\n${"padding\n".repeat(1200)}`;
       const outline = generateOutlineFromContent("/workspace/links.md", content);
 
       expect(outline).toBeDefined();
-      const heading = outline!.sections.find((s) => s.id === "installation-guide");
+      const heading = outline?.sections.find((section) => section.id === "installation-guide");
       expect(heading).toBeDefined();
-      expect(heading!.label).toBe("Installation Guide");
+      expect(heading?.label).toBe("Installation Guide");
     });
   });
 
   describe("XML extractor", () => {
-    test("extracts top-level elements with id attributes", async () => {
+    test("extracts top-level elements with id attributes", () => {
       const content = `<root>
   <section id="intro">
     Introduction content here.
@@ -109,7 +112,7 @@ line 9\n${"padding\n".repeat(1200)}`;
       const outline = generateOutlineFromContent("/workspace/doc.xml", content);
 
       expect(outline).toBeDefined();
-      const ids = outline!.sections.map((s) => s.id);
+      const ids = outline?.sections.map((section) => section.id);
       expect(ids).toContain("intro");
       expect(ids).toContain("main");
       expect(ids).toContain("conclusion");
@@ -129,7 +132,7 @@ line 9\n${"padding\n".repeat(1200)}`;
       const extractors = getExtractors();
       expect(extractors.length).toBe(initialCount + 1);
       // Highest priority extractor should be first
-      expect(extractors[0]!.priority).toBe(100);
+      expect(extractors[0]?.priority).toBe(100);
     });
   });
 });

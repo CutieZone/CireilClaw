@@ -84,7 +84,7 @@ export const openFile: ToolDef = {
         // File is small enough — just open the whole thing
         ctx.session.activeFileSections.delete(data.path);
       } else {
-        const validIds = new Set(outline.sections.map((s) => s.id));
+        const validIds = new Set(outline.sections.map((section) => section.id));
         const invalid = data.sections.filter((id) => !validIds.has(id));
         if (invalid.length > 0) {
           throw new ToolError(
@@ -100,7 +100,7 @@ export const openFile: ToolDef = {
     }
 
     return {
-      activeSections: data.sections ?? null,
+      activeSections: data.sections ?? undefined,
       open: [...ctx.session.openedFiles],
       path: data.path,
       success: true,
