@@ -32,6 +32,8 @@ interface UserMessage extends BaseMessage {
 interface SystemMessage extends BaseMessage {
   role: "system";
   content: TextContent;
+  // If false, excluded from persistence. Used for ephemeral prompts like summarizer instructions.
+  persist?: boolean;
 }
 
 interface ToolMessage extends BaseMessage {

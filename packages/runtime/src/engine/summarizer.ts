@@ -10,6 +10,8 @@ import { SummarizationConfigSchema } from "#config/schemas/summarization.js";
 import { deleteSummary, saveSummary } from "#db/sessions.js";
 import type { Message } from "#engine/message.js";
 import type { Session } from "#harness/session.js";
+import colors from "#output/colors.js";
+import { debug } from "#output/log.js";
 import { agentRoot } from "#util/paths.js";
 
 // The system prompt given to the summarizer when identifying topic boundaries.
@@ -55,8 +57,10 @@ async function loadSummarizationConfig(agentSlug: string): Promise<Summarization
   try {
     const content = await readFile(file, "utf8");
     const parsed = parse(content);
-    return vb.parse(SummarizationConfigSchema, parsed);
+    const cfg = vb.parse(SummarizationConfigSchema, parsed);
+    return cfg;
   } catch {
+    debug("No summarization config — using defaults", colors.keyword(agentSlug));
     return {};
   }
 }
@@ -108,6 +112,12 @@ function commitSummary(agentSlug: string, session: Session, result: SummarizeRes
   // Remove any existing summary with the same slug
   const existingIdx = session.summaries.findIndex((summary) => summary.slug === result.slug);
   if (existingIdx !== -1) {
+    debug(
+      "Replacing existing summary",
+      colors.keyword(agentSlug),
+      colors.keyword(session.id()),
+      `slug=${result.slug}`,
+    );
     session.summaries.splice(existingIdx, 1);
     deleteSummary(agentSlug, session.id(), result.slug);
   }
@@ -133,6 +143,16 @@ function commitSummary(agentSlug: string, session: Session, result: SummarizeRes
     startMessageId: result.startMessageId,
     summary: result.summary,
   });
+
+  debug(
+    "Summary committed",
+    colors.keyword(agentSlug),
+    colors.keyword(session.id()),
+    `slug=${result.slug}`,
+    `range=[${result.startMessageId}, ${result.endMessageId}]`,
+    `preserved=${result.preserve.length} messages`,
+    `summary=${result.summary.length} chars`,
+  );
 }
 
 // Removes a summary by slug from storage and in-memory state.
@@ -141,8 +161,17 @@ function removeSummary(agentSlug: string, session: Session, slug: string): boole
   if (idx === -1) {
     return false;
   }
+  const removed = session.summaries[idx];
   session.summaries.splice(idx, 1);
   deleteSummary(agentSlug, session.id(), slug);
+
+  debug(
+    "Summary removed",
+    colors.keyword(agentSlug),
+    colors.keyword(session.id()),
+    `slug=${slug}`,
+    `displayName=${removed?.displayName}`,
+  );
   return true;
 }
 

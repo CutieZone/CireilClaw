@@ -2,6 +2,7 @@ import { ApplicationCommandOptionTypes, ApplicationCommandTypes, MessageFlags } 
 import type { CommandInteraction, CreateApplicationCommandOptions } from "oceanic.js";
 
 import { saveSession } from "#db/sessions.js";
+import { SUMMARIZER_SYSTEM_PROMPT } from "#engine/summarizer.js";
 import { sanitizeError } from "#util/paths.js";
 
 import type { HandlerCtx } from "./handler-ctx.js";
@@ -86,15 +87,25 @@ async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): 
       return;
     }
 
-    // The summarization is requested via the engine. We inject a system
-    // message into the session that tells the agent to invoke the summarizer.
-    // The agent receives a special prompt instructing it to identify the
-    // topic boundaries and call prune-boundaries.
+    // Inject the summarizer system prompt so the agent knows it's now
+    // acting as a context compaction assistant with a specific task.
     session.pendingToolMessages.push({
       content: {
-        content: `<summarization-request name="${name}">${description}</summarization-request>`,
+        content: SUMMARIZER_SYSTEM_PROMPT,
         type: "text",
       },
+      role: "system",
+    });
+
+    // Inject the user's summarization request with the topic name and description.
+    // Marked persist: false so the summarizer system prompt and request don't
+    // pollute the conversation history.
+    session.pendingToolMessages.push({
+      content: {
+        content: `<summarization-request name="${name}">${description}</summarization-request>\n\nCall \`read-session\` if you need to examine history beyond what's visible. When you've identified the range, call \`prune-boundaries\` to commit the compaction.`,
+        type: "text",
+      },
+      persist: false,
       role: "user",
     });
 
@@ -104,6 +115,18 @@ async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): 
       content: `Summarization requested for "${name}". The agent will identify the relevant conversation range and compact it. Use \`/unsummarize ${name}\` to undo.`,
       flags: MessageFlags.EPHEMERAL,
     });
+
+    // Trigger the turn immediately so the agent processes the summarization
+    // request now, rather than waiting for the next user message.
+    if (session.busy) {
+      return;
+    }
+    session.busy = true;
+    try {
+      await agent.runTurn(session);
+    } finally {
+      session.busy = false;
+    }
   } catch (error) {
     await interaction.createFollowup({
       content: `Summarize failed: ${sanitizeError(error, ctx.agentSlug)}`,

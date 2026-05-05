@@ -70,11 +70,42 @@ export const readSession: ToolDef = {
 
     const results = paginated.map((msg) => {
       const content = Array.isArray(msg.content) ? msg.content : [msg.content];
+      const text = content
+        .map((part) => {
+          // Cast through unknown — ContentBlock is a discriminated union on 'type'.
+          switch (part.type) {
+            case "text":
+              return part.content;
+            case "toolCall": {
+              const { name } = part;
+              if (name === "respond") {
+                // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+                const toolInput = part.input as Record<string, unknown> | undefined;
+                const responseContent =
+                  typeof toolInput?.["content"] === "string" ? toolInput["content"] : "";
+                return responseContent;
+              }
+              return `[toolCall: ${name} ${JSON.stringify(part.input)}]`;
+            }
+
+            case "thinking":
+              return `[thinking: ${part.thinking.slice(0, 200)}]`;
+            case "redacted_thinking":
+              return "[redacted_thinking]";
+            case "image":
+            case "image_ref":
+              return "[image]";
+            case "video":
+            case "video_ref":
+              return "[video]";
+            default:
+              return "[unknown]";
+          }
+        })
+        .filter((txt) => txt.length > 0)
+        .join("\n");
       return {
-        content: content
-          .filter((part) => "content" in part)
-          .map((part) => part.content)
-          .join("\n"),
+        content: text,
         role: msg.role,
         timestamp: msg.timestamp,
       };

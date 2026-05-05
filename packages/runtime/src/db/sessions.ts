@@ -89,12 +89,15 @@ function serializeHistory(
     return ct;
   }
 
-  // Filter out non-persistent messages (e.g., reply context) before serializing.
+  // Filter out non-persistent messages (e.g., reply context, summarizer prompts).
   const persistable = history.filter((msg) => {
-    if (msg.role !== "user") {
-      return true;
+    if (msg.role === "user" && msg.persist === false) {
+      return false;
     }
-    return msg.persist !== false;
+    if (msg.role === "system" && msg.persist === false) {
+      return false;
+    }
+    return true;
   });
 
   const serialized = persistable.map((msg) => ({
