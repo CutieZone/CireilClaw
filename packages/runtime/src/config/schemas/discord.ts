@@ -54,9 +54,9 @@ const DiscordConfigSchema = vb.strictObject({
       vb.number(),
       vb.integer(),
       vb.check((it) => it > 0, "Must be a positive integer greater than zero"),
-      vb.description("Timeout for the Discord REST client"),
+      vb.description("Timeout for the Discord REST client (in milliseconds)"),
     ),
-    30,
+    30_000,
   ),
   token: vb.pipe(
     nonEmptyString,
