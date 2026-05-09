@@ -49,6 +49,15 @@ const DiscordConfigSchema = vb.strictObject({
     vb.regex(/[0-9]+/),
     vb.description("The ID of the 'owner' of the agent."),
   ),
+  timeout: vb.optional(
+    vb.pipe(
+      vb.number(),
+      vb.integer(),
+      vb.check((it) => it > 0, "Must be a positive integer greater than zero"),
+      vb.description("Timeout for the Discord REST client"),
+    ),
+    30,
+  ),
   token: vb.pipe(
     nonEmptyString,
     vb.description("The bot token from https://discord.com/developers/applications"),

@@ -1051,7 +1051,10 @@ async function handleInteractionCreate(
 }
 
 async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicClient> {
-  const { access, directMessages, token, ownerId } = await loadChannel("discord", agentSlug);
+  const { access, directMessages, token, ownerId, timeout } = await loadChannel(
+    "discord",
+    agentSlug,
+  );
 
   const agent = owner.agents.get(agentSlug);
   if (agent === undefined) {
@@ -1068,7 +1071,9 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
         Intents.GUILD_MESSAGE_REACTIONS |
         Intents.DIRECT_MESSAGE_REACTIONS,
     },
-    rest: {},
+    rest: {
+      requestTimeout: timeout,
+    },
   });
 
   // Store client and ownerId on the agent for channel resolution
