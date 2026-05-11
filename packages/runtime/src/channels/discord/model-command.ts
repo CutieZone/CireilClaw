@@ -135,6 +135,10 @@ async function handleOverride(interaction: CommandInteraction, ctx: HandlerCtx):
   async function success(model: string, provider: string): Promise<void> {
     const session = getSession(interaction, ctx);
     if (session === undefined) {
+      await interaction.createFollowup({
+        content: "No active session to apply overrides in.",
+        flags: MessageFlags.EPHEMERAL,
+      });
       return;
     }
 
