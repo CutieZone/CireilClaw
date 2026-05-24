@@ -7,6 +7,14 @@ import { generateOutline } from "#engine/outline.js";
 import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
 
 const Schema = vb.strictObject({
+  all: vb.exactOptional(
+    vb.pipe(
+      vb.boolean(),
+      vb.description(
+        "Open all sections from the file outline. Mutually exclusive with `sections` and `closeSections`.",
+      ),
+    ),
+  ),
   closeSections: vb.exactOptional(
     vb.pipe(
       vb.array(vb.pipe(vb.string(), vb.nonEmpty())),
@@ -33,7 +41,7 @@ const Schema = vb.strictObject({
 export const openFile: ToolDef = {
   description:
     "Pin a file to the system prompt so its full contents are included in every subsequent turn. The file stays pinned until you call `close-file`.\n\n" +
-    "For large files, you can provide `sections` to open only specific sections from the file outline (as returned by `read`). " +
+    "For large files, you can provide `sections` to open only specific sections from the file outline (as returned by `read`), or use `all` to open every section at once. " +
     "Use `closeSections` to remove sections without closing the entire file. If `sections` is omitted, the entire file is pinned.\n\n" +
     "When to use:\n" +
     "- You need to reference or edit a file across multiple turns and want its contents always visible.\n\n" +
@@ -43,6 +51,14 @@ export const openFile: ToolDef = {
     "Note that paths used here *must* be absolute.",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     const data = vb.parse(Schema, input);
+
+    if (data.all === true && (data.sections !== undefined || data.closeSections !== undefined)) {
+      throw new ToolError(
+        "`all` is mutually exclusive with `sections` and `closeSections`.",
+        "Use `all` alone, or use `sections` / `closeSections` instead.",
+      );
+    }
+
     const realPath = await ctx.paths.resolve(data.path);
 
     await ctx.paths.checkConditionalAccess(data.path);
@@ -76,7 +92,20 @@ export const openFile: ToolDef = {
 
     ctx.session.openedFiles.add(data.path);
 
-    if (data.sections !== undefined && data.sections.length > 0) {
+    if (data.all === true) {
+      // Open all sections from the outline
+      const content = await readFile(realPath, "utf8");
+      const outline = await generateOutline(data.path, ctx.agentSlug, content);
+      if (outline === undefined) {
+        // File is small enough — just open the whole thing
+        ctx.session.activeFileSections.delete(data.path);
+      } else {
+        ctx.session.activeFileSections.set(
+          data.path,
+          new Set(outline.sections.map((section) => section.id)),
+        );
+      }
+    } else if (data.sections !== undefined && data.sections.length > 0) {
       // Validate sections against the file outline
       const content = await readFile(realPath, "utf8");
       const outline = await generateOutline(data.path, ctx.agentSlug, content);
@@ -99,8 +128,10 @@ export const openFile: ToolDef = {
       ctx.session.activeFileSections.delete(data.path);
     }
 
+    const activeSections = ctx.session.activeFileSections.get(data.path);
+
     return {
-      activeSections: data.sections ?? undefined,
+      activeSections: activeSections === undefined ? undefined : [...activeSections],
       open: [...ctx.session.openedFiles],
       path: data.path,
       success: true,
