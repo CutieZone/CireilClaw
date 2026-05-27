@@ -1,5 +1,6 @@
 import { buildApplication, buildRouteMap } from "@stricli/core";
 
+import { codexCommand } from "#cli/codex-command.js";
 import { repairCommand } from "#cli/repair-command.js";
 import { runCommand } from "#cli/run-command.js";
 import { tuiCommand } from "#cli/tui-command.js";
@@ -14,6 +15,7 @@ const routes = buildRouteMap({
   },
   routes: {
     clear: clearCommand,
+    codex: codexCommand,
     init: initCommand,
     migrate: migrateCommand,
     repair: repairCommand,

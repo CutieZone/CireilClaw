@@ -14,9 +14,10 @@ isGlobalDefault = true
 #
 # apiBase               (required)  Valid API base URL
 # apiKey                (optional)  String or array of strings for key pooling. Default: "not-needed"
+# authId                (optional)  Local OAuth credential ID for providers like openai-codex. Default: "default"
 # defaultModel          (required)  The default model identifier
 # isGlobalDefault       (optional)  One provider must have this set to true. Default: false
-# kind                  (optional)  "openai" or "anthropic". Default: "openai"
+# kind                  (optional)  "openai", "anthropic", or "openai-codex". Default: "openai"
 # availableModels       (optional)  List of model names, or "analyze" for auto-resolution. Default: "analyze"
 # maxGenerationRetries  (optional)  How many times generation can fail before crashing. Default: 2
 # maxTurns              (optional)  Number of conversation turns sent to the API. Default: 30
@@ -24,6 +25,15 @@ isGlobalDefault = true
 # useJpegForImages      (optional)  Force JPEG over WEBP for images. Default: false
 # useToolChoiceAuto     (optional)  Prefer tool_choice: auto over required. Default: false
 # customHeaders         (optional)  Custom headers for generation requests
+#
+# OpenAI Codex OAuth example:
+#   Run `cireilclaw codex` first to store ChatGPT OAuth credentials.
+#   [codex]
+#   kind = "openai-codex"
+#   apiBase = "https://chatgpt.com/backend-api"
+#   authId = "default"
+#   defaultModel = "gpt-5.1-codex-medium"
+#   availableModels = ["gpt-5.1-codex-medium", "gpt-5.2-codex-high", "gpt-5.5-codex-high"]
 #
 # models                (optional)  Model-specific overrides, keyed by model name:
 #   [my-provider.models.gpt-4o]

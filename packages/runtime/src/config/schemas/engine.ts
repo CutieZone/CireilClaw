@@ -36,6 +36,12 @@ type ModelConfig = vb.InferOutput<typeof ModelConfigSchema>;
 const ProviderConfigSchema = vb.strictObject({
   apiBase: vb.pipe(nonEmptyString, vb.url(), vb.description("A valid API base URL")),
   apiKey: vb.exactOptional(ApiKeySchema, "not-needed"),
+  authId: vb.pipe(
+    vb.exactOptional(nonEmptyString, "default"),
+    vb.description(
+      "Credential ID for providers that use local OAuth credentials, such as openai-codex",
+    ),
+  ),
   availableModels: vb.pipe(
     vb.exactOptional(
       vb.union([vb.pipe(vb.array(nonEmptyString), vb.minLength(1)), vb.literal("analyze")]),

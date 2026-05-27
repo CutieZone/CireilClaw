@@ -17,6 +17,7 @@ import type { Context, UsageInfo } from "#engine/context.js";
 import { GenerationNoToolCallsError, ToolError, ParseError } from "#engine/errors.js";
 import { generate as generateAnthropic } from "#engine/provider/anthropic.js";
 import { generate as generateOai } from "#engine/provider/oai.js";
+import { generate as generateOpenAiCodex } from "#engine/provider/openai-codex.js";
 import { getToolRegistry } from "#engine/tools/index.js";
 import type { ToolContext } from "#engine/tools/tool-def.js";
 import type {
@@ -357,6 +358,21 @@ export async function runTurn(
               customHeaders: selectedProvider.customHeaders,
               reasoning: modelCfg.reasoning,
               reasoningBudget: modelCfg.reasoningBudget,
+            },
+          ));
+          break;
+        }
+
+        case "openai-codex": {
+          ({ message: assistantMsg, usage } = await generateOpenAiCodex(
+            context,
+            selectedProvider.apiBase,
+            selectedModel,
+            {
+              authId: selectedProvider.authId,
+              customHeaders: selectedProvider.customHeaders,
+              forceJpeg: selectedProvider.useJpegForImages,
+              reasoning: modelCfg.reasoning,
             },
           ));
           break;

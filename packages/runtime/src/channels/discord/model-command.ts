@@ -11,6 +11,7 @@ import { loadEngine } from "#config/index.js";
 import type { ProviderConfig } from "#config/schemas/engine.js";
 import { nonEmptyString } from "#config/schemas/shared.js";
 import { saveSession } from "#db/sessions.js";
+import { OPENAI_CODEX_MODELS } from "#engine/provider/openai-codex.js";
 import { DiscordSession } from "#harness/session.js";
 import colors from "#output/colors.js";
 import { debug, warning } from "#output/log.js";
@@ -91,6 +92,9 @@ async function fetchModelListFor(
 
       return list.data.map((it) => ({ id: it.id, name: it.name ?? it.id }));
     }
+    case "openai-codex":
+      return OPENAI_CODEX_MODELS.map((id) => ({ id, name: id }));
+
     case "anthropic": {
       const modelList = await fetch(`${selected.apiBase}/models`, {
         headers: {

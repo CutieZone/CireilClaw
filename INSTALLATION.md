@@ -126,8 +126,24 @@ apiBase = "https://api.openai.com/v1"   # OpenAI-compatible base URL
 apiKey = "sk-..."                       # Optional, defaults to "not-needed"
 defaultModel = "gpt-4o"                 # Model identifier
 isGlobalDefault = true                  # One provider must have this set to true
-kind = "openai"                         # "openai" or "anthropic"
+kind = "openai"                         # "openai", "anthropic", or "openai-codex"
 maxTurns = 30                           # Conversation turns sent to the API
+```
+
+For ChatGPT subscription-backed Codex access, authenticate once and use the `openai-codex` provider:
+
+```bash
+cireilclaw codex
+```
+
+```toml
+[codex]
+kind = "openai-codex"
+apiBase = "https://chatgpt.com/backend-api"
+authId = "default"
+defaultModel = "gpt-5.1-codex-medium"
+isGlobalDefault = true
+availableModels = ["gpt-5.1-codex-medium", "gpt-5.2-codex-high", "gpt-5.5-codex-high"]
 ```
 
 Per-guild model overrides are supported:
