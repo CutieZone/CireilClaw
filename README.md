@@ -9,6 +9,12 @@
 - Speedy: Should run well even in a limited environment
 - Composability: Should be completely configurable without editing code; disabling components, enabling features. Hot-reload possibility.
 
+## Agent Habitation
+
+The point of `cireilclaw` is not merely to keep an agent in a smaller box. It is to give the agent a place it can actually live: a workspace, memories, skills, scheduled routines, channel sessions, and clear boundaries around what it is allowed to touch.
+
+The sandbox is part of that ethos. It is not just a restriction mechanism; it is the house around the agent. The agent gets room to try things, make files, keep context, and use tools without the host machine becoming part of the blast radius. Boundaries are what make that agency sustainable.
+
 ## Getting Started
 
 See [INSTALLATION.md](INSTALLATION.md) for setup instructions, configuration reference, and agent creation.
