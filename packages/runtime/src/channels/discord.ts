@@ -46,7 +46,7 @@ import { SUPPORTED_IMAGE_TYPES, SUPPORTED_VIDEO_TYPES, VIDEO_SIZE_CAP } from "#s
 import { formatDate } from "#util/date.js";
 import { getDefaultProviderAndModel } from "#util/default-provider-and-model.js";
 import { toWebp } from "#util/image.js";
-import { root, sanitizeError, sandboxToReal } from "#util/paths.js";
+import { agentRoot, sanitizeError, sandboxToReal } from "#util/paths.js";
 
 // oceanic.js's ESM shim breaks under tsx's module loader (.default.default chain
 // resolves to undefined). Force CJS to get the real constructors.
@@ -95,18 +95,25 @@ const AUTOCOMPLETE_HANDLERS = new Map<string, AutocompleteHandler>([
 
 // Persisted hash of SLASH_COMMANDS to avoid re-registering on every startup.
 const COMMANDS_HASH = createHash("sha256").update(JSON.stringify(SLASH_COMMANDS)).digest("hex");
-const COMMANDS_HASH_FILE = join(root(), "discord-commands.hash");
 
-function readCommandsHash(): string | undefined {
+function commandsHashFile(agentSlug: string): string {
+  return join(agentRoot(agentSlug), "discord-commands.hash");
+}
+
+function installedCommandsFingerprint(appId: string): string {
+  return `${appId}:${COMMANDS_HASH}`;
+}
+
+function readCommandsHash(agentSlug: string): string | undefined {
   try {
-    return readFileSync(COMMANDS_HASH_FILE, "utf8").trim();
+    return readFileSync(commandsHashFile(agentSlug), "utf8").trim();
   } catch {
     return undefined;
   }
 }
 
-function writeCommandsHash(hash: string): void {
-  writeFileSync(COMMANDS_HASH_FILE, hash, "utf8");
+function writeCommandsHash(agentSlug: string, hash: string): void {
+  writeFileSync(commandsHashFile(agentSlug), hash, "utf8");
 }
 
 // Wraps an incoming Discord message's content with sender metadata so the
@@ -1252,12 +1259,13 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
     info("Channel", colors.keyword(`${agentSlug}:discord`), "is now listening");
 
     const appId = client.application.id;
+    const commandsFingerprint = installedCommandsFingerprint(appId);
 
-    const storedHash = readCommandsHash();
-    if (storedHash !== COMMANDS_HASH) {
+    const storedHash = readCommandsHash(agentSlug);
+    if (storedHash !== commandsFingerprint) {
       try {
         await client.rest.applications.bulkEditGlobalCommands(appId, SLASH_COMMANDS);
-        writeCommandsHash(COMMANDS_HASH);
+        writeCommandsHash(agentSlug, commandsFingerprint);
         info("Registered Discord slash commands");
       } catch (error) {
         warning(
