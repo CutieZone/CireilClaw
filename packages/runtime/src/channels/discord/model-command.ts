@@ -4,14 +4,11 @@ import type {
   CommandInteraction,
   CreateApplicationCommandOptions,
 } from "oceanic.js";
-import * as vb from "valibot";
 
 import type { HandlerCtx } from "#channels/discord/handler-ctx.js";
 import { loadEngine } from "#config/index.js";
-import type { ProviderConfig } from "#config/schemas/engine.js";
-import { nonEmptyString } from "#config/schemas/shared.js";
 import { saveSession } from "#db/sessions.js";
-import { OPENAI_CODEX_MODELS } from "#engine/provider/openai-codex.js";
+import { fetchModelMetadataFor } from "#engine/provider/model-metadata.js";
 import { DiscordSession } from "#harness/session.js";
 import colors from "#output/colors.js";
 import { debug, warning } from "#output/log.js";
@@ -56,71 +53,6 @@ const definition: CreateApplicationCommandOptions = {
   ],
   type: ApplicationCommandTypes.CHAT_INPUT,
 };
-
-const OpenAIModelListSchema = vb.object({
-  data: vb.array(
-    vb.object({
-      id: nonEmptyString,
-      name: vb.exactOptional(nonEmptyString),
-    }),
-  ),
-});
-
-const AnthropicModelListSchema = vb.object({
-  data: vb.array(
-    vb.object({
-      id: nonEmptyString,
-    }),
-  ),
-});
-
-async function fetchModelListFor(
-  selected: ProviderConfig,
-): Promise<{ name: string; id: string }[]> {
-  const key = Array.isArray(selected.apiKey) ? selected.apiKey[0] : selected.apiKey;
-
-  switch (selected.kind) {
-    case "openai": {
-      const modelList = await fetch(`${selected.apiBase}/models`, {
-        headers: {
-          Authorization: `Bearer ${key}`,
-        },
-      });
-
-      const json = await modelList.json();
-      const list = vb.parse(OpenAIModelListSchema, json);
-
-      return list.data.map((it) => ({ id: it.id, name: it.name ?? it.id }));
-    }
-    case "openai-codex":
-      return OPENAI_CODEX_MODELS.map((id) => ({ id, name: id }));
-
-    case "anthropic": {
-      const modelList = await fetch(`${selected.apiBase}/models`, {
-        headers: {
-          Authorization: `Bearer ${key}`,
-          "Content-Type": "application/json",
-          "anthropic-beta": "oauth-2025-04-20,interleaved-thinking-2025-05-14",
-          "anthropic-version": "2023-06-01",
-        },
-      });
-
-      const json = await modelList.json();
-
-      const list = vb.parse(AnthropicModelListSchema, json);
-
-      return list.data.map((it) => ({
-        id: it.id,
-        name: it.id,
-      }));
-    }
-    default: {
-      const _exhaustive = selected.kind;
-      // oxlint-disable-next-line typescript/restrict-template-expressions
-      throw new Error(`Unimplemented provider: ${_exhaustive}`);
-    }
-  }
-}
 
 function getSession(interaction: CommandInteraction, ctx: HandlerCtx): DiscordSession | undefined {
   const sessionId =
@@ -191,7 +123,7 @@ async function handleOverride(interaction: CommandInteraction, ctx: HandlerCtx):
   }
 
   if (providerCfg.availableModels === "analyze") {
-    const models = await fetchModelListFor(providerCfg);
+    const models = await fetchModelMetadataFor(providerCfg);
 
     if (models.some((it) => it.id === model.value)) {
       await success(model.value, provider.value);
@@ -333,7 +265,7 @@ async function handleAutocomplete(
       let models: { value: string; name: string }[] | undefined = undefined;
 
       if (selected?.availableModels === "analyze") {
-        const tmp = await fetchModelListFor(selected);
+        const tmp = await fetchModelMetadataFor(selected);
         models = tmp
           .filter(
             ({ name, id }) =>

@@ -13,9 +13,15 @@ import { DefaultReasoningBudget, DefaultToolFailThreshold } from "#config/schema
 import { getDb } from "#db/index.js";
 import { hashImage } from "#db/sessions.js";
 import type { ToolCallContent } from "#engine/content.js";
+import {
+  CONTEXT_PRUNE_WARNING,
+  computeContextUsageSnapshot,
+  formatPromptMetadata,
+} from "#engine/context-usage.js";
 import type { Context, UsageInfo } from "#engine/context.js";
 import { GenerationNoToolCallsError, ToolError, ParseError } from "#engine/errors.js";
 import { generate as generateAnthropic } from "#engine/provider/anthropic.js";
+import { resolveModelContextWindow } from "#engine/provider/model-metadata.js";
 import { generate as generateOai } from "#engine/provider/oai.js";
 import { generate as generateOpenAiCodex } from "#engine/provider/openai-codex.js";
 import { getToolRegistry } from "#engine/tools/index.js";
@@ -205,6 +211,14 @@ export async function runTurn(
       toolFailThreshold: DefaultToolFailThreshold,
     };
 
+  const contextBudget = modelCfg.contextBudget ?? 0.6;
+  const contextHardBudget = modelCfg.contextHardBudget ?? 0.85;
+  const effectiveContextWindow = await resolveModelContextWindow(
+    selectedProvider,
+    selectedModel,
+    modelCfg,
+  );
+
   let generationRetries = 0;
   // Tracks consecutive failures per tool; disables the tool after hitting the threshold.
   const toolConsecutiveFailures = new Map<string, number>();
@@ -275,14 +289,15 @@ export async function runTurn(
       modelCfg.supportsVideo,
     );
 
+    const systemTokens = estimateSystemPrompt(prompt);
     const { modifiedHistory, newCursor } = pruneHistory(
       session.history,
       session.historyCursor,
       selectedProvider.maxTurns,
-      modelCfg.contextWindow,
-      modelCfg.contextBudget ?? 0.6,
-      modelCfg.contextHardBudget ?? 0.85,
-      estimateSystemPrompt(prompt),
+      effectiveContextWindow,
+      contextBudget,
+      contextHardBudget,
+      systemTokens,
     );
     session.history = modifiedHistory;
     session.historyCursor = newCursor;
@@ -306,10 +321,27 @@ export async function runTurn(
       modelCfg.supportsVideo,
     );
 
-    // Append an ephemeral date reminder so the LLM always sees the current time
-    // at the very end of context, preventing date hallucination from stale history.
+    const usageSnapshot = computeContextUsageSnapshot({
+      contextBudget,
+      contextHardBudget,
+      contextWindow: effectiveContextWindow,
+      messages: filteredMessages,
+      systemTokens,
+    });
+    const shouldWarnBeforePrune =
+      usageSnapshot.shouldWarnBeforePrune &&
+      session.lastContextWarningCursor !== session.historyCursor;
+
+    let promptMetadata = formatPromptMetadata(await formatDate(), usageSnapshot);
+    if (shouldWarnBeforePrune) {
+      promptMetadata = `${promptMetadata}\n${CONTEXT_PRUNE_WARNING}`;
+      session.lastContextWarningCursor = session.historyCursor;
+    }
+
+    // Append ephemeral prompt metadata so the LLM always sees current context
+    // at the very end, preventing stale-history date and budget mistakes.
     filteredMessages.push({
-      content: { content: `Current date: ${await formatDate()}`, type: "text" },
+      content: { content: promptMetadata, type: "text" },
       role: "user",
     });
 

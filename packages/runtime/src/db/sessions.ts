@@ -209,10 +209,13 @@ async function deserializeHistory(json: string, agentSlug: string): Promise<Mess
 // Channel meta
 // ---------------------------------------------------------------------------
 
+const LastContextWarningCursorSchema = vb.pipe(vb.number(), vb.integer(), vb.minValue(0));
+
 const DiscordMetaSchema = vb.object({
   channelId: nonEmptyString,
   guildId: vb.exactOptional(nonEmptyString),
   isNsfw: vb.exactOptional(vb.boolean()),
+  lastContextWarningCursor: vb.exactOptional(LastContextWarningCursorSchema),
   selectedModel: vb.exactOptional(nonEmptyString),
   selectedProvider: vb.exactOptional(nonEmptyString),
 });
@@ -220,6 +223,7 @@ const DiscordMetaSchema = vb.object({
 type DiscordMeta = vb.InferOutput<typeof DiscordMetaSchema>;
 
 const MatrixMetaSchema = vb.object({
+  lastContextWarningCursor: vb.exactOptional(LastContextWarningCursorSchema),
   roomId: nonEmptyString,
   selectedModel: vb.exactOptional(nonEmptyString),
   selectedProvider: vb.exactOptional(nonEmptyString),
@@ -267,17 +271,20 @@ function _flushSession(agentSlug: string, session: Session): void {
       channelId: session.channelId,
       guildId: session.guildId,
       isNsfw: session.isNsfw,
+      lastContextWarningCursor: session.lastContextWarningCursor,
       selectedModel: session.selectedModel,
       selectedProvider: session.selectedProvider,
     } satisfies DiscordMeta;
   } else if (session.channel === "matrix") {
     meta = {
+      lastContextWarningCursor: session.lastContextWarningCursor,
       roomId: session.roomId,
       selectedModel: session.selectedModel,
       selectedProvider: session.selectedProvider,
     };
   } else {
     meta = {
+      lastContextWarningCursor: session.lastContextWarningCursor,
       selectedModel: session.selectedModel,
       selectedProvider: session.selectedProvider,
     };
@@ -383,18 +390,18 @@ async function loadSessions(agentSlug: string): Promise<Map<string, Session>> {
       continue;
     }
 
-    if (session.selectedModel === undefined || session.selectedProvider === undefined) {
-      const common = vb.safeParse(
-        vb.looseObject({
-          selectedModel: vb.exactOptional(nonEmptyString),
-          selectedProvider: vb.exactOptional(nonEmptyString),
-        }),
-        metaJson,
-      );
-      if (common.success) {
-        session.selectedModel ??= common.output.selectedModel;
-        session.selectedProvider ??= common.output.selectedProvider;
-      }
+    const common = vb.safeParse(
+      vb.looseObject({
+        lastContextWarningCursor: vb.exactOptional(LastContextWarningCursorSchema),
+        selectedModel: vb.exactOptional(nonEmptyString),
+        selectedProvider: vb.exactOptional(nonEmptyString),
+      }),
+      metaJson,
+    );
+    if (common.success) {
+      session.lastContextWarningCursor = common.output.lastContextWarningCursor;
+      session.selectedModel ??= common.output.selectedModel;
+      session.selectedProvider ??= common.output.selectedProvider;
     }
     session.history = history;
     session.historyCursor = row.historyCursor;

@@ -49,6 +49,8 @@ abstract class BaseSession {
   public lastActivity = 0;
   // Timestamp (ms) of the most recent heartbeat turn for this session.
   public lastHeartbeatAt?: number;
+  // Cursor value when the model was last asked to warn about imminent token pruning.
+  public lastContextWarningCursor?: number;
   // Optional hook checked by Harness.send() — return false to suppress delivery.
   public sendFilter?: (content: string) => boolean = undefined;
 
@@ -64,6 +66,7 @@ abstract class BaseSession {
     this.pendingToolMessages = [];
     this.pendingImages = [];
     this.pendingVideos = [];
+    this.lastContextWarningCursor = undefined;
     this.stopRequested = false;
   }
 }
