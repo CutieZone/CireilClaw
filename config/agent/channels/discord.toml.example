@@ -3,6 +3,7 @@
 
 token = "" # Bot token from https://discord.com/developers/applications
 ownerId = "" # Your Discord user ID (numeric string)
+# timeout = 60000 # Discord REST request timeout in ms. Default: 60000
 
 # [access]
 # mode = "disabled"             # "disabled", "allowlist", or "denylist". Default: "disabled"

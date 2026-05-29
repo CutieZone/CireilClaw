@@ -191,6 +191,7 @@ hostEnvPassthrough = []          # Host env vars to pass through
 ```toml
 token = "your-bot-token"
 ownerId = "your-discord-user-id"
+# timeout = 60000 # Discord REST request timeout in ms. Default: 60000
 
 [access]
 mode = "disabled"             # "disabled", "allowlist", or "denylist"

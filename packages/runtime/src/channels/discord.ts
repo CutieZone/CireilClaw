@@ -30,9 +30,11 @@ import type { HandlerCtx } from "#channels/discord/handler-ctx.js";
 import * as inviteCommand from "#channels/discord/invite-command.js";
 import * as modelCommand from "#channels/discord/model-command.js";
 import * as repairCommand from "#channels/discord/repair-command.js";
+import { runDiscordRestWithRetries } from "#channels/discord/rest-retry.js";
 import * as stopCommand from "#channels/discord/stop-command.js";
 import * as summarizeCommand from "#channels/discord/summarize-command.js";
 import * as unsummarizeCommand from "#channels/discord/unsummarize-command.js";
+import { sendDiscordWarningMessage } from "#channels/discord/warning-message.js";
 import { loadChannel, loadEngine } from "#config/index.js";
 import { saveSession } from "#db/sessions.js";
 import type { ImageContent, TextContent, VideoContent } from "#engine/content.js";
@@ -630,7 +632,28 @@ async function handleMessageCreate(
     return;
   }
 
-  const msgChannel = await client.rest.channels.get(msg.channelID);
+  const msgChannel = await runDiscordRestWithRetries(
+    "GET /channels/{id}",
+    async () => await client.rest.channels.get(msg.channelID),
+  ).catch(async (error: unknown) => {
+    warning(
+      "Failed to fetch Discord channel",
+      colors.keyword(msg.channelID),
+      "after retries:",
+      error,
+    );
+    const reason = sanitizeError(error, agentSlug);
+    await sendDiscordWarningMessage(
+      client,
+      msg,
+      "Discord error",
+      `Could not fetch channel metadata after retrying Discord REST timeouts; this message was not processed. ${reason}`,
+    );
+    return undefined;
+  });
+  if (msgChannel === undefined) {
+    return;
+  }
 
   if (
     msgChannel.type === ChannelTypes.GROUP_DM ||
@@ -829,29 +852,7 @@ async function handleMessageCreate(
         warning("Stack trace:", error.stack);
       }
       const reason = sanitizeError(error, agentSlug);
-      try {
-        const newMsg = await msgChannel.createMessage({
-          allowedMentions: {
-            repliedUser: true,
-          },
-          content: `⚠️ Engine error: ${reason}\n\n-# agent owner can react with ✨ to delete`,
-          messageReference: {
-            channelID: msg.channelID,
-            guildID: msg.guildID ?? undefined,
-            messageID: msg.id,
-          },
-        });
-
-        await newMsg.createReaction("✨");
-
-        // oxlint-disable-next-line no-shadow
-      } catch (error) {
-        warning(
-          "Failed to send engine error Discord message",
-          error instanceof Error ? error.message : String(error),
-        );
-        // Best-effort.
-      }
+      await sendDiscordWarningMessage(client, msg, "Engine error", reason);
     }
   } finally {
     saveSession(agent.slug, session);
@@ -884,7 +885,9 @@ async function handleMessageReactionAdd(
 
     if (
       realMsg.content.startsWith("⚠️ Engine error") ||
-      realMsg.content.startsWith(":warning: Engine error")
+      realMsg.content.startsWith(":warning: Engine error") ||
+      realMsg.content.startsWith("⚠️ Discord error") ||
+      realMsg.content.startsWith(":warning: Discord error")
     ) {
       await realMsg.delete("No longer necessary");
     }
