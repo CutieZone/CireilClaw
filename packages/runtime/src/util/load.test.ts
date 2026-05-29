@@ -49,9 +49,11 @@ describe("loadBlocks", () => {
     });
 
     const result = await loadBlocks("testagent");
-    expect(Object.keys(result)).toEqual(["person", "identity", "long-term", "soul", "style-notes"]);
-    expect(result["person"].content).toContain("person-content");
+    expect(Object.keys(result)).toEqual(["soul", "identity", "person", "long-term", "style-notes"]);
+    expect(result["person"].content).toBe("person-content");
+    expect(result["person"].content).not.toContain("+++");
     expect(result["person"].description).toBe("person");
+    expect(result["person"].metadata.chars_current).toBe("person-content".length);
     expect(result["person"].filePath).toBe("/blocks/person.md");
   });
 
@@ -198,7 +200,10 @@ describe("loadConditionalBlocks", () => {
     const result = await loadConditionalBlocks("testagent", conditions, session);
     expect(result).toHaveLength(1);
     expect(result[0]?.label).toBe("conditional/nsfw_persona");
+    expect(result[0]?.content).toBe("extra personality traits");
+    expect(result[0]?.content).not.toContain("+++");
     expect(result[0]?.description).toBe("NSFW persona");
+    expect(result[0]?.metadata.chars_current).toBe("extra personality traits".length);
     expect(result[0]?.filePath).toBe("/blocks/conditional/nsfw_persona.md");
   });
 

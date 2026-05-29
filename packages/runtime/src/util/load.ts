@@ -19,7 +19,43 @@ const BlockFrontmatterSchema = vb.object({
 
 type Frontmatter = Omit<MemoryBlock, "content" | "label" | "metadata" | "filePath">;
 
-const labels = ["person", "identity", "long-term", "soul", "style-notes"] as const;
+function parseBlockFrontmatter(
+  content: string,
+  displayName: string,
+  path: string,
+  subject = "Base file",
+): {
+  body: string;
+  frontmatter: Frontmatter;
+} {
+  if (content.indexOf("+++", 0) !== 0) {
+    throw new Error(
+      `${subject} ${colors.keyword(displayName)} at path ${colors.path(path)} has an invalid frontmatter (expected TOML, but file does not start with '${colors.keyword("+++")}')`,
+    );
+  }
+
+  const ending = content.indexOf("+++", 3);
+  if (ending === -1) {
+    throw new Error(
+      `${subject} ${colors.keyword(displayName)} at path ${colors.path(path)} has an invalid frontmatter (expected closing '${colors.keyword("+++")}', but none found)`,
+    );
+  }
+
+  const tomlData = content.slice(3, ending);
+  let bodyStart = ending + 3;
+  if (content.startsWith("\r\n", bodyStart)) {
+    bodyStart += 2;
+  } else if (content.startsWith("\n", bodyStart)) {
+    bodyStart += 1;
+  }
+
+  return {
+    body: content.slice(bodyStart),
+    frontmatter: vb.parse(BlockFrontmatterSchema, parse(tomlData)),
+  };
+}
+
+const labels = ["soul", "identity", "person", "long-term", "style-notes"] as const;
 type BlockLabel = (typeof labels)[number];
 
 async function loadBlocks(slug: string): Promise<Record<BlockLabel, MemoryBlock>> {
@@ -36,31 +72,15 @@ async function loadBlocks(slug: string): Promise<Record<BlockLabel, MemoryBlock>
 
     if (existsSync(it)) {
       const content = await readFile(it, { encoding: "utf8" });
-
-      if (content.indexOf("+++", 0) !== 0) {
-        throw new Error(
-          `Base file ${colors.keyword(label)} at path ${colors.path(it)} has an invalid frontmatter (expected TOML, but file does not start with '${colors.keyword("+++")}')`,
-        );
-      }
-
-      const ending = content.indexOf("+++", 2);
-      if (ending === -1) {
-        throw new Error(
-          `Base file ${colors.keyword(label)} at path ${colors.path(it)} has an invalid frontmatter (expected closing '${colors.keyword("+++")}', but none found)`,
-        );
-      }
-
-      const tomlData = content.slice(3, ending);
-
-      const frontmatter = vb.parse(BlockFrontmatterSchema, parse(tomlData));
+      const { body, frontmatter } = parseBlockFrontmatter(content, label, it, "Base file");
 
       files.set(label, {
-        content,
+        content: body,
         description: frontmatter.description,
         filePath: `/blocks/${label}.md`,
         label,
         metadata: {
-          chars_current: content.length - tomlData.length - 6, // `+++`s
+          chars_current: body.length,
         },
       });
     } else {
@@ -178,31 +198,20 @@ async function loadConditionalBlocks(
     }
 
     const content = await readFile(filePath, { encoding: "utf8" });
-
-    if (content.indexOf("+++", 0) !== 0) {
-      throw new Error(
-        `Conditional block ${colors.keyword(name)} at path ${colors.path(filePath)} has an invalid frontmatter (expected TOML, but file does not start with '${colors.keyword("+++")}')`,
-      );
-    }
-
-    const ending = content.indexOf("+++", 2);
-    if (ending === -1) {
-      throw new Error(
-        `Conditional block ${colors.keyword(name)} at path ${colors.path(filePath)} has an invalid frontmatter (expected closing '${colors.keyword("+++")}', but none found)`,
-      );
-    }
-
-    const tomlData = content.slice(3, ending);
-
-    const frontmatter = vb.parse(BlockFrontmatterSchema, parse(tomlData));
+    const { body, frontmatter } = parseBlockFrontmatter(
+      content,
+      name,
+      filePath,
+      "Conditional block",
+    );
 
     blocks.push({
-      content,
+      content: body,
       description: frontmatter.description,
       filePath: `/blocks/conditional/${name}.md`,
       label: `conditional/${name}`,
       metadata: {
-        chars_current: content.length - tomlData.length - 6,
+        chars_current: body.length,
       },
     });
   }
