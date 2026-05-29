@@ -3,22 +3,32 @@
 #
 # Simple tools: set to true/false to enable/disable.
 # The exec tool has its own config object.
+# Tools are enabled only when listed here and set to true.
 
-# --- Core tools (always enabled, listed for reference) ---
-# respond = true
-# no-response = true
-# read = true
-# open-file = true
-# close-file = true
-# list-dir = true
-# read-skill = true
-# session-info = true
+# --- Core tools ---
+# Generated agents start with these enabled, but they can be explicitly disabled.
+# Disabling respond/no-response prevents normal turns from completing.
+respond = true
+no-response = true
+read = true
+open-file = true
+close-file = true
+list-dir = true
+read-skill = true
+session-info = true
 
-# --- Optional tools ---
+# --- Optional built-in tools ---
 write = true
 str-replace = true
+read-sections = true
 schedule = true
 react = true
+download-attachments = true
+read-history = true
+list-sessions = true
+query-sessions = true
+read-session = true
+prune-boundaries = true
 
 # --- Exec tool (sandboxed command execution) ---
 # To disable, use `exec = false`.

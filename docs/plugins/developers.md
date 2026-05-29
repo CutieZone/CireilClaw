@@ -2,6 +2,8 @@
 
 You are writing a plugin. This document covers the SDK surface, authoring conventions, publishing mechanics, and the caveats of worker isolation.
 
+A plugin is trusted host code. It should preserve CireilClaw's guarantor role: give the agent useful capability without silently widening the blast radius for the operator.
+
 If you are _installing_ a plugin, see [`operators.md`](operators.md).
 
 ## Starting a New Plugin
@@ -229,7 +231,7 @@ Each plugin runs in a dedicated Node worker thread. The runtime talks to it over
 
 **What isolation does _not_ buy:**
 
-- **Security.** Workers have full Node API access, so they can `import("node:fs")`, open network sockets, etc. The isolation prevents programming accidents, not malicious code.
+- **Security.** Workers have full Node API access, so they can `import("node:fs")`, open network sockets, etc. The isolation prevents programming accidents, not malicious code. Plugin code is outside the agent sandbox and must be treated as trusted.
 
 ### Caveats Worth Knowing
 

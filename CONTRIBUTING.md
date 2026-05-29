@@ -103,7 +103,9 @@ This project, due to its nature, cannot be effectively integration-tested. The b
 
 ## Security-Sensitive Changes
 
-Changes that touch security boundaries (sandbox configuration, path allowlists, privilege boundaries, access control) require explicit maintainer sign-off. These paths are security-critical and will receive thorough review.
+CireilClaw's central promise is that agents can act freely without making their mistakes catastrophic. Changes that touch security boundaries (sandbox configuration, path allowlists, privilege boundaries, access control) require explicit maintainer sign-off because they can weaken that guarantee.
+
+These paths are security-critical and will receive thorough review.
 
 Key security files:
 

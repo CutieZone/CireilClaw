@@ -1,13 +1,13 @@
 # Conditional Block Loading and Path Access
 
-The `conditions.toml` config file enables conditional access to resources based on session context. This allows you to:
+The `conditions.toml` config file enables conditional access to resources based on session context. It narrows what the agent can see or touch in a given channel, keeping authority tied to where the work is happening. This allows you to:
 
 - Load additional memory blocks only in appropriate contexts (e.g., NSFW content in NSFW channels)
 - Grant or restrict access to specific files/folders based on where the session is running (e.g., admin tools only in specific Discord channels)
 
 ## Note
 
-This currently shouldn't affect the `exec` tool due to the fact that there are near-infinite ways to bypass path checks.
+`conditions.toml` is not an `exec` sandbox boundary. Path checks can gate CireilClaw file tools, but a command allowed through `exec` may have many ways to read, copy, or transform data inside its mounted environment. Use `exec` binary allowlists and sandbox mounts as the boundary for command execution.
 
 ## Config Location
 

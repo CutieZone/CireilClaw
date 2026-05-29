@@ -2,9 +2,11 @@
 
 `cireilclaw` is an opinionated agent system, originally written due to a desire for something more secure than OpenClaw. Now it has evolved to being an actual project with actual intent behind it.
 
+CireilClaw exists so agents can act freely without making their mistakes catastrophic. Its job is to be the guarantor: the agent gets room to work, and the operator stays protected when the agent makes a bad call.
+
 ## Core Tenets
 
-- Safety: Principle of Least Privilege, Separation of Concerns, and [`bubblewrap`](https://github.com/containers/bubblewrap).
+- Safety: Principle of Least Privilege, Separation of Concerns, and [`bubblewrap`](https://github.com/containers/bubblewrap). The system should enforce boundaries, not merely ask the model to behave.
 - Sanity: Debuggable, non-obtuse code, with useful comments. Comments are generally meant to explain _why_, not _what_ or _how_; the latter two are the code's job.
 - Speedy: Should run well even in a limited environment
 - Composability: Should be completely configurable without editing code; disabling components, enabling features. Hot-reload possibility.
@@ -13,11 +15,13 @@
 
 The point of `cireilclaw` is not merely to keep an agent in a smaller box. It is to give the agent a place it can actually live: a workspace, memories, skills, scheduled routines, channel sessions, and clear boundaries around what it is allowed to touch.
 
-The sandbox is part of that ethos. It is not just a restriction mechanism; it is the house around the agent. The agent gets room to try things, make files, keep context, and use tools without the host machine becoming part of the blast radius. Boundaries are what make that agency sustainable.
+The sandbox is part of that ethos. It is not just a restriction mechanism; it is the house around the agent. The agent gets room to try things, make files, keep context, and use tools without the host machine becoming part of the blast radius. Boundaries are what make that agency sustainable: freedom for the agent, containment for the operator.
 
 ## Getting Started
 
 See [INSTALLATION.md](INSTALLATION.md) for setup instructions, configuration reference, and agent creation.
+
+The `init` wizard writes each agent's `config/tools.toml` allowlist. Core tools such as `respond`, `no-response`, `read`, `open-file`, `list-dir`, `read-skill`, and `session-info` start enabled in generated configs, but they are still just config entries: set one to `false` to disable it. Disabling `respond`/`no-response` prevents normal turns from completing.
 
 ## Project State
 
@@ -31,7 +35,7 @@ Plugins are installed either as npm packages (`pnpm add @cireilclaw/plugin-<name
 
 It is explicitly the first pass of implementation, and thus has the following caveats:
 
-1. It is not "secure": worker isolation buys crash isolation and a clean API boundary, not a security boundary. Plugins still have full Node API access. Untrusted code is untrusted code.
+1. Plugin worker isolation is not a security boundary: it buys crash isolation and a clean API boundary, not containment. Plugins still have full Node API access. Untrusted code is untrusted code.
 2. Plugins must match the runtime's SDK (same realpath). Two copies — even at the same version — fail loudly at load.
 3. Lifecycle hooks are not yet implemented.
 

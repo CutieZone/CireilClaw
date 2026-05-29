@@ -261,7 +261,7 @@ description = "The way you communicate; specific tics, word usage, et cetera."
 
 type ToolPreset = "minimal" | "standard" | "full";
 
-// Tools that are always enabled regardless of preset — the agent can't function without them.
+// Tools that every preset starts with enabled. Operators may still disable them explicitly.
 const CORE_TOOLS = new Set([
   "respond",
   "no-response",
@@ -287,7 +287,7 @@ function buildToolsConfig(
     } else if (CORE_TOOLS.has(tool)) {
       obj[tool] = true;
     } else {
-      // Non-core tools (write, str-replace, schedule, react) are on for standard/full.
+      // Non-core built-ins are on for standard/full.
       obj[tool] = preset !== "minimal";
     }
   }
@@ -383,7 +383,7 @@ async function run(flags: Flags): Promise<void> {
   const preset = await select<ToolPreset>({
     choices: [
       {
-        description: "All file I/O, search, scheduling, and reactions — no shell execution",
+        description: "Core tools plus non-exec built-ins — no shell execution",
         name: "Standard",
         value: "standard",
       },
@@ -394,7 +394,7 @@ async function run(flags: Flags): Promise<void> {
         value: "full",
       },
       {
-        description: "Core file I/O and respond only — no search, scheduling, exec, or reactions",
+        description: "Core file/context tools plus respond/no-response only",
         name: "Minimal",
         value: "minimal",
       },

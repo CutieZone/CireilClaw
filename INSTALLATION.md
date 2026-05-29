@@ -1,8 +1,10 @@
 # Installation
 
+CireilClaw exists so agents can act freely without making their mistakes catastrophic. It is designed as a guarantor: sandboxing, tool allowlists, and per-agent configuration give the agent room to operate while keeping the operator safe when the agent gets something wrong.
+
 ## Prerequisites
 
-- **Linux** — cireilclaw relies on Linux kernel namespaces via [bubblewrap](https://github.com/containers/bubblewrap) for sandboxing. macOS/Windows users need a Linux VM or WSL2.
+- **Linux** — CireilClaw relies on Linux kernel namespaces via [bubblewrap](https://github.com/containers/bubblewrap) for sandboxing. macOS/Windows users need a Linux VM or WSL2.
 - **Node.js** — v22+ recommended.
 - **pnpm** — Package manager.
 - **bubblewrap** (`bwrap`) — Must be available on `PATH`.
@@ -66,7 +68,7 @@ If you are running CireilClaw inside a container that already provides isolation
 CIREILCLAW_RUNTIME_INSECURE_DISABLE_SANDBOX_I_AM_100_PERCENT_SURE=i-am-in-a-container pnpm start
 ```
 
-This bypasses `bwrap` entirely. Only use this when the container itself is the security boundary.
+This bypasses `bwrap` entirely. Only use this when the container itself is the security boundary; in that mode, the container is taking over the guarantor role that CireilClaw normally assigns to bubblewrap.
 
 </details>
 
@@ -90,10 +92,13 @@ You will be prompted for:
 
 1. **Agent name** — Slugified to a filesystem-safe identifier (e.g. "My Bot" becomes `my-bot`).
 2. **Short description** — Optional. Seeded into the identity block.
-3. **Tool preset** — Controls which tools are available:
-   - `minimal` — File I/O and respond only.
-   - `standard` — Adds write, search, scheduling, reactions.
-   - `full` — Adds sandboxed command execution (prompts for an allowed binaries whitelist).
+3. **Tool preset** — Writes the initial `tools.toml` allowlist:
+   - `minimal` — Core file/context tools plus `respond`/`no-response`.
+   - `standard` — Enables the core tools plus non-exec built-ins such as write/edit, session/history lookup, attachment download, scheduling, and reactions.
+   - `full` — Standard plus sandboxed command execution (prompts for an allowed binaries whitelist).
+
+   Core tools start enabled in generated configs, but they are not immutable. You can explicitly set any core tool to `false` in `tools.toml` if you accept the consequences; disabling `respond`/`no-response` prevents normal turns from completing.
+
 4. **API endpoint** — Base URL of any OpenAI-compatible API (e.g. `https://api.openai.com/v1`).
 5. **Model name** — The model identifier to use.
 6. **API key** — Leave blank if the endpoint doesn't require one.
@@ -168,13 +173,33 @@ package = "@cireilclaw/plugin-brave-search"
 <details>
 <summary><code>config/tools.toml</code> (per-agent, required)</summary>
 
-Each key is a tool name; value is `true`/`false`. Core tools (`respond`, `read`, `open-file`, etc.) are always enabled and do not need to be listed.
+Each key is a tool name. Simple tools use `true`/`false`; `exec` either uses `false` or its config table. A tool is enabled only when it is present and set to `true` (or, for `exec`, when `enabled = true`).
+
+Core tools are generated as enabled by every preset because the agent needs them for normal operation, but they can still be explicitly disabled by setting them to `false`.
 
 ```toml
-write         = true
-str-replace   = true
-schedule      = true
-react         = true
+# Core tools: generated enabled, but explicitly configurable.
+respond      = true
+no-response  = true
+read         = true
+open-file    = true
+close-file   = true
+list-dir     = true
+read-skill   = true
+session-info = true
+
+# Non-exec built-ins enabled by the standard/full presets.
+write                = true
+str-replace          = true
+read-sections        = true
+schedule             = true
+react                = true
+download-attachments = true
+read-history         = true
+list-sessions        = true
+query-sessions       = true
+read-session         = true
+prune-boundaries     = true
 
 [exec]
 enabled  = true

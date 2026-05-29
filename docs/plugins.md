@@ -2,11 +2,13 @@
 
 `cireilclaw` supports third-party plugins that extend the agent with new tools. Each plugin runs in its own Node worker thread; the runtime talks to it over a small RPC layer. Tool invocations cross the boundary, callbacks (sending replies, reading config, fetching channel history) come back as RPCs.
 
+Plugins are trusted host extensions, not sandboxed agent actions. CireilClaw's guarantor boundary protects the operator from the agent; it does not protect the operator from plugin code they install.
+
 ## Trust Model
 
 Worker isolation only buys _crash isolation_ and a _clean API boundary_, not a security boundary. Plugins still have full Node API access: they can read your filesystem, open network sockets, etc.
 
-Sooo... Only install plugins you trust. Subprocess sandboxing (e.g. `bubblewrap`) is not yet implemented.
+Only install plugins you trust. A plugin is allowed to participate in the runtime; it is not contained the way an agent's tool use is contained. Subprocess sandboxing (e.g. `bubblewrap`) is not yet implemented.
 
 ## Two Kinds of Audience
 

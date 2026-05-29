@@ -2,6 +2,8 @@
 
 You are installing and running plugins that somebody else wrote. This document covers the install flow, `plugins.toml` syntax, and troubleshooting.
 
+Plugins are trusted host extensions. They are not sandboxed like agent tool calls, and installing one moves trust to the plugin author. Only install plugins you would be comfortable running as local Node code.
+
 If you are _writing_ a plugin, see [`developers.md`](developers.md).
 
 ## Two Install Modes
@@ -54,6 +56,8 @@ allowOverride = true
 ```
 
 `allowOverride` permits this plugin's tools to shadow built-in tools of the same name. Without it, a name collision against a builtin fails loudly at startup. Two plugins with the same tool name always fail regardless.
+
+Treat overrides as security-sensitive: replacing a built-in tool changes part of the boundary CireilClaw presents to the agent.
 
 ## Plugin Configuration
 
