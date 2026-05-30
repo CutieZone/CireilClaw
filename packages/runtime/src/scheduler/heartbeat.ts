@@ -15,6 +15,40 @@ import { agentRoot } from "#util/paths.js";
 
 const HEARTBEAT_OK = "HEARTBEAT_OK";
 
+const MINUTES_PER_DAY = 24 * 60;
+
+function parseClockMinutes(value: string, midnightAsEndOfDay = false): number {
+  const hour = Number(value.slice(0, 2));
+  const minute = Number(value.slice(3, 5));
+
+  if (
+    !Number.isInteger(hour) ||
+    !Number.isInteger(minute) ||
+    hour < 0 ||
+    hour > 23 ||
+    minute < 0 ||
+    minute > 59
+  ) {
+    throw new Error(`Invalid clock time: ${value}`);
+  }
+
+  if (midnightAsEndOfDay && hour === 0 && minute === 0) {
+    return MINUTES_PER_DAY;
+  }
+
+  return hour * 60 + minute;
+}
+
+function isWithinActiveHours(current: string, start: string, end: string): boolean {
+  const startMinutes = parseClockMinutes(start);
+  const endIsMidnightBoundary = end === "00:00" && startMinutes > 0;
+  const currentMinutes =
+    endIsMidnightBoundary && current === "00:00" ? MINUTES_PER_DAY : parseClockMinutes(current);
+  const endMinutes = parseClockMinutes(end, endIsMidnightBoundary);
+
+  return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
+}
+
 // Check whether the current time falls within the configured active hours window.
 function isInActiveHours(activeHours: NonNullable<HeartbeatConfig["activeHours"]>): boolean {
   try {
@@ -31,14 +65,14 @@ function isInActiveHours(activeHours: NonNullable<HeartbeatConfig["activeHours"]
     const minute = parts.find((part) => part.type === "minute")?.value ?? "00";
     const current = `${hour}:${minute}`;
 
-    return current >= activeHours.start && current <= activeHours.end;
+    return isWithinActiveHours(current, activeHours.start, activeHours.end);
   } catch {
     // Malformed timezone or format — allow the heartbeat to proceed.
     return true;
   }
 }
 
-export async function runHeartbeat(agent: Agent, cfg: HeartbeatConfig): Promise<void> {
+async function runHeartbeat(agent: Agent, cfg: HeartbeatConfig): Promise<void> {
   debug("Heartbeat: firing for agent", colors.keyword(agent.slug));
 
   if (cfg.activeHours !== undefined && !isInActiveHours(cfg.activeHours)) {
@@ -153,3 +187,5 @@ export async function runHeartbeat(agent: Agent, cfg: HeartbeatConfig): Promise<
     saveSession(agent.slug, session);
   }
 }
+
+export { isWithinActiveHours, runHeartbeat };

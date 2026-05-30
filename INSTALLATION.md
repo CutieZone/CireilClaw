@@ -241,7 +241,7 @@ target = "last"           # "last", "none", or a session ID
 
 [activeHours]
 start = "08:00"
-end = "22:00"
+end = "22:00"             # Use "00:00" for end of day
 timezone = "America/New_York"
 
 [visibility]

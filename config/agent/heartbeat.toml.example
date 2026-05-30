@@ -11,7 +11,7 @@ enabled = false
 
 # [activeHours]
 # start = "08:00"               # HH:MM format
-# end = "22:00"                 # HH:MM format
+# end = "22:00"                 # HH:MM format; "00:00" means end of day
 # timezone = "America/New_York" # IANA timezone name
 
 # [visibility]
