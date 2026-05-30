@@ -432,8 +432,11 @@ export async function generate(
         }
 
         // Some providers reject tool_choice: "required" with a 400.
-        // Fall back to tool_choice: "auto" with a stern message and retry.
+        // Fall back to tool_choice: "auto" with a stern message and retry once.
         if (error.status === 400 && error.message.toLowerCase().includes("tool_choice")) {
+          if (params.tool_choice === "auto") {
+            throw error;
+          }
           warning(
             `Model '${model}' rejected tool_choice: required, falling back to tool_choice: auto`,
           );

@@ -212,6 +212,11 @@ describe("getMountEntriesAtPath", () => {
     expect(entries[0]?.type).toBe("directory");
   });
 
+  it("returns first-level mount entries at /workspace/ with a trailing slash", () => {
+    const entries = getMountEntriesAtPath("/workspace/", mounts);
+    expect(entries.map((entry) => entry.name).toSorted()).toEqual(["docs", "libs", "project"]);
+  });
+
   it("returns nested mount entries at intermediate paths", () => {
     const entries = getMountEntriesAtPath("/workspace/libs", mounts);
     expect(entries).toHaveLength(1);

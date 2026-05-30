@@ -394,6 +394,41 @@ describe("buildBwrap", () => {
       expect(result.args).not.toContain("--dev-bind");
     }
   });
+
+  it("lets workspace .env override host passthrough variables", async () => {
+    vi.stubEnv("HOME", "/home/test");
+    vi.stubEnv("API_TOKEN", "host-value");
+    mockedReadFileSync.mockReturnValue("API_TOKEN=workspace-value\n");
+    mockedExistsSync.mockImplementation((path) => {
+      const stringPath = String(path);
+      return [
+        "/home/test",
+        "/usr",
+        "/bin",
+        "/lib",
+        "/etc/passwd",
+        "/etc/group",
+        "/etc/nsswitch.conf",
+        "/etc/resolv.conf",
+        "/usr/bin/echo",
+        "/home/test/.cireilclaw/agents/test-agent/workspace/.env",
+      ].includes(stringPath);
+    });
+
+    const result = await buildBwrap(["echo"], ["API_TOKEN"], "test-agent");
+    expect(result.type).toBe("success");
+    if (result.type === "success") {
+      const assignments = result.args
+        .map((arg, index) => ({ arg, index }))
+        .filter(({ arg }) => arg === "--setenv")
+        .map(({ index }) => [result.args[index + 1], result.args[index + 2]]);
+      expect(assignments.filter(([key]) => key === "API_TOKEN")).toEqual([
+        ["API_TOKEN", "host-value"],
+        ["API_TOKEN", "workspace-value"],
+      ]);
+    }
+  });
+
   it("includes --dev-bind /dev when devices.all is true", async () => {
     vi.stubEnv("HOME", "/home/test");
     mockedExistsSync.mockImplementation((path) => {

@@ -9,7 +9,7 @@ import { nonEmptyString } from "#config/schemas/shared.js";
 import { getDb } from "#db/index.js";
 import { images, sessions, summaries as summariesTable } from "#db/schema.js";
 import type { Content, ImageContent, ImageRef, VideoContent, VideoRef } from "#engine/content.js";
-import { isVideoContent, isVideoRef } from "#engine/content.js";
+import { isImageRef, isVideoContent, isVideoRef } from "#engine/content.js";
 import { isMessage } from "#engine/message.js";
 import type { AssistantContent, Message, UserContent } from "#engine/message.js";
 import type { Session, Summary } from "#harness/session.js";
@@ -90,15 +90,7 @@ function serializeHistory(
   }
 
   // Filter out non-persistent messages (e.g., reply context, summarizer prompts).
-  const persistable = history.filter((msg) => {
-    if (msg.role === "user" && msg.persist === false) {
-      return false;
-    }
-    if (msg.role === "system" && msg.persist === false) {
-      return false;
-    }
-    return true;
-  });
+  const persistable = history.filter((msg) => !("persist" in msg && msg.persist === false));
 
   const serialized = persistable.map((msg) => ({
     ...msg,
@@ -111,12 +103,25 @@ function serializeHistory(
 }
 
 async function deserializeHistory(json: string, agentSlug: string): Promise<Message[]> {
-  async function deserializeUserContent(ct: Content | ImageRef): Promise<UserContent | undefined> {
-    if (ct.type === "image_ref") {
-      const ref = ct;
-      const path = imagePath(agentSlug, ref.id, ref.mediaType);
+  function deserializeImageRef(ref: ImageRef): ImageContent | undefined {
+    const path = imagePath(agentSlug, ref.id, ref.mediaType);
+    try {
       const data = readFileSync(path);
       return { data, mediaType: ref.mediaType, type: "image" } satisfies ImageContent;
+    } catch (error) {
+      warning(
+        "Failed to restore image for session:",
+        path,
+        error instanceof Error ? error.message : String(error),
+      );
+      // Drop the image from the restored message rather than making the whole session unreadable.
+      return undefined;
+    }
+  }
+
+  async function deserializeUserContent(ct: Content | ImageRef): Promise<UserContent | undefined> {
+    if (ct.type === "image_ref") {
+      return deserializeImageRef(ct);
     }
 
     if (ct.type === "video_ref") {
@@ -152,12 +157,9 @@ async function deserializeHistory(json: string, agentSlug: string): Promise<Mess
     throw new Error(`Invalid content type for user (found ${ct.type})`);
   }
 
-  function deserializeAssistantContent(ct: Content | ImageRef): AssistantContent {
+  function deserializeAssistantContent(ct: Content | ImageRef): AssistantContent | undefined {
     if (ct.type === "image_ref") {
-      const ref = ct;
-      const path = imagePath(agentSlug, ref.id, ref.mediaType);
-      const data = readFileSync(path);
-      return { data, mediaType: ref.mediaType, type: "image" } satisfies ImageContent;
+      return deserializeImageRef(ct);
     }
 
     if (
@@ -182,21 +184,31 @@ async function deserializeHistory(json: string, agentSlug: string): Promise<Mess
       if (Array.isArray(msg.content)) {
         const resolved = await Promise.all(msg.content.map(deserializeUserContent));
         const content = resolved.filter((it): it is UserContent => it !== undefined);
-        messages.push({ ...msg, content });
+        messages.push({
+          ...msg,
+          content: content.length > 0 ? content : { content: "", type: "text" },
+        });
       } else {
         const resolved = await deserializeUserContent(msg.content);
-        // If the sole content was a video that failed to restore, use an empty
+        // If the sole content was media that failed to restore, use an empty
         // text block to avoid a malformed message.
         const content = resolved ?? ({ content: "", type: "text" } as const);
         messages.push({ ...msg, content });
       }
     } else if (msg.role === "assistant") {
-      messages.push({
-        ...msg,
-        content: Array.isArray(msg.content)
-          ? msg.content.map((it) => deserializeAssistantContent(it))
-          : deserializeAssistantContent(msg.content),
-      });
+      if (Array.isArray(msg.content)) {
+        const content = msg.content
+          .map((it) => deserializeAssistantContent(it))
+          .filter((it): it is AssistantContent => it !== undefined);
+        messages.push({
+          ...msg,
+          content: content.length > 0 ? content : { content: "", type: "text" },
+        });
+      } else {
+        const content =
+          deserializeAssistantContent(msg.content) ?? ({ content: "", type: "text" } as const);
+        messages.push({ ...msg, content });
+      }
     } else {
       messages.push(msg);
     }
@@ -346,6 +358,7 @@ async function loadSessions(agentSlug: string): Promise<Map<string, Session>> {
   const map = new Map<string, Session>();
 
   for (const row of rows) {
+    let rowId = row.id;
     const history = await deserializeHistory(row.history, agentSlug);
     const openedFiles = new Set(vb.parse(vb.array(vb.string()), JSON.parse(row.openedFiles)));
 
@@ -379,8 +392,44 @@ async function loadSessions(agentSlug: string): Promise<Map<string, Session>> {
       session.selectedModel = meta.selectedModel;
       session.selectedProvider = meta.selectedProvider;
     } else if (row.channel === "internal") {
-      const name = row.id.startsWith("internal:") ? row.id.slice("internal:".length) : row.id;
+      const legacyInternalId = !row.id.startsWith("internal:");
+      const name = legacyInternalId ? row.id : row.id.slice("internal:".length);
       session = new NamedInternalSession(name);
+      if (legacyInternalId) {
+        const newId = session.id();
+        const existing = db
+          .select({ id: sessions.id })
+          .from(sessions)
+          .where(eq(sessions.id, newId))
+          .get();
+        if (existing !== undefined) {
+          warning(
+            "Skipping legacy internal session because a canonical row already exists:",
+            row.id,
+            newId,
+          );
+          continue;
+        }
+        db.insert(sessions)
+          .values({
+            activeFileSections: row.activeFileSections,
+            channel: row.channel,
+            history: row.history,
+            historyCursor: row.historyCursor,
+            id: newId,
+            lastActivity: row.lastActivity,
+            meta: row.meta,
+            openedFiles: row.openedFiles,
+          })
+          .run();
+        db.update(images).set({ sessionId: newId }).where(eq(images.sessionId, row.id)).run();
+        db.update(summariesTable)
+          .set({ sessionId: newId })
+          .where(eq(summariesTable.sessionId, row.id))
+          .run();
+        db.delete(sessions).where(eq(sessions.id, row.id)).run();
+        rowId = newId;
+      }
     } else if (row.channel === "tui") {
       // TUI session in DB is primarily for history inspection.
       // We don't have the bridge here, it will be injected by the TUI app if needed.
@@ -409,7 +458,7 @@ async function loadSessions(agentSlug: string): Promise<Map<string, Session>> {
     session.activeFileSections = activeFileSections;
 
     session.lastActivity = row.lastActivity === null ? 0 : Date.parse(row.lastActivity);
-    map.set(row.id, session);
+    map.set(rowId, session);
   }
 
   // Load all summaries and attach them to their sessions.
@@ -517,7 +566,7 @@ function resetSession(agentSlug: string, sessionId: string): void {
   db.delete(images).where(eq(images.sessionId, sessionId)).run();
   db.delete(summariesTable).where(eq(summariesTable.sessionId, sessionId)).run();
   db.update(sessions)
-    .set({ activeFileSections: "{}", history: "[]", openedFiles: "[]" })
+    .set({ activeFileSections: "{}", history: "[]", historyCursor: 0, openedFiles: "[]" })
     .where(eq(sessions.id, sessionId))
     .run();
 }
@@ -554,9 +603,14 @@ function updateSessionImages(
     return;
   }
 
-  // Parse history, find messages with matching IDs, and update their images
-  const raw = vb.parse(vb.record(vb.string(), vb.unknown()), JSON.parse(row.history));
-  const entries = Object.values(raw).filter((it) => isMessage(it));
+  // Parse history, find messages with matching IDs, and update their images.
+  // History is normally an array; tolerate legacy object-shaped rows produced by older repair code.
+  const raw: unknown = JSON.parse(row.history);
+  const entries = Array.isArray(raw)
+    ? raw.filter((it) => isMessage(it))
+    : Object.values(vb.parse(vb.record(vb.string(), vb.unknown()), raw)).filter((it) =>
+        isMessage(it),
+      );
 
   // First pass: update image_ref IDs in messages
   for (const msg of entries) {
@@ -589,81 +643,80 @@ function updateSessionImages(
     }
   }
 
-  // Write updated history back
+  // Write updated history back without changing its container shape.
   const updatedHistory = JSON.stringify(raw);
 
-  // Collect pending images to write
+  // Collect every image_ref that remains in history so the image index stays in
+  // lockstep with the serialized conversation after repair.
+  const referencedImages = new Map<string, ImageRef>();
   const pendingImages: PendingImage[] = [];
   for (const msg of entries) {
-    if (msg.role !== "user" || msg.id === undefined) {
-      continue;
-    }
+    const content = Array.isArray(msg.content) ? msg.content : [msg.content];
+    for (const block of content) {
+      if (!isImageRef(block)) {
+        continue;
+      }
 
-    const msgId = msg.id;
-    const data = newImages.get(msgId);
-    if (data === undefined) {
-      continue;
-    }
+      const key = `${block.id}\0${block.mediaType}`;
+      referencedImages.set(key, { id: block.id, mediaType: block.mediaType, type: "image_ref" });
 
-    const { content } = msg;
-    if (Array.isArray(content)) {
-      for (const block of content) {
-        if (block.type === "image_ref") {
-          const ref: ImageRef = block;
-          const path = imagePath(agentSlug, ref.id, ref.mediaType);
-          pendingImages.push({ data, id: ref.id, mediaType: ref.mediaType, path });
+      if (msg.role === "user" && msg.id !== undefined) {
+        const data = newImages.get(msg.id);
+        if (data !== undefined) {
+          const path = imagePath(agentSlug, block.id, block.mediaType);
+          pendingImages.push({ data, id: block.id, mediaType: block.mediaType, path });
         }
       }
-    } else if (content.type === "image_ref") {
-      const ref: ImageRef = content;
-      const path = imagePath(agentSlug, ref.id, ref.mediaType);
-      pendingImages.push({ data, id: ref.id, mediaType: ref.mediaType, path });
     }
   }
 
-  // Delete old images for this session
   const oldImages = db
     .select({ id: images.id, mediaType: images.mediaType })
     .from(images)
     .where(eq(images.sessionId, sessionId))
     .all();
 
-  for (const img of oldImages) {
-    // Check if image is shared with other sessions
-    const shared = db
-      .select({ id: images.id })
-      .from(images)
-      .where(and(notInArray(images.sessionId, [sessionId]), eq(images.id, img.id)))
-      .get();
-
-    if (shared === undefined) {
-      // Not shared, delete the file
-      const path = imagePath(agentSlug, img.id, img.mediaType);
-      try {
-        unlinkSync(path);
-      } catch {
-        // Already gone — fine.
-      }
-    }
-  }
-
-  // Delete old image DB entries
-  db.delete(images).where(eq(images.sessionId, sessionId)).run();
-
-  // Update session history
-  db.update(sessions).set({ history: updatedHistory }).where(eq(sessions.id, sessionId)).run();
-
-  // Write new image files and index them
+  // Write new image files before repointing the DB row at them.
   if (pendingImages.length > 0) {
     mkdirSync(imageDir(agentSlug), { recursive: true });
     for (const img of pendingImages) {
       if (!existsSync(img.path)) {
         writeFileSync(img.path, Buffer.from(img.data));
       }
-      db.insert(images)
-        .values({ id: img.id, mediaType: img.mediaType, sessionId })
-        .onConflictDoNothing()
-        .run();
+    }
+  }
+
+  db.update(sessions).set({ history: updatedHistory }).where(eq(sessions.id, sessionId)).run();
+
+  db.delete(images).where(eq(images.sessionId, sessionId)).run();
+  for (const ref of referencedImages.values()) {
+    db.insert(images)
+      .values({ id: ref.id, mediaType: ref.mediaType, sessionId })
+      .onConflictDoNothing()
+      .run();
+  }
+
+  const stillReferencedHere = new Set(referencedImages.keys());
+  for (const img of oldImages) {
+    if (stillReferencedHere.has(`${img.id}\0${img.mediaType}`)) {
+      continue;
+    }
+
+    const shared = db
+      .select({ id: images.id })
+      .from(images)
+      .where(and(notInArray(images.sessionId, [sessionId]), eq(images.id, img.id)))
+      .get();
+
+    if (shared !== undefined) {
+      continue;
+    }
+
+    const path = imagePath(agentSlug, img.id, img.mediaType);
+    try {
+      unlinkSync(path);
+    } catch {
+      // Already gone — fine.
     }
   }
 }

@@ -169,7 +169,10 @@ function getMountEntriesAtPath(
     return [];
   }
 
-  const rest = sandboxPath === "/workspace" ? "" : sandboxPath.slice("/workspace/".length);
+  const rest =
+    sandboxPath === "/workspace" || sandboxPath === "/workspace/"
+      ? ""
+      : sandboxPath.slice("/workspace/".length);
 
   // If we're inside or exactly at a mount target, readdir on the resolved real path handles it.
   for (const mount of mounts) {

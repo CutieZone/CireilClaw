@@ -14,7 +14,11 @@ const Schema = vb.strictObject({
     vb.string(),
     vb.nonEmpty(),
     vb.custom((input: unknown) => {
-      if (typeof input === "string" && input.startsWith("/blocks/") && !input.endsWith(".md")) {
+      if (
+        typeof input === "string" &&
+        (input === "/blocks" || input.startsWith("/blocks/")) &&
+        !input.endsWith(".md")
+      ) {
         return false;
       }
       return true;

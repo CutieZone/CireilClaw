@@ -29,11 +29,20 @@ interface ReferencedMessage {
 }
 
 function buildDiscordWarningContent(heading: string, detail: string): string {
-  const prefix = `⚠️ ${heading}: `;
-  const maxDetailLength =
-    DISCORD_WARNING_CONTENT_LIMIT - prefix.length - DISCORD_WARNING_SUFFIX.length;
+  const maxBodyLength = DISCORD_WARNING_CONTENT_LIMIT - DISCORD_WARNING_SUFFIX.length;
+  const headingPrefix = "⚠️ ";
+  const headingSuffix = ": ";
+  const maxHeadingLength = Math.max(0, maxBodyLength - headingPrefix.length - headingSuffix.length);
+  const visibleHeading =
+    heading.length > maxHeadingLength
+      ? `${heading.slice(0, Math.max(0, maxHeadingLength - 1))}${maxHeadingLength > 0 ? "…" : ""}`
+      : heading;
+  const prefix = `${headingPrefix}${visibleHeading}${headingSuffix}`;
+  const maxDetailLength = Math.max(0, maxBodyLength - prefix.length);
   const visibleDetail =
-    detail.length > maxDetailLength ? `${detail.slice(0, maxDetailLength - 1)}…` : detail;
+    detail.length > maxDetailLength
+      ? `${detail.slice(0, Math.max(0, maxDetailLength - 1))}${maxDetailLength > 0 ? "…" : ""}`
+      : detail;
   return `${prefix}${visibleDetail}${DISCORD_WARNING_SUFFIX}`;
 }
 

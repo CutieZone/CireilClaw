@@ -48,7 +48,7 @@ import { SUPPORTED_IMAGE_TYPES, SUPPORTED_VIDEO_TYPES, VIDEO_SIZE_CAP } from "#s
 import { formatDate } from "#util/date.js";
 import { getDefaultProviderAndModel } from "#util/default-provider-and-model.js";
 import { toWebp } from "#util/image.js";
-import { agentRoot, sanitizeError, sandboxToReal } from "#util/paths.js";
+import { agentRoot, sandboxToReal } from "#util/paths.js";
 
 // oceanic.js's ESM shim breaks under tsx's module loader (.default.default chain
 // resolves to undefined). Force CJS to get the real constructors.
@@ -267,6 +267,9 @@ async function fetchAttachmentImages(msg: DiscordMessage): Promise<ImageContent[
       }
       try {
         const response = await fetch(attachment.url);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
         const raw = await response.arrayBuffer();
         const data = await toWebp(raw, mediaType);
         return {
@@ -315,6 +318,9 @@ async function fetchStickerImages(msg: DiscordMessage): Promise<ImageContent[]> 
             : `https://cdn.discordapp.com/stickers/${sticker.id}.png`;
 
         const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
         const raw = await response.arrayBuffer();
         const data = await toWebp(raw);
         return {
@@ -642,12 +648,11 @@ async function handleMessageCreate(
       "after retries:",
       error,
     );
-    const reason = sanitizeError(error, agentSlug);
     await sendDiscordWarningMessage(
       client,
       msg,
       "Discord error",
-      `Could not fetch channel metadata after retrying Discord REST timeouts; this message was not processed. ${reason}`,
+      "Could not fetch channel metadata after retrying Discord REST timeouts; this message was not processed. Details were written to the console logs.",
     );
     return undefined;
   });
@@ -762,27 +767,33 @@ async function handleMessageCreate(
           continue;
         }
 
-        const ancestorContent = await formatHistoryContext(ancestor);
+        const isFromBot = ancestor.author.id === botId;
+        const ancestorContent = isFromBot
+          ? await formatAssistantContext(ancestor)
+          : await formatHistoryContext(ancestor);
         const ancestorImages = await fetchAllImages(ancestor);
         ds.history.push({
           content:
             ancestorImages.length > 0 ? [ancestorContent, ...ancestorImages] : ancestorContent,
           id: ancestor.id,
           persist: false,
-          role: "user",
+          role: isFromBot ? "assistant" : "user",
           timestamp: Date.now(),
         });
       }
 
       // Add direct reply only if not already in history
       if (!isMessageInHistory(ds.history, directReply.id)) {
-        const replyContent = await formatHistoryContext(directReply);
+        const isFromBot = directReply.author.id === botId;
+        const replyContent = isFromBot
+          ? await formatAssistantContext(directReply)
+          : await formatHistoryContext(directReply);
         const replyImages = await fetchAllImages(directReply);
         ds.history.push({
           content: replyImages.length > 0 ? [replyContent, ...replyImages] : replyContent,
           id: directReply.id,
           persist: true,
-          role: "user",
+          role: isFromBot ? "assistant" : "user",
           timestamp: Date.now(),
         });
       }
@@ -843,16 +854,21 @@ async function handleMessageCreate(
     } catch (error) {
       // Roll back any history entries added during this failed turn so that the
       // next message doesn't see a stranded user message with no response.
-      // Also clear pending tool messages — they reference tool calls from the
-      // rolled-back assistant message and must not leak into the next turn.
+      // Also clear pending tool/media messages — they reference the rolled-back
+      // turn and must not leak into the next turn.
       session.history.length = historyLengthBeforeTurn;
       session.pendingToolMessages.length = 0;
+      session.pendingVideos.length = 0;
       warning("Error during agent turn:", error instanceof Error ? error.message : String(error));
       if (error instanceof Error && error.stack !== undefined) {
         warning("Stack trace:", error.stack);
       }
-      const reason = sanitizeError(error, agentSlug);
-      await sendDiscordWarningMessage(client, msg, "Engine error", reason);
+      await sendDiscordWarningMessage(
+        client,
+        msg,
+        "Engine error",
+        "The turn failed before a response could be produced. Details were written to the console logs.",
+      );
     }
   } finally {
     saveSession(agent.slug, session);
@@ -961,24 +977,6 @@ async function handleMessageUpdate(
       ? await formatAssistantContext(realMsg)
       : await formatHistoryContext(realMsg);
     const images = await fetchAllImages(realMsg);
-    const engineConfig = await loadEngine(agentSlug);
-    const defaults = getDefaultProviderAndModel(engineConfig);
-
-    const provider = engineConfig[session.selectedProvider ?? defaults.provider.name];
-    if (provider === undefined) {
-      throw new Error(
-        `Could not load the provider ${session.selectedProvider} from the engine config: check your configuration`,
-      );
-    }
-    const { models } = provider;
-    const modelSupportsVideo =
-      models?.[session.selectedModel ?? defaults.model.name] === undefined
-        ? false
-        : models[session.selectedModel ?? defaults.model.name]?.supportsVideo;
-
-    const supportsVideo = models === undefined ? false : (modelSupportsVideo ?? false);
-    const videos = supportsVideo ? await fetchAttachmentVideos(realMsg) : [];
-    session.pendingVideos.push(...videos);
     const media = [...images];
 
     entry.content = media.length > 0 ? [textContent, ...media] : textContent;
@@ -1105,6 +1103,9 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
       const results: { filename: string; data: Buffer }[] = [];
       for (const attachment of msg.attachments.values()) {
         const response = await fetch(attachment.url);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
         const data = Buffer.from(await response.arrayBuffer());
         results.push({ data, filename: attachment.filename });
       }

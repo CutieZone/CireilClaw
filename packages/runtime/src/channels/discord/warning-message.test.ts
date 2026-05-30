@@ -19,6 +19,13 @@ describe("buildDiscordWarningContent", () => {
     expect(content.length).toBeLessThanOrEqual(1800);
     expect(content).toContain("…\n\n-# agent owner can react with ✨ to delete");
   });
+
+  it("keeps warning content under the limit when the heading leaves no room for detail", () => {
+    const content = buildDiscordWarningContent("x".repeat(2000), "sensitive detail");
+
+    expect(content.length).toBeLessThanOrEqual(1800);
+    expect(content).not.toContain("sensitive detail");
+  });
 });
 
 describe("sendDiscordWarningMessage", () => {

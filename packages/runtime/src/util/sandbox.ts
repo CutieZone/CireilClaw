@@ -300,7 +300,7 @@ function addEnvironmentVars(
   }
 
   const allVars = extraVars
-    ? [...defaultVars, ...extraVars, ...hostVars]
+    ? [...defaultVars, ...hostVars, ...extraVars]
     : [...defaultVars, ...hostVars];
 
   for (const { key, value } of allVars) {
@@ -739,9 +739,7 @@ async function exec(cfg: ExecConfig): Promise<ExecResult> {
   }
 
   const isNixOS = detectNixOS();
-  const commandPath = isNixOS
-    ? (locate(command, ["/run/current-system/sw/bin"]) ?? `/bin/${command}`)
-    : locate(command);
+  const commandPath = isNixOS ? locate(command, ["/run/current-system/sw/bin"]) : locate(command);
 
   if (commandPath === undefined || !existsSync(commandPath)) {
     return {
