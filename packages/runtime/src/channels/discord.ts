@@ -118,6 +118,17 @@ function writeCommandsHash(agentSlug: string, hash: string): void {
   writeFileSync(commandsHashFile(agentSlug), hash, "utf8");
 }
 
+// Resolves the best display name for a message author. Prefers the guild
+// nickname, then the global display name, then the username. Falls back to the
+// cached guild member when `msg.member` is missing (common for REST-fetched
+// messages like history or reply chains).
+function resolveDisplayName(msg: DiscordMessage): string {
+  const member =
+    msg.member ??
+    (msg.guildID === null ? undefined : msg.client.guilds.get(msg.guildID)?.members.get(msg.author.id));
+  return member?.nick ?? msg.author.globalName ?? msg.author.username;
+}
+
 // Wraps an incoming Discord message's content with sender metadata so the
 // agent has full context about who sent what and when, without needing to
 // parse it out of the message history separately. Includes attachment metadata
@@ -125,7 +136,7 @@ function writeCommandsHash(agentSlug: string, hash: string): void {
 async function formatUserMessage(msg: DiscordMessage): Promise<TextContent> {
   const { username } = msg.author;
   const authorId = msg.author.id;
-  const displayName = msg.member?.nick ?? msg.author.globalName ?? username;
+  const displayName = resolveDisplayName(msg);
   const timestamp = await formatDate(msg.createdAt);
 
   let innerContent = msg.content;
@@ -166,7 +177,7 @@ async function formatUserMessage(msg: DiscordMessage): Promise<TextContent> {
 async function formatHistoryContext(msg: DiscordMessage): Promise<TextContent> {
   const { username } = msg.author;
   const authorId = msg.author.id;
-  const displayName = msg.member?.nick ?? msg.author.globalName ?? username;
+  const displayName = resolveDisplayName(msg);
   const timestamp = await formatDate(msg.createdAt);
 
   let innerContent = msg.content;
