@@ -19,13 +19,13 @@ const PositiveIntegerSchema = vb.pipe(vb.number(), vb.integer(), vb.minValue(1))
 const OpenAIModelListSchema = vb.object({
   data: vb.array(
     vb.looseObject({
-      context_length: vb.exactOptional(PositiveIntegerSchema),
+      context_length: vb.optional(vb.nullable(PositiveIntegerSchema)),
       id: nonEmptyString,
-      max_input_tokens: vb.exactOptional(PositiveIntegerSchema),
+      max_input_tokens: vb.optional(vb.nullable(PositiveIntegerSchema)),
       name: vb.exactOptional(nonEmptyString),
       top_provider: vb.exactOptional(
         vb.looseObject({
-          context_length: vb.exactOptional(PositiveIntegerSchema),
+          context_length: vb.optional(vb.nullable(PositiveIntegerSchema)),
         }),
       ),
     }),
@@ -36,7 +36,7 @@ const AnthropicModelListSchema = vb.object({
   data: vb.array(
     vb.looseObject({
       id: nonEmptyString,
-      max_input_tokens: vb.exactOptional(PositiveIntegerSchema),
+      max_input_tokens: vb.optional(vb.nullable(PositiveIntegerSchema)),
     }),
   ),
 });
@@ -80,7 +80,8 @@ function cacheKey(provider: ProviderConfig): string {
 function parseOpenAIModelMetadata(json: unknown): ModelMetadata[] {
   const list: OpenAIModelList = vb.parse(OpenAIModelListSchema, json);
   return list.data.map((it) => ({
-    contextWindow: it.context_length ?? it.top_provider?.context_length ?? it.max_input_tokens,
+    contextWindow:
+      it.context_length ?? it.top_provider?.context_length ?? it.max_input_tokens ?? undefined,
     id: it.id,
     name: it.name ?? it.id,
   }));
@@ -89,7 +90,7 @@ function parseOpenAIModelMetadata(json: unknown): ModelMetadata[] {
 function parseAnthropicModelMetadata(json: unknown): ModelMetadata[] {
   const list: AnthropicModelList = vb.parse(AnthropicModelListSchema, json);
   return list.data.map((it) => ({
-    contextWindow: it.max_input_tokens,
+    contextWindow: it.max_input_tokens ?? undefined,
     id: it.id,
     name: it.id,
   }));

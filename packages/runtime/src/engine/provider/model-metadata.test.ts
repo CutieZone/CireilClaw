@@ -40,6 +40,41 @@ describe("parseOpenAIModelMetadata", () => {
 
     expect(models).toEqual([{ contextWindow: undefined, id: "gpt-example", name: "gpt-example" }]);
   });
+  it("treats null context_length as absent and falls back", () => {
+    // oxlint-disable unicorn/no-null
+    const models = parseOpenAIModelMetadata({
+      data: [
+        {
+          context_length: null,
+          id: "openrouter/model-c",
+          name: "Model C",
+          top_provider: { context_length: 32_000 },
+        },
+      ],
+    });
+    // oxlint-enable unicorn/no-null
+
+    expect(models).toEqual([{ contextWindow: 32_000, id: "openrouter/model-c", name: "Model C" }]);
+  });
+
+  it("treats all-null numeric fields as absent", () => {
+    // oxlint-disable unicorn/no-null
+    const models = parseOpenAIModelMetadata({
+      data: [
+        {
+          context_length: null,
+          id: "openrouter/model-d",
+          max_input_tokens: null,
+          top_provider: { context_length: null },
+        },
+      ],
+    });
+    // oxlint-enable unicorn/no-null
+
+    expect(models).toEqual([
+      { contextWindow: undefined, id: "openrouter/model-d", name: "openrouter/model-d" },
+    ]);
+  });
 });
 
 describe("parseAnthropicModelMetadata", () => {

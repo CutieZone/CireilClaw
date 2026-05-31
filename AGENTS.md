@@ -31,6 +31,8 @@ NixOS-based — `flake.nix` provides nodejs, pnpm, and bubblewrap via direnv. Us
 - Never use `pnpm lint` piped through `grep`, `tail`, or `head`. It only makes it harder to find problems. Run it directly and read the full output.
 - Use `eza --git-ignore --tree` to get a project tree that respects `.gitignore`.
 - When editing configuration schemas, the edits should also be made to the example configs _and_ to any related documentation files if there are applicable ones.
+- When editing configuration schemas, the edits should also be made to the example configs _and_ to any related documentation files if there are applicable ones.
+- This is a pnpm monorepo. Source code lives under `packages/`, not a top-level `src/`. Use `find` with patterns like `packages/**/*.ts` rather than assuming `src/`.
 
 ## Architecture
 
