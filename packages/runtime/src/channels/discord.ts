@@ -120,13 +120,25 @@ function writeCommandsHash(agentSlug: string, hash: string): void {
 
 // Resolves the best display name for a message author. Prefers the guild
 // nickname, then the global display name, then the username. Falls back to the
-// cached guild member when `msg.member` is missing (common for REST-fetched
-// messages like history or reply chains).
-function resolveDisplayName(msg: DiscordMessage): string {
-  const member =
-    msg.member ??
-    (msg.guildID === null ? undefined : msg.client.guilds.get(msg.guildID)?.members.get(msg.author.id));
-  return member?.nick ?? msg.author.globalName ?? msg.author.username;
+// cached guild member when `msg.member` is missing; if the member isn't cached,
+// fetches it via REST (which also populates the cache).
+async function resolveDisplayName(msg: DiscordMessage): Promise<string> {
+  const { member: msgMember, guildID, author, client } = msg;
+  let member = msgMember;
+  if (member === undefined && guildID !== null) {
+    member = client.guilds.get(guildID)?.members.get(author.id);
+  }
+  if (member === undefined && guildID !== null) {
+    try {
+      member = await runDiscordRestWithRetries(
+        `GET /guilds/${guildID}/members/${author.id}`,
+        async () => await client.rest.guilds.getMember(guildID, author.id),
+      );
+    } catch {
+      // Member may have left or we lack permissions; fall through to author info.
+    }
+  }
+  return member?.nick ?? author.globalName ?? author.username;
 }
 
 // Wraps an incoming Discord message's content with sender metadata so the
@@ -136,7 +148,7 @@ function resolveDisplayName(msg: DiscordMessage): string {
 async function formatUserMessage(msg: DiscordMessage): Promise<TextContent> {
   const { username } = msg.author;
   const authorId = msg.author.id;
-  const displayName = resolveDisplayName(msg);
+  const displayName = await resolveDisplayName(msg);
   const timestamp = await formatDate(msg.createdAt);
 
   let innerContent = msg.content;
@@ -177,7 +189,7 @@ async function formatUserMessage(msg: DiscordMessage): Promise<TextContent> {
 async function formatHistoryContext(msg: DiscordMessage): Promise<TextContent> {
   const { username } = msg.author;
   const authorId = msg.author.id;
-  const displayName = resolveDisplayName(msg);
+  const displayName = await resolveDisplayName(msg);
   const timestamp = await formatDate(msg.createdAt);
 
   let innerContent = msg.content;
