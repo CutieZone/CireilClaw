@@ -157,19 +157,38 @@ async function buildSystemPrompt(
     lines.push("</skills>");
   }
 
+  const missingFiles: string[] = [];
+
   if (session.openedFiles.size > 0) {
     lines.push("<opened_files>", "These are your currently open files:", "");
 
     for (const file of session.openedFiles) {
       const realPath = sandboxToReal(file, agentSlug);
+
+      let stats: Awaited<ReturnType<typeof stat>> | undefined = undefined;
+      try {
+        stats = await stat(realPath);
+      } catch {
+        missingFiles.push(file);
+        session.openedFiles.delete(file);
+        session.activeFileSections.delete(file);
+        continue;
+      }
+
+      if (!stats.isFile()) {
+        missingFiles.push(file);
+        session.openedFiles.delete(file);
+        session.activeFileSections.delete(file);
+        continue;
+      }
+
       const content = await readFile(realPath, "utf8");
-      const { size } = await stat(realPath);
 
       const activeSections = session.activeFileSections.get(file);
       if (activeSections !== undefined && activeSections.size > 0) {
         // Render only the open sections with their IDs as labels
         lines.push(
-          `<file path="${file}" size="${size}" sections="${[...activeSections].join(", ")}">`,
+          `<file path="${file}" size="${stats.size}" sections="${[...activeSections].join(", ")}">`,
         );
 
         for (const sectionId of activeSections) {
@@ -179,11 +198,25 @@ async function buildSystemPrompt(
         }
       } else {
         // No section filter — render the entire file
-        lines.push(`<file path="${file}" size="${size}">`, content, "</file>", "");
+        lines.push(`<file path="${file}" size="${stats.size}">`, content, "</file>", "");
       }
     }
 
     lines.push("</opened_files>");
+  }
+
+  if (missingFiles.length > 0) {
+    session.pendingToolMessages.push({
+      content: {
+        content: missingFiles
+          .map(
+            (filePath) => `File ${filePath} moved/deleted while still open. Automatically closed.`,
+          )
+          .join("\n"),
+        type: "text",
+      },
+      role: "user",
+    });
   }
 
   lines.push("<metadata>", `The current session is on the platform: ${session.channel}`);
