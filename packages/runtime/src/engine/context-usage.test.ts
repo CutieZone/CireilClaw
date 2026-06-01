@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   computeContextUsageSnapshot,
+  formatContextPruneWarning,
   formatContextUsage,
   formatPromptMetadata,
 } from "./context-usage.js";
@@ -107,6 +108,26 @@ describe("formatContextUsage", () => {
 
     expect(formatPromptMetadata("2026-05-27", snapshot)).toBe(
       "Current date: 2026-05-27\nContext usage: ~1 tokens (context window unavailable; token-budget percentage unavailable; max-turn pruning applies).",
+    );
+  });
+});
+
+describe("formatContextPruneWarning", () => {
+  it("includes remaining tokens and approximate prune target", () => {
+    const snapshot = computeContextUsageSnapshot({
+      contextBudget: 0.6,
+      contextHardBudget: 0.85,
+      contextWindow: 1000,
+      messages: [{ content: { content: "x".repeat(2391), type: "text" }, role: "user" }],
+      systemTokens: 0,
+    });
+    expect(formatContextPruneWarning(snapshot)).toBe(
+      "Context note: the conversation window is approaching its limit (~49 tokens before auto-prune). When pruning happens, older turns will be dropped to keep roughly ~600 tokens. If anything in this conversation needs to survive, write it to a file now.",
+    );
+  });
+  it("falls back to zero when fields are missing", () => {
+    expect(formatContextPruneWarning({ estimatedTokens: 100, shouldWarnBeforePrune: false })).toBe(
+      "Context note: the conversation window is approaching its limit (~0 tokens before auto-prune). When pruning happens, older turns will be dropped to keep roughly ~0 tokens. If anything in this conversation needs to survive, write it to a file now.",
     );
   });
 });

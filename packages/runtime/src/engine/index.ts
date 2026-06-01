@@ -14,8 +14,8 @@ import { getDb } from "#db/index.js";
 import { hashImage } from "#db/sessions.js";
 import type { ToolCallContent } from "#engine/content.js";
 import {
-  CONTEXT_PRUNE_WARNING,
   computeContextUsageSnapshot,
+  formatContextPruneWarning,
   formatPromptMetadata,
 } from "#engine/context-usage.js";
 import type { Context, UsageInfo } from "#engine/context.js";
@@ -334,7 +334,7 @@ export async function runTurn(
 
     let promptMetadata = formatPromptMetadata(await formatDate(), usageSnapshot);
     if (shouldWarnBeforePrune) {
-      promptMetadata = `${promptMetadata}\n${CONTEXT_PRUNE_WARNING}`;
+      promptMetadata = `${promptMetadata}\n${formatContextPruneWarning(usageSnapshot)}`;
       session.lastContextWarningCursor = session.historyCursor;
     }
 

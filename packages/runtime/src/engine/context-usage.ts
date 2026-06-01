@@ -68,11 +68,14 @@ function formatPromptMetadata(currentDate: string, snapshot: ContextUsageSnapsho
   return `Current date: ${currentDate}\n${formatContextUsage(snapshot)}`;
 }
 
-const CONTEXT_PRUNE_WARNING =
-  "Context warning: less than 5% of the configured context window remains before auto-prune. Before doing more non-essential work, warn the user that pruning is close and ask whether they want to package up or compact anything first.";
+function formatContextPruneWarning(snapshot: ContextUsageSnapshot): string {
+  const remaining = snapshot.remainingToHardPrune ?? 0;
+  const target = snapshot.softPruneTarget ?? 0;
+  return `Context note: the conversation window is approaching its limit (~${remaining} tokens before auto-prune). When pruning happens, older turns will be dropped to keep roughly ~${target} tokens. If anything in this conversation needs to survive, write it to a file now.`;
+}
 
 export {
-  CONTEXT_PRUNE_WARNING,
+  formatContextPruneWarning,
   computeContextUsageSnapshot,
   formatContextUsage,
   formatPromptMetadata,
