@@ -35,6 +35,7 @@ export const exec: ToolDef = {
     "- Performing operations that cannot be expressed with the other file tools (e.g., grep, git, compilation).\n\n" +
     "Constraints:\n" +
     "- Filesystem access outside the sandbox is restricted.\n" +
+    "- `/blocks` explicitly CANNOT be accessed using `exec`" +
     "- Commands that exceed the configured timeout are killed automatically.\n\n" +
     "Tip: Use list-dir with path /bin to see which binaries are available in the sandbox.\n" +
     "Tip: The `/workspace/.env` file *is* sourced and can affect your $PATH and other environment variables.",
