@@ -14,6 +14,10 @@ const Schema = vb.strictObject({
     vb.nonEmpty(),
     vb.description("Sandbox path to read (e.g. /workspace/notes.txt)."),
   ),
+  raw: vb.pipe(
+    vb.optional(vb.boolean(), false),
+    vb.description("Always gives the raw content of the file, skipping the section subsystem."),
+  ),
 });
 
 export const read: ToolDef = {
@@ -54,6 +58,11 @@ export const read: ToolDef = {
     }
 
     const content = await readFile(realPath, "utf8");
+
+    if (data.raw) {
+      // Short-circuit raw read
+      return { content, path: data.path, size, success: true };
+    }
 
     // If the file is large, return an outline instead of full content.
     const outline = await generateOutline(data.path, ctx.agentSlug, content);
