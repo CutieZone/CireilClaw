@@ -51,6 +51,10 @@ abstract class BaseSession {
   public lastHeartbeatAt?: number;
   // Cursor value when the model was last asked to warn about imminent token pruning.
   public lastContextWarningCursor?: number;
+  // Timestamp (ms) marking the boundary for automatic history population.
+  // Channel-specific meaning: Discord uses it to exclude messages created before this time.
+  public historyBarrier?: number;
+
   // Optional hook checked by Harness.send() — return false to suppress delivery.
   public sendFilter?: (content: string) => boolean = undefined;
 

@@ -479,6 +479,11 @@ async function populateHistoryFromDiscord(
       continue;
     }
 
+    // Skip messages before the history barrier (super-clear)
+    if (session.historyBarrier !== undefined && msg.createdAt.getTime() < session.historyBarrier) {
+      continue;
+    }
+
     // Skip suppressed notification messages (silent messages) - they shouldn't
     // make it to the LLM unless they're in the reply chain (which is handled
     // separately by crawlReplyTree)
@@ -790,6 +795,10 @@ async function handleMessageCreate(
           continue;
         }
 
+        if (ds.historyBarrier !== undefined && ancestor.createdAt.getTime() < ds.historyBarrier) {
+          continue;
+        }
+
         const isFromBot = ancestor.author.id === botId;
         const ancestorContent = isFromBot
           ? await formatAssistantContext(ancestor)
@@ -807,18 +816,25 @@ async function handleMessageCreate(
 
       // Add direct reply only if not already in history
       if (!isMessageInHistory(ds.history, directReply.id)) {
-        const isFromBot = directReply.author.id === botId;
-        const replyContent = isFromBot
-          ? await formatAssistantContext(directReply)
-          : await formatHistoryContext(directReply);
-        const replyImages = await fetchAllImages(directReply);
-        ds.history.push({
-          content: replyImages.length > 0 ? [replyContent, ...replyImages] : replyContent,
-          id: directReply.id,
-          persist: true,
-          role: isFromBot ? "assistant" : "user",
-          timestamp: Date.now(),
-        });
+        if (
+          ds.historyBarrier !== undefined &&
+          directReply.createdAt.getTime() < ds.historyBarrier
+        ) {
+          // Direct reply is before the barrier — skip it entirely.
+        } else {
+          const isFromBot = directReply.author.id === botId;
+          const replyContent = isFromBot
+            ? await formatAssistantContext(directReply)
+            : await formatHistoryContext(directReply);
+          const replyImages = await fetchAllImages(directReply);
+          ds.history.push({
+            content: replyImages.length > 0 ? [replyContent, ...replyImages] : replyContent,
+            id: directReply.id,
+            persist: true,
+            role: isFromBot ? "assistant" : "user",
+            timestamp: Date.now(),
+          });
+        }
       }
     }
 

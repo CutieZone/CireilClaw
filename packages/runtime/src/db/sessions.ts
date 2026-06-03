@@ -226,6 +226,7 @@ const LastContextWarningCursorSchema = vb.pipe(vb.number(), vb.integer(), vb.min
 const DiscordMetaSchema = vb.object({
   channelId: nonEmptyString,
   guildId: vb.exactOptional(nonEmptyString),
+  historyBarrier: vb.exactOptional(vb.number()),
   isNsfw: vb.exactOptional(vb.boolean()),
   lastContextWarningCursor: vb.exactOptional(LastContextWarningCursorSchema),
   selectedModel: vb.exactOptional(nonEmptyString),
@@ -282,6 +283,7 @@ function _flushSession(agentSlug: string, session: Session): void {
     meta = {
       channelId: session.channelId,
       guildId: session.guildId,
+      historyBarrier: session.historyBarrier,
       isNsfw: session.isNsfw,
       lastContextWarningCursor: session.lastContextWarningCursor,
       selectedModel: session.selectedModel,
@@ -289,6 +291,7 @@ function _flushSession(agentSlug: string, session: Session): void {
     } satisfies DiscordMeta;
   } else if (session.channel === "matrix") {
     meta = {
+      historyBarrier: session.historyBarrier,
       lastContextWarningCursor: session.lastContextWarningCursor,
       roomId: session.roomId,
       selectedModel: session.selectedModel,
@@ -296,6 +299,7 @@ function _flushSession(agentSlug: string, session: Session): void {
     };
   } else {
     meta = {
+      historyBarrier: session.historyBarrier,
       lastContextWarningCursor: session.lastContextWarningCursor,
       selectedModel: session.selectedModel,
       selectedProvider: session.selectedProvider,
@@ -441,6 +445,7 @@ async function loadSessions(agentSlug: string): Promise<Map<string, Session>> {
 
     const common = vb.safeParse(
       vb.looseObject({
+        historyBarrier: vb.exactOptional(vb.number()),
         lastContextWarningCursor: vb.exactOptional(LastContextWarningCursorSchema),
         selectedModel: vb.exactOptional(nonEmptyString),
         selectedProvider: vb.exactOptional(nonEmptyString),
@@ -448,6 +453,7 @@ async function loadSessions(agentSlug: string): Promise<Map<string, Session>> {
       metaJson,
     );
     if (common.success) {
+      session.historyBarrier = common.output.historyBarrier;
       session.lastContextWarningCursor = common.output.lastContextWarningCursor;
       session.selectedModel ??= common.output.selectedModel;
       session.selectedProvider ??= common.output.selectedProvider;
