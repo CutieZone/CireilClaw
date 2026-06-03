@@ -53,12 +53,21 @@ action = "allow"
 | `tui`                         | TUI session (run via `pnpm start tui`)  |
 | `internal`                    | Internal session (heartbeat, cron jobs) |
 
+Conditions support negation with a leading `!`:
+
+```toml
+# Load a block everywhere EXCEPT in NSFW channels
+[blocks.sfw-only]
+when = "!discord:nsfw"
+action = "load"
+
+# Allow access in any channel except DMs
+[workspace."/shared/"]
+when = "!discord:dm"
+action = "allow"
+```
+
 ## Logic Modes
-
-Arrays of conditions support two modes:
-
-- `mode = "or"` (default) - Allow if **any** condition matches
-- `mode = "and"` - Allow only if **all** conditions match
 
 ```toml
 # Allow in NSFW channels OR DMs (default behavior)

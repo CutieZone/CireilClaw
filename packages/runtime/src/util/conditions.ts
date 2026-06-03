@@ -3,57 +3,54 @@ import type { Session } from "#harness/session.js";
 
 /**
  * Evaluate a single condition against the session context.
+ * Supports negation with a leading `!` (e.g., `!discord:nsfw`).
  */
 function evaluate(condition: Condition, session: Session): boolean {
-  if (condition === "tui") {
-    return session.channel === "tui";
-  }
-  if (condition === "internal") {
-    return session.channel === "internal";
-  }
+  const negate = condition.startsWith("!");
+  const base = negate ? condition.slice(1) : condition;
 
-  if (condition.startsWith("discord:")) {
+  let result = false;
+
+  if (base === "tui") {
+    result = session.channel === "tui";
+  } else if (base === "internal") {
+    result = session.channel === "internal";
+  } else if (base.startsWith("discord:")) {
     // All discord conditions require a discord session
-    if (session.channel !== "discord") {
-      return false;
-    }
+    if (session.channel === "discord") {
+      const parts = base.split(":");
+      const [, part1, part2, ..._rest] = parts;
 
-    const parts = condition.split(":");
-    const [, part1, part2, ..._rest] = parts;
-
-    if (part1 === "nsfw") {
-      return session.isNsfw;
-    }
-
-    if (part1 === "dm") {
-      // DM means no guildId
-      if (session.guildId !== undefined) {
-        return false;
+      if (part1 === "nsfw") {
+        result = session.isNsfw;
+      } else if (part1 === "dm") {
+        // DM means no guildId
+        if (session.guildId !== undefined) {
+          result = false;
+        } else if (parts.length === 2) {
+          // discord:dm matches any DM
+          result = true;
+        } else if (parts.length === 3 && part2 !== undefined) {
+          // discord:dm:<channelId> matches specific DM channel
+          result = session.channelId === part2;
+        } else {
+          result = false;
+        }
+      } else if (part1 === "guild" && parts.length === 3 && part2 !== undefined) {
+        result = session.guildId === part2;
+      } else if (part1 === "channel" && parts.length === 3 && part2 !== undefined) {
+        result = session.channelId === part2;
+      } else {
+        result = false;
       }
-
-      // discord:dm matches any DM
-      if (parts.length === 2) {
-        return true;
-      }
-
-      // discord:dm:<channelId> matches specific DM channel
-      if (parts.length === 3 && part2 !== undefined) {
-        return session.channelId === part2;
-      }
+    } else {
+      result = false;
     }
-
-    if (part1 === "guild" && parts.length === 3 && part2 !== undefined) {
-      // discord:guild:<guildId>
-      return session.guildId === part2;
-    }
-
-    if (part1 === "channel" && parts.length === 3 && part2 !== undefined) {
-      // discord:channel:<channelId>
-      return session.channelId === part2;
-    }
+  } else {
+    result = false;
   }
 
-  return false;
+  return negate ? !result : result;
 }
 
 /**

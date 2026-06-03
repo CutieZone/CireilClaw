@@ -2,22 +2,24 @@ import * as vb from "valibot";
 
 const nonEmptyString = vb.pipe(vb.string(), vb.nonEmpty());
 
-// Simple string condition schema with validation
+// Simple string condition schema with validation (supports optional `!` prefix for negation)
 const ConditionStringSchema = vb.message(
   vb.pipe(
     vb.string(),
-    vb.check(
-      (str) =>
-        str === "discord:nsfw" ||
-        str === "discord:dm" ||
-        /^discord:dm:\d+$/.test(str) ||
-        /^discord:guild:\d+$/.test(str) ||
-        /^discord:channel:\d+$/.test(str) ||
-        str === "tui" ||
-        str === "internal",
-    ),
+    vb.check((str) => {
+      const base = str.startsWith("!") ? str.slice(1) : str;
+      return (
+        base === "discord:nsfw" ||
+        base === "discord:dm" ||
+        /^discord:dm:\d+$/.test(base) ||
+        /^discord:guild:\d+$/.test(base) ||
+        /^discord:channel:\d+$/.test(base) ||
+        base === "tui" ||
+        base === "internal"
+      );
+    }),
   ),
-  "Invalid condition format. Supported: discord:nsfw, discord:dm[:id], discord:guild:id, discord:channel:id, tui, internal",
+  "Invalid condition format. Supported: [!]discord:nsfw, [!]discord:dm[:id], [!]discord:guild:id, [!]discord:channel:id, [!]tui, [!]internal",
 );
 
 const WhenSchema = vb.union([

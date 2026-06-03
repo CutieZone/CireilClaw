@@ -129,9 +129,80 @@ describe("evaluate", () => {
       );
     });
   });
-
   it("returns false for unknown conditions", () => {
     expect(evaluate("unknown:thing" as Condition, makeDiscord({}))).toBe(false);
+  });
+});
+
+describe("negated conditions", () => {
+  it("!discord:nsfw matches when nsfw is false", () => {
+    expect(evaluate("!discord:nsfw" as Condition, makeDiscord({ isNsfw: false }))).toBe(true);
+  });
+
+  it("!discord:nsfw does not match when nsfw is true", () => {
+    expect(evaluate("!discord:nsfw" as Condition, makeDiscord({ isNsfw: true }))).toBe(false);
+  });
+
+  it("!tui matches non-tui sessions", () => {
+    expect(evaluate("!tui" as Condition, makeDiscord({}))).toBe(true);
+  });
+
+  it("!tui does not match TuiSession", () => {
+    expect(evaluate("!tui" as Condition, new TuiSession())).toBe(false);
+  });
+
+  it("!internal matches non-internal sessions", () => {
+    expect(evaluate("!internal" as Condition, makeDiscord({}))).toBe(true);
+  });
+
+  it("!discord:dm matches guild channels", () => {
+    expect(evaluate("!discord:dm" as Condition, makeDiscord({ guildId: "g1" }))).toBe(true);
+  });
+
+  it("!discord:dm does not match actual DMs", () => {
+    expect(evaluate("!discord:dm" as Condition, makeDiscord({ guildId: undefined }))).toBe(false);
+  });
+
+  it("!discord:guild:g1 matches different guild", () => {
+    expect(evaluate("!discord:guild:g1" as Condition, makeDiscord({ guildId: "g2" }))).toBe(true);
+  });
+
+  it("!discord:guild:g1 does not match same guild", () => {
+    expect(evaluate("!discord:guild:g1" as Condition, makeDiscord({ guildId: "g1" }))).toBe(false);
+  });
+});
+
+describe("evaluateRule with negation", () => {
+  it("evaluates negated condition in 'or' mode", () => {
+    const rule = { mode: "or" as const, when: "!tui" as Condition };
+    expect(evaluateRule(rule, makeDiscord({}))).toBe(true);
+  });
+
+  it("mixes positive and negative conditions in 'or' mode", () => {
+    const rule: { when: Condition[]; mode: "or" } = {
+      mode: "or",
+      when: ["!discord:nsfw", "discord:dm"],
+    };
+    // nsfw=false → !nsfw=true, so or-mode matches
+    expect(evaluateRule(rule, makeDiscord({ guildId: "g1", isNsfw: false }))).toBe(true);
+  });
+
+  it("mixes positive and negative conditions in 'and' mode", () => {
+    const rule: { when: Condition[]; mode: "and" } = {
+      mode: "and",
+      when: ["!discord:nsfw", "discord:guild:g1"],
+    };
+    // nsfw=false, guild=g1 → both true
+    expect(evaluateRule(rule, makeDiscord({ guildId: "g1", isNsfw: false }))).toBe(true);
+  });
+
+  it("fails 'and' mode when negated condition is false", () => {
+    const rule: { when: Condition[]; mode: "and" } = {
+      mode: "and",
+      when: ["!discord:nsfw", "discord:guild:g1"],
+    };
+    // nsfw=true → !nsfw=false, so and-mode fails
+    expect(evaluateRule(rule, makeDiscord({ guildId: "g1", isNsfw: true }))).toBe(false);
   });
 });
 
