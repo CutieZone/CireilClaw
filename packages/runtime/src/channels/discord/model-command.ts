@@ -46,6 +46,11 @@ const definition: CreateApplicationCommandOptions = {
       type: ApplicationCommandOptionTypes.SUB_COMMAND,
     },
     {
+      description: "Clear model overrides for all channels",
+      name: "clear-all",
+      type: ApplicationCommandOptionTypes.SUB_COMMAND,
+    },
+    {
       description: "Show the effective provider and model for this channel",
       name: "query",
       type: ApplicationCommandOptionTypes.SUB_COMMAND,
@@ -168,6 +173,35 @@ async function handleClear(interaction: CommandInteraction, ctx: HandlerCtx): Pr
   });
 }
 
+async function handleClearAll(interaction: CommandInteraction, ctx: HandlerCtx): Promise<void> {
+  const agent = ctx.owner.agents.get(ctx.agentSlug);
+  if (agent === undefined || agent.sessions.size === 0) {
+    await interaction.createFollowup({
+      content: "No active sessions to clear overrides in.",
+      flags: MessageFlags.EPHEMERAL,
+    });
+    return;
+  }
+
+  let cleared = 0;
+  for (const session of agent.sessions.values()) {
+    if (session.selectedProvider !== undefined || session.selectedModel !== undefined) {
+      session.selectedProvider = undefined;
+      session.selectedModel = undefined;
+      saveSession(ctx.agentSlug, session);
+      cleared++;
+    }
+  }
+
+  await interaction.createFollowup({
+    content:
+      cleared > 0
+        ? `Cleared model overrides in ${cleared} session(s).`
+        : "No model overrides were active.",
+    flags: MessageFlags.EPHEMERAL,
+  });
+}
+
 async function handleQuery(interaction: CommandInteraction, ctx: HandlerCtx): Promise<void> {
   const session = getSession(interaction, ctx);
   if (session === undefined) {
@@ -209,6 +243,10 @@ async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): 
       }
       case "clear": {
         await handleClear(interaction, ctx);
+        break;
+      }
+      case "clear-all": {
+        await handleClearAll(interaction, ctx);
         break;
       }
       case "query": {
