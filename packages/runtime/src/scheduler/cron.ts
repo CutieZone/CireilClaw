@@ -47,7 +47,7 @@ async function deliverOutput(
   }
 
   // delivery === "announce"
-  const target = agent.resolveTarget(job.target);
+  const target = await agent.resolveTarget(job.target);
   if (target === undefined) {
     debug("Cron: no target session to announce for job", colors.keyword(job.id));
     return;
@@ -65,7 +65,7 @@ async function deliverOutput(
 }
 
 async function runMainSession(agent: Agent, job: CronJobConfig): Promise<void> {
-  const session = agent.resolveTarget(job.target);
+  const session = await agent.resolveTarget(job.target);
   if (session === undefined) {
     debug("Cron: no target session for job", colors.keyword(job.id), "— skipping");
     return;

@@ -92,7 +92,7 @@ async function runHeartbeat(agent: Agent, cfg: HeartbeatConfig): Promise<void> {
     return;
   }
 
-  const session = agent.resolveTarget(cfg.target);
+  const session = await agent.resolveTarget(cfg.target);
   if (session === undefined) {
     debug("Heartbeat: no target session found — skipping");
     return;

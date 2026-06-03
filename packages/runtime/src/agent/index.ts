@@ -1,6 +1,6 @@
 import type { Client as OceanicClient } from "oceanic.js";
 
-import { loadConditions } from "#config/index.js";
+import { loadConditions, loadEngine } from "#config/index.js";
 import type { ConditionsConfig } from "#config/schemas/conditions.js";
 import { runTurn } from "#engine/index.js";
 import { MINIMAL_HANDLER } from "#harness/channel-handler.js";
@@ -13,6 +13,7 @@ import type {
 import type { Session } from "#harness/session.js";
 import { DiscordSession, NamedInternalSession, TuiSession } from "#harness/session.js";
 import { Scheduler } from "#scheduler/index.js";
+import { getDefaultProviderAndModel } from "#util/default-provider-and-model.js";
 
 export class Agent {
   private readonly _slug: string;
@@ -80,7 +81,7 @@ export class Agent {
 
   // Resolve a scheduler target string to a session, auto-creating ephemeral
   // sessions (internal, TUI, Discord) when the target is valid but missing.
-  public resolveTarget(target: string): Session | undefined {
+  public async resolveTarget(target: string): Promise<Session | undefined> {
     if (target === "none") {
       return undefined;
     }
@@ -124,6 +125,35 @@ export class Agent {
         });
         this._sessions.set(target, session);
         return session;
+      }
+    }
+
+    // "owner" resolves to a DM channel with the bot owner.
+    if (target === "owner") {
+      if (this._ownerId === undefined || this._discordClient === undefined) {
+        return undefined;
+      }
+
+      try {
+        const dmChannel = await this._discordClient.rest.users.createDM(this._ownerId);
+        const sessionId = `discord:${dmChannel.id}`;
+        const prior = this._sessions.get(sessionId);
+        if (prior !== undefined) {
+          return prior;
+        }
+
+        const engine = await loadEngine(this._slug);
+        const { provider, model } = getDefaultProviderAndModel(engine);
+
+        const session = new DiscordSession({
+          channelId: dmChannel.id,
+          selectedModel: model.name,
+          selectedProvider: provider.name,
+        });
+        this._sessions.set(sessionId, session);
+        return session;
+      } catch {
+        return undefined;
       }
     }
 
