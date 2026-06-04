@@ -9,6 +9,7 @@ import type { Tool } from "#engine/tool.js";
 import { debug, warning } from "#output/log.js";
 import { encode } from "#util/base64.js";
 import { toJpeg } from "#util/image.js";
+import { parseRepairedJSON } from "#util/json.js";
 
 import { getChatGptAccountId, getValidCodexAuth } from "./openai-codex-auth.js";
 
@@ -558,12 +559,22 @@ function translateCodexOutput(
         }),
         item,
       );
-      toolCalls.push({
-        id: parsed.call_id,
-        input: parsed.arguments.trim().length === 0 ? {} : JSON.parse(parsed.arguments),
-        name: parsed.name,
-        type: "toolCall",
-      });
+      try {
+        toolCalls.push({
+          id: parsed.call_id,
+          input:
+            parsed.arguments.trim().length === 0
+              ? {}
+              : (parseRepairedJSON(parsed.arguments) as Record<string, unknown>),
+          name: parsed.name,
+          type: "toolCall",
+        });
+      } catch (error: unknown) {
+        throw new Error(
+          `Failed to parse tool-call arguments into a json object\n ${parsed.arguments}`,
+          { cause: error },
+        );
+      }
     } else if (type === "reasoning") {
       const encrypted = item["encrypted_content"];
       if (typeof encrypted === "string" && encrypted.length > 0) {

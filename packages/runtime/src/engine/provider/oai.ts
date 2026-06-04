@@ -20,6 +20,7 @@ import type { Tool } from "#engine/tool.js";
 import { debug, warning } from "#output/log.js";
 import { encode } from "#util/base64.js";
 import { toJpeg } from "#util/image.js";
+import { parseRepairedJSON } from "#util/json.js";
 
 // Per-apiBase JPEG requirement flag. Set on first WebP rejection so subsequent
 // turns skip the doomed WebP attempt entirely.
@@ -541,7 +542,10 @@ export async function generate(
           try {
             return {
               id: it.id,
-              input: it.function.arguments.trim() === "" ? {} : JSON.parse(it.function.arguments),
+              input:
+                it.function.arguments.trim() === ""
+                  ? {}
+                  : (parseRepairedJSON(it.function.arguments) as Record<string, unknown>),
               name: it.function.name,
               type: "toolCall",
             } as ToolCallContent;
