@@ -8,9 +8,10 @@ const VALID_JSON_ESCAPE_CHARS: Record<string, true> = {
   n: true,
   r: true,
   t: true,
-  u: true,
 };
 // oxlint-enable id-length
+
+const HEX_DIGIT = /^[0-9A-Fa-f]$/u;
 
 /**
  * Repair invalid JSON escape sequences in a string by doubling backslashes
@@ -36,17 +37,40 @@ function repairJsonEscapes(json: string): string {
     const ch = json.charAt(i);
     if (ch === "\\") {
       const next = json[i + 1];
-      if (next !== undefined && VALID_JSON_ESCAPE_CHARS[next] !== undefined) {
+      if (next === undefined) {
+        // Trailing backslash at end of input — escape it.
+        parts.push(String.raw`\\`);
+        i += 1;
+      } else if (next === "u") {
+        // \uXXXX — only valid if followed by exactly 4 hex digits.
+        if (
+          HEX_DIGIT.test(json.charAt(i + 2)) &&
+          HEX_DIGIT.test(json.charAt(i + 3)) &&
+          HEX_DIGIT.test(json.charAt(i + 4)) &&
+          HEX_DIGIT.test(json.charAt(i + 5))
+        ) {
+          parts.push(
+            "\\",
+            "u",
+            json.charAt(i + 2),
+            json.charAt(i + 3),
+            json.charAt(i + 4),
+            json.charAt(i + 5),
+          );
+          i += 6;
+        } else {
+          // Malformed \u — escape the backslash.
+          parts.push(String.raw`\\`, "u");
+          i += 2;
+        }
+      } else if (VALID_JSON_ESCAPE_CHARS[next] === undefined) {
+        // Invalid escape — insert an extra backslash.
+        parts.push(String.raw`\\`, next);
+        i += 2;
+      } else {
         // Valid JSON escape — pass through unchanged.
         parts.push("\\", next);
         i += 2;
-      } else {
-        // Invalid or trailing backslash — insert an extra backslash.
-        parts.push(String.raw`\\`);
-        if (next !== undefined) {
-          parts.push(next);
-        }
-        i += next === undefined ? 1 : 2;
       }
     } else {
       parts.push(ch);
