@@ -38,10 +38,6 @@ async function loadTools(agentSlug: string): Promise<ToolsConfig> {
   throw new Error(`Tools config at path ${colors.path(file)} does not exist.`);
 }
 
-/**
- * Load and parses the appropriate engine config.
- * @param agentSlug Optional slug to specify the agent for which to load the engine config for
- */
 async function loadEngine(agentSlug?: string): Promise<ProvidersConfig> {
   let obj: TomlTable | undefined = undefined;
   if (agentSlug === undefined) {
@@ -68,7 +64,6 @@ async function loadEngine(agentSlug?: string): Promise<ProvidersConfig> {
 
   const cfg = vb.parse(ProvidersConfigSchema, obj);
 
-  // Validate that a global default provider exists
   const defaultProvider = Object.values(cfg).filter((it) => it.isGlobalDefault);
 
   if (defaultProvider.length === 0) {

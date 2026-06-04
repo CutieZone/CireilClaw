@@ -46,7 +46,6 @@ const readHistory: ToolDef = {
       return { messages: [], success: true };
     }
 
-    // Use channel-formatted content
     const formatted = messages.map((msg) => msg.formatted).join("\n");
 
     return {

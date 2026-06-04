@@ -15,11 +15,9 @@ function truncateToTurns(messages: Message[], maxTurns: number): Message[] {
   const turns: Message[][] = [];
 
   for (const msg of messages) {
-    // Start a new turn on user messages, or if we're just beginning
     if (msg.role === "user" || turns.length === 0) {
       turns.push([msg]);
     } else {
-      // Associate with the current turn (assistant or toolResponse)
       const currentTurn = turns.at(-1);
       if (currentTurn !== undefined) {
         currentTurn.push(msg);
@@ -27,7 +25,6 @@ function truncateToTurns(messages: Message[], maxTurns: number): Message[] {
     }
   }
 
-  // Keep only the last maxTurns
   const truncated = turns.slice(-maxTurns);
   return truncated.flat();
 }
@@ -246,7 +243,6 @@ function countTurns(messages: Message[]): number {
 function pruneToBudget(messages: Message[], systemTokens: number, budget: number): PruneResult {
   const originalTokens = estimateTokens(messages);
 
-  // Step 1: Supersede stale reads
   let pruned = applyReadSupersession([...messages]);
   const readSuperseded = pruned.filter(
     (msg) =>
@@ -256,7 +252,6 @@ function pruneToBudget(messages: Message[], systemTokens: number, budget: number
       msg.content.output["superseded"] === true,
   ).length;
 
-  // Step 2: Evict oldest tool responses
   const historyBudget = budget - systemTokens;
   pruned = evictToolResponses(pruned, historyBudget);
   const toolResponsesEvicted = pruned.filter(
@@ -266,7 +261,6 @@ function pruneToBudget(messages: Message[], systemTokens: number, budget: number
       msg.content.output["reason"] === "budget",
   ).length;
 
-  // Step 3: Drop turns if still over budget
   let turnsDropped = 0;
   let messagesDropped = 0;
   if (estimateTokens(pruned) > historyBudget) {
@@ -319,7 +313,6 @@ function pruneHistory(
   systemTokens: number,
 ): PruneHistoryResult {
   if (contextWindow === undefined) {
-    // Legacy path: hard turn cap only.
     const visible = history.slice(cursor);
     const pruned = truncateToTurns(visible, maxTurns);
     const messagesDropped = visible.length - pruned.length;
@@ -387,7 +380,6 @@ function applyTopicSubstitution(messages: Message[], summaries: Summary[]): Mess
     return messages;
   }
 
-  // Build a map of message IDs to be preserved
   const preservedIds = new Set<string>();
   for (const summary of summaries) {
     for (const id of summary.preserve) {
@@ -395,7 +387,6 @@ function applyTopicSubstitution(messages: Message[], summaries: Summary[]): Mess
     }
   }
 
-  // Collect all message IDs that fall within any summary range
   const compactedIds = new Set<string>();
   for (const summary of summaries) {
     let inRange = false;
@@ -412,7 +403,6 @@ function applyTopicSubstitution(messages: Message[], summaries: Summary[]): Mess
     }
   }
 
-  // Build the result by replacing each summary range
   const result: Message[] = [];
   let idx = 0;
 
@@ -423,16 +413,13 @@ function applyTopicSubstitution(messages: Message[], summaries: Summary[]): Mess
       continue;
     }
 
-    // Check if this message starts any summary range
     const summary = summaries.find((summ) => summ.startMessageId === msg.id);
     if (summary === undefined) {
-      // Not the start of a summary — include normally
       result.push(msg);
       idx++;
       continue;
     }
 
-    // Collect preserved messages within this range
     const preserved: Message[] = [];
     let secondaryIdx = idx;
     while (secondaryIdx < messages.length) {
@@ -449,8 +436,6 @@ function applyTopicSubstitution(messages: Message[], summaries: Summary[]): Mess
       }
       secondaryIdx++;
     }
-
-    // Emit the summary message
     result.push({
       content: {
         content: `<topic-summary slug="${summary.slug}" display-name="${summary.displayName}">${summary.summary}</topic-summary>`,
@@ -459,12 +444,10 @@ function applyTopicSubstitution(messages: Message[], summaries: Summary[]): Mess
       role: "user",
     });
 
-    // Emit preserved messages
     for (const preservedMsg of preserved) {
       result.push(preservedMsg);
     }
 
-    // Skip to after the end of this summary range
     idx = secondaryIdx + 1;
   }
 

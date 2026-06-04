@@ -82,10 +82,8 @@ export const listSessions: ToolDef = {
       if (lastMsg !== undefined) {
         const contents = Array.isArray(lastMsg.content) ? lastMsg.content : [lastMsg.content];
 
-        // Priority 1: First text content
         const textContent = contents.find((item) => item.type === "text");
         if (textContent === undefined) {
-          // Priority 2: Last 'respond' tool call's content
           const lastRespond = contents.findLast(
             (item) => item.type === "toolCall" && item.name === "respond",
           );
@@ -100,10 +98,8 @@ export const listSessions: ToolDef = {
               : undefined;
 
           if (respondContent === undefined) {
-            // Priority 3: First other tool call
             const toolCall = contents.find((item) => item.type === "toolCall");
             if (toolCall === undefined) {
-              // Priority 4: First image
               const image = contents.find((item) => item.type === "image");
               if (image !== undefined) {
                 preview = "[Image]";
@@ -119,7 +115,6 @@ export const listSessions: ToolDef = {
             }
           }
         } else {
-          // Strip Discord-style tags like <msg ...> or <history-context ...>
           let text = textContent.content.replaceAll(/<[^>]*>/g, "").trim();
           if (text === "") {
             // If stripping tags left nothing, maybe it's just tags or metadata.

@@ -19,7 +19,7 @@ interface LogConfig {
 
 const config: LogConfig = { level: "debug" };
 
-const MAX_BYTES = 10 * 1024 * 1024; // 10MB
+const MAX_BYTES = 10 * 1024 * 1024;
 const MAX_BACKUPS = 5;
 
 let _fd: number | undefined = undefined;
@@ -55,7 +55,6 @@ function serializeArgs(level: Level, data: unknown[]): Record<string, unknown> {
 }
 
 function rotate(filePath: string): void {
-  // Shift backups: .4 → .5, .3 → .4, ..., .1 → .2
   for (let idx = MAX_BACKUPS - 1; idx >= 1; idx--) {
     const from = `${filePath}.${idx}`;
     const to = `${filePath}.${idx + 1}`;
@@ -63,7 +62,6 @@ function rotate(filePath: string): void {
       renameSync(from, to);
     }
   }
-  // Close current fd, rename current log → .1, open fresh file
   if (_fd !== undefined) {
     closeSync(_fd);
     _fd = undefined;

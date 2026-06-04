@@ -47,7 +47,6 @@ function getMatchFn(query: string, mode: "raw" | "glob" | "regex"): (text: strin
     case "raw":
       return (text) => text.includes(query);
     case "glob": {
-      // Simple glob-to-regex conversion (supporting * and ?)
       const escaped = query.replaceAll(/[.+^${}()|[\]\\]/g, String.raw`\$&`);
       const regexStr = escaped.replaceAll(String.raw`\*`, ".*").replaceAll(String.raw`\?`, ".");
       const regex = new RegExp(`^${regexStr}$`, "i");
@@ -130,7 +129,6 @@ export const querySessions: ToolDef = {
       }
     }
 
-    // Sort globally
     results.sort((first, second) => {
       const tsA = first.timestamp ?? 0;
       const tsB = second.timestamp ?? 0;

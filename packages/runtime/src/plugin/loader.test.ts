@@ -86,12 +86,10 @@ describe("setToolRegistry", () => {
 
     // Import again to verify the mutable module state was updated
     // Note: Because of ESM module caching, we need to re-import
-    // The test verifies the function doesn't throw
     expect(() => {
       setToolRegistry(customRegistry);
     }).not.toThrow();
 
-    // Restore original
     setToolRegistry(builtinToolRegistry);
   });
 });

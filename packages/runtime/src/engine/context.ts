@@ -12,7 +12,6 @@ interface Context {
 interface UsageInfo {
   promptTokens: number;
   completionTokens: number;
-  /** Estimated system prompt token count (length / 4 heuristic). */
   systemPromptTokensEst: number;
 }
 

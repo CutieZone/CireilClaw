@@ -78,8 +78,6 @@ export class Agent {
     this._channelHandlers.set(channel, handler);
   }
 
-  // Resolve a scheduler target string to a session, auto-creating ephemeral
-  // sessions (internal, TUI, Discord) when the target is valid but missing.
   public async resolveTarget(target: string): Promise<Session | undefined> {
     if (target === "none") {
       return undefined;
@@ -100,7 +98,6 @@ export class Agent {
       return existing;
     }
 
-    // Auto-create named internal or TUI sessions if requested but missing.
     if (target.startsWith("internal:")) {
       const session = new NamedInternalSession(target.slice("internal:".length));
       this._sessions.set(target, session);
@@ -113,7 +110,6 @@ export class Agent {
       return session;
     }
 
-    // Auto-create Discord sessions for valid targets.
     if (target.startsWith("discord:")) {
       const rest = target.slice("discord:".length);
       const [channelId, guildId] = rest.split("|");
@@ -127,7 +123,6 @@ export class Agent {
       }
     }
 
-    // "owner" resolves to a DM channel with the bot owner.
     if (target === "owner") {
       if (this._ownerId === undefined || this._discordClient === undefined) {
         return undefined;
@@ -164,7 +159,6 @@ export class Agent {
     attachments?: string[],
     flags?: number,
   ): Promise<void> {
-    // Allow the session to intercept and optionally suppress delivery.
     if (session.sendFilter !== undefined && !session.sendFilter(content)) {
       return;
     }
@@ -175,12 +169,10 @@ export class Agent {
 
   // oxlint-disable-next-line require-await
   public async resolveChannel(spec: string, currentSession: Session): Promise<ChannelResolution> {
-    // "current" returns the current session
     if (spec === "current") {
       return currentSession;
     }
 
-    // "last" returns the most recently active session
     if (spec === "last") {
       let best: Session | undefined = undefined;
       for (const session of this._sessions.values()) {
@@ -197,7 +189,6 @@ export class Agent {
       return result;
     }
 
-    // Fallback: direct session lookup
     return this._sessions.get(spec) ?? { error: `session not found: ${spec}` };
   }
 

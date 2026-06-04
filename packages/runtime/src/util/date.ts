@@ -41,14 +41,6 @@ function formatRelativeTime(ms: number): string {
   return `in ${absSec} second${absSec === 1 ? "" : "s"}`;
 }
 
-/**
- * Format a date as ISO 8601 with timezone offset and a relative time hint.
- * If timezone is configured in system.toml, uses that timezone.
- * Otherwise uses system local time.
- * @param date The date to format (defaults to now)
- * @param now Reference date for calculating relative time (defaults to now)
- * @returns ISO 8601 string with timezone offset and relative hint (e.g. "2026-03-12T14:30:00-05:00 (Thursday, EST) [2 hours ago]")
- */
 async function formatDate(date: Date = new Date(), now: Date = new Date()): Promise<string> {
   const systemCfg = await loadSystem();
   const { timezone } = systemCfg;

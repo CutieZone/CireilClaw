@@ -18,9 +18,7 @@ interface FileOutline {
 // An extractor examines raw file content and returns an array of sections.
 // Plugins register extractors by file extension glob with an optional priority.
 interface Extractor {
-  // Glob pattern matching file extensions/paths (e.g. "*.md", "*.xml", "*.html").
   glob: string;
-  // Higher priority extractors are tried first.
   priority: number;
   extract(filePath: string, content: string): Section[] | Promise<Section[]>;
 }
@@ -28,16 +26,12 @@ interface Extractor {
 // Token estimation heuristic — same as prune.ts CHARS_PER_TOKEN.
 const CHARS_PER_TOKEN = 3;
 
-// Default threshold: files larger than this in estimated tokens trigger
-// outline generation instead of full content in the read tool response.
 const DEFAULT_OUTLINE_THRESHOLD_TOKENS = 2000;
 
 // ---------------------------------------------------------------------------
 // Built-in extractors
 // ---------------------------------------------------------------------------
 
-// Matches ATX headings and setext h1/h2 in markdown. Captures the heading
-// level and text, stripping link syntax for display labels.
 const HEADING_RE = /^(#{1,6})\s+(.+)$/gm;
 const SETEXT_H1_RE = /^(.+)\n=+\s*$/gm;
 const SETEXT_H2_RE = /^(.+)\n-+\s*$/gm;
@@ -50,7 +44,6 @@ function markdownExtractor(_filePath: string, content: string): Section[] {
   const sections: Section[] = [];
   const lines = content.split("\n");
 
-  // ATX headings
   // oxlint-disable-next-line unicorn/no-null
   let match: RegExpExecArray | null = null;
   HEADING_RE.lastIndex = 0;
@@ -67,12 +60,11 @@ function markdownExtractor(_filePath: string, content: string): Section[] {
       id,
       label: text,
       line: lineNum,
-      lines: 0, // Computed below
+      lines: 0,
       type: `h${level}`,
     });
   }
 
-  // Setext headings
   const joined = content;
   SETEXT_H1_RE.lastIndex = 0;
   while ((match = SETEXT_H1_RE.exec(joined)) !== null) {
@@ -106,7 +98,6 @@ function markdownExtractor(_filePath: string, content: string): Section[] {
     });
   }
 
-  // Sort by line number and compute line counts
   sections.sort((lhs, rhs) => lhs.line - rhs.line);
 
   for (let idx = 0; idx < sections.length; idx++) {
@@ -121,8 +112,6 @@ function markdownExtractor(_filePath: string, content: string): Section[] {
   return sections;
 }
 
-// Matches top-level XML elements that have an id or name attribute.
-// Reads line-by-line to find opening tags.
 const XML_TAG_RE = /<(\w+)[^>]*?(?:\sid\s*=\s*"([^"]+)"|\sname\s*=\s*"([^"]+)")[^>]*>/g;
 
 function xmlExtractor(_filePath: string, content: string): Section[] {
@@ -172,7 +161,6 @@ const extractors: Extractor[] = [
 ];
 
 function registerExtractor(extractor: Extractor): void {
-  // Insert sorted by priority (highest first)
   const idx = extractors.findIndex((ext) => ext.priority < extractor.priority);
   if (idx === -1) {
     extractors.push(extractor);
@@ -192,10 +180,8 @@ function getExtractors(): readonly Extractor[] {
 const OUTLINE_TOKEN_THRESHOLD = DEFAULT_OUTLINE_THRESHOLD_TOKENS;
 
 function matchesGlob(filename: string, glob: string): boolean {
-  // Simple extension/name matching without a full glob library.
-  // Supports: "*.md", "*.xml", "*.html", or exact filenames.
   if (glob.startsWith("*.")) {
-    const ext = glob.slice(1); // ".md", ".xml", etc.
+    const ext = glob.slice(1);
     return filename.endsWith(ext);
   }
   return filename === glob;
@@ -215,12 +201,11 @@ async function generateOutlineFromContent(
   const estTokens = estimateTokens(content);
 
   if (estTokens <= OUTLINE_TOKEN_THRESHOLD) {
-    return undefined; // File is small enough — no outline needed
+    return undefined;
   }
 
   const fileName = sandboxPath.split("/").pop() ?? sandboxPath;
 
-  // Try registered extractors in priority order
   for (const extractor of extractors) {
     if (matchesGlob(fileName, extractor.glob)) {
       const sections = await extractor.extract(sandboxPath, content);
@@ -230,7 +215,6 @@ async function generateOutlineFromContent(
     }
   }
 
-  // No extractor matched — no outline
   return undefined;
 }
 

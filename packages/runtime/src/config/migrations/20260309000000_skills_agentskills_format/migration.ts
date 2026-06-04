@@ -33,7 +33,6 @@ const migration: ConfigMigration = {
       const flatPath = join(skillsPath, entry.name);
       const content = await readFile(flatPath, "utf8");
 
-      // Parse TOML +++ frontmatter
       if (!content.startsWith("+++")) {
         continue;
       }
@@ -42,7 +41,6 @@ const migration: ConfigMigration = {
         continue;
       }
 
-      // Backup the original file before modification
       await context.backupFile(flatPath);
 
       const tomlData = content.slice(3, ending);

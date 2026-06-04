@@ -60,12 +60,10 @@ async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): 
       .replaceAll(/[^a-z0-9]+/g, "-")
       .replaceAll(/^-+|-+$/g, "");
 
-    // Try exact slug match first, then find by display name
     let removed = removeSummary(ctx.agentSlug, session, slug);
     let matchedName = name;
 
     if (!removed) {
-      // Try to find by display name
       const match = session.summaries.find(
         (summary) => summary.displayName.toLowerCase() === name.toLowerCase(),
       );

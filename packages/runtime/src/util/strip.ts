@@ -1,10 +1,5 @@
 import type { Message } from "#engine/message.js";
 
-/**
- * Strip image/video content blocks from user messages based on model capabilities.
- * Drops user messages that have no remaining content after stripping.
- * Non-user messages are preserved unchanged.
- */
 export function stripMediaForModel(
   messages: Message[],
   supportsVision: boolean,

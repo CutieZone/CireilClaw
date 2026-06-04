@@ -97,7 +97,7 @@ function parseAuthorizationInput(input: string): ParsedAuthorizationInput {
       state: url.searchParams.get("state") ?? undefined,
     };
   } catch {
-    // Fall through to partial URL and raw-code formats.
+    // Not a valid URL — fall through to partial URL and raw-code formats.
   }
 
   if (value.includes("#")) {

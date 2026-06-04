@@ -11,7 +11,6 @@ import colors from "#output/colors.js";
 import { debug, warning } from "#output/log.js";
 import { runHeartbeat } from "#scheduler/heartbeat.js";
 
-// Uniform handle interface covering both setTimeout and croner jobs.
 interface StopHandle {
   stop(): void;
 }
@@ -28,7 +27,6 @@ export class Scheduler {
   private readonly _agent: Agent;
   private readonly _signal: AbortSignal;
   private _heartbeatHandle: StopHandle | undefined = undefined;
-  // keyed by job ID
   private readonly _cronHandles = new Map<string, StopHandle>();
 
   public constructor(agent: Agent, signal: AbortSignal) {
@@ -54,7 +52,6 @@ export class Scheduler {
       }
     }
 
-    // Load and schedule persisted one-shot jobs from the DB.
     for (const row of getAgentCronJobs(this._agent.slug)) {
       if (row.type !== "one-shot" || row.status !== "pending") {
         continue;
@@ -92,7 +89,6 @@ export class Scheduler {
     debug("Scheduler: reloaded for agent", colors.keyword(this._agent.slug));
   }
 
-  // Register a runtime one-shot job created via the schedule tool.
   public scheduleDynamic(job: CronJobConfig): void {
     this._scheduleCronJob(job);
   }
@@ -160,7 +156,6 @@ export class Scheduler {
     if ("every" in schedule) {
       delayMs = schedule.every * 1000;
     } else {
-      // at: one-shot ISO timestamp
       const target = new Date(schedule.at).getTime();
       delayMs = target - Date.now();
 

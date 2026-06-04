@@ -47,7 +47,6 @@ export const listDir: ToolDef = {
       ? await ctx.paths.resolve(data.path)
       : validateSystemPath(data.path);
 
-    // Check conditional access rules for agent sandbox paths only
     if (isAgentPath) {
       await ctx.paths.checkConditionalAccess(data.path);
     }

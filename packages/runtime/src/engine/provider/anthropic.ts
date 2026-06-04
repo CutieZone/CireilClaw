@@ -323,7 +323,6 @@ export async function generate(
   for (;;) {
     const token = keyPool.getNextKey();
 
-    // If we've already tried this key, all keys have been exhausted
     if (attemptedKeys.has(token)) {
       throw new Error(
         `All API keys have been rate-limited. Please try again later.\n` +
@@ -350,7 +349,6 @@ export async function generate(
     debug("Finished Anthropic message generation...");
 
     if (!resp.ok) {
-      // Check for rate limit (429) - try next key
       if (resp.status === 429) {
         const errorText = await resp.text();
         warning(`Rate limited (429) on API key: ${errorText}`);

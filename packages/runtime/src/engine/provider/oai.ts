@@ -393,7 +393,6 @@ export async function generate(
   for (;;) {
     const apiKey = keyPool.getNextKey();
 
-    // If we've already tried this key, all keys have been exhausted
     if (attemptedKeys.has(apiKey)) {
       throw new Error(
         `All API keys have been rate-limited. Please try again later.\n` +
@@ -424,7 +423,6 @@ export async function generate(
       debug("Finished chat completion generation...");
     } catch (error) {
       if (error instanceof APIError) {
-        // Check for rate limit (429) - try next key
         if (error.status === 429) {
           debug(`Rate limited (429) on API key, trying next key...`);
           keyPool.reportFailure(apiKey);
@@ -492,7 +490,6 @@ export async function generate(
       throw error;
     }
 
-    // Process successful response
     try {
       if (!Array.isArray(resp.choices)) {
         debug("Got unexpected response", resp);

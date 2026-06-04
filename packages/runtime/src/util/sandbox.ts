@@ -137,7 +137,6 @@ interface EnvParseError {
   hint?: string;
 }
 
-// Matches $VAR, ${VAR}, or ${VAR:-default}
 const ENV_VAR_PATTERN = /\$\{(\w+)(?::-([^}]*))?\}|\$(\w+)/g;
 
 class EnvResolutionError extends Error {
@@ -172,7 +171,6 @@ function resolveEnvValue(
           throw new EnvResolutionError(`Circular reference to '${key}'`);
         }
 
-        // Look up in order: file vars (already resolved) → host env
         const fromFile = fileVars.get(key);
         const fromHost = process.env[key];
 
@@ -195,7 +193,6 @@ function resolveEnvValue(
           return fromHost;
         }
 
-        // Not found — use default if provided
         if (defaultVal !== undefined) {
           return defaultVal;
         }
@@ -253,7 +250,6 @@ function parseEnvFile(envPath: string): EnvVar[] | EnvParseError {
     rawVars.push({ key, lineNumber: lineIndex + 1, value });
   }
 
-  // Second pass: resolve values
   for (const { key, lineNumber, value: rawValue } of rawVars) {
     const resolved = resolveEnvValue(rawValue, resolvedVars, new Set());
 
@@ -268,7 +264,6 @@ function parseEnvFile(envPath: string): EnvVar[] | EnvParseError {
     resolvedVars.set(key, resolved);
   }
 
-  // Return resolved vars
   return rawVars.map(({ key }) => ({
     key,
     value: resolvedVars.get(key) ?? "",
@@ -290,7 +285,6 @@ function addEnvironmentVars(
     { key: "LC_ALL", value: "C.UTF-8" },
   ];
 
-  // Read passthrough vars from host environment
   const hostVars: EnvVar[] = [];
   for (const key of passthroughVars ?? []) {
     const value = process.env[key];
@@ -445,7 +439,6 @@ function buildGenericLinuxBindings(args: string[], binaries: string[]): boolean 
     args.push("--ro-bind", "/lib64", "/lib64");
   }
 
-  // Dynamic linker configuration for finding shared libraries
   const ldConfigFiles = ["/etc/ld.so.cache", "/etc/ld.so.conf"];
   for (const file of ldConfigFiles) {
     if (existsSync(file)) {

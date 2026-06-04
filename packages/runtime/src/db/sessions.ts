@@ -22,10 +22,6 @@ import {
 import { warning } from "#output/log.js";
 import { agentRoot } from "#util/paths.js";
 
-// ---------------------------------------------------------------------------
-// Image file helpers
-// ---------------------------------------------------------------------------
-
 const MEDIA_TYPE_EXT: Record<string, string> = {
   "image/gif": ".gif",
   "image/jpeg": ".jpg",
@@ -45,10 +41,6 @@ function imagePath(agentSlug: string, id: string, mediaType: string): string {
 function hashImage(data: Uint8Array): string {
   return Buffer.from(blake3(data)).toString("hex");
 }
-
-// ---------------------------------------------------------------------------
-// Serialized message format
-// ---------------------------------------------------------------------------
 
 // On-disk, ImageContent is replaced with a lean reference — the ArrayBuffer
 // stays in a file, not in the JSON blob.
@@ -89,7 +81,6 @@ function serializeHistory(
     return ct;
   }
 
-  // Filter out non-persistent messages (e.g., reply context, summarizer prompts).
   const persistable = history.filter((msg) => !("persist" in msg && msg.persist === false));
 
   const serialized = persistable.map((msg) => ({
@@ -217,10 +208,6 @@ async function deserializeHistory(json: string, agentSlug: string): Promise<Mess
   return messages;
 }
 
-// ---------------------------------------------------------------------------
-// Channel meta
-// ---------------------------------------------------------------------------
-
 const LastContextWarningCursorSchema = vb.pipe(vb.number(), vb.integer(), vb.minValue(0));
 
 const DiscordMetaSchema = vb.object({
@@ -244,19 +231,11 @@ const MatrixMetaSchema = vb.object({
 
 // type MatrixMeta = vb.InferOutput<typeof MatrixMetaSchema>;
 
-// ---------------------------------------------------------------------------
-// Debounce
-// ---------------------------------------------------------------------------
-
 const DEBOUNCE_MS = 2000;
 
 // Store the flush callback so flushAllSessions() can drain without needing
 // to re-fetch the session from somewhere.
 const _pending = new Map<string, { timer: NodeJS.Timeout; flush: () => void }>();
-
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
 
 // Flushes all pending debounced saves immediately — call before process exit
 // so in-flight data isn't lost.
@@ -309,7 +288,6 @@ function _flushSession(agentSlug: string, session: Session): void {
   const lastActivity =
     session.lastActivity > 0 ? new Date(session.lastActivity).toISOString() : undefined;
 
-  // Serialize activeFileSections: Map<string, Set<string>> → Record<string, string[]>
   const activeFileSections: Record<string, string[]> = {};
   for (const [path, sections] of session.activeFileSections) {
     activeFileSections[path] = [...sections];
@@ -366,7 +344,6 @@ async function loadSessions(agentSlug: string): Promise<Map<string, Session>> {
     const history = await deserializeHistory(row.history, agentSlug);
     const openedFiles = new Set(vb.parse(vb.array(vb.string()), JSON.parse(row.openedFiles)));
 
-    // Parse activeFileSections: JSON {path: [section_ids]} → Map<string, Set<string>>
     const activeFileSectionsRaw = vb.safeParse(
       vb.record(vb.string(), vb.array(vb.string())),
       JSON.parse(row.activeFileSections),
@@ -490,8 +467,6 @@ async function loadSessions(agentSlug: string): Promise<Map<string, Session>> {
   return map;
 }
 
-// Deletes a session and prunes image files that are no longer referenced by
-// any remaining session.
 function deleteSession(agentSlug: string, sessionId: string): void {
   const db = getDb(agentSlug);
 
@@ -532,8 +507,6 @@ function deleteSession(agentSlug: string, sessionId: string): void {
   db.delete(sessions).where(eq(sessions.id, sessionId)).run();
 }
 
-// Clears conversation state (history, images, opened files) for a session
-// while keeping the session row and its meta (provider/model selections).
 function resetSession(agentSlug: string, sessionId: string): void {
   const db = getDb(agentSlug);
 
@@ -594,8 +567,6 @@ function saveSession(agentSlug: string, session: Session): void {
   _pending.set(key, { flush, timer: setTimeout(flush, DEBOUNCE_MS) });
 }
 
-// Updates images for a session by replacing the image data in history
-// and rewriting the image files. Called after re-fetching from Discord.
 function updateSessionImages(
   agentSlug: string,
   sessionId: string,
@@ -727,9 +698,6 @@ function updateSessionImages(
   }
 }
 
-// Updates video_ref URLs in session history JSON. Called after /repair re-fetches
-// fresh Discord CDN URLs for expired video attachments. No files are written —
-// videos are not stored on disk.
 function updateSessionVideoRefs(
   agentSlug: string,
   sessionId: string,
@@ -764,7 +732,6 @@ function updateSessionVideoRefs(
   db.update(sessions).set({ history: updatedHistory }).where(eq(sessions.id, sessionId)).run();
 }
 
-// Persists a new summary to the database and returns the assigned ID.
 function saveSummary(agentSlug: string, sessionId: string, summary: Summary): number {
   const db = getDb(agentSlug);
   const result = db
@@ -783,7 +750,6 @@ function saveSummary(agentSlug: string, sessionId: string, summary: Summary): nu
   return Number(result.lastInsertRowid);
 }
 
-// Deletes a summary by session and slug.
 function deleteSummary(agentSlug: string, sessionId: string, slug: string): void {
   const db = getDb(agentSlug);
   db.delete(summariesTable)

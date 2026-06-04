@@ -43,7 +43,6 @@ async function run(_noFlags: {}, agentSlug: string): Promise<void> {
 
   const choices: { name: string; value: string }[] = [];
 
-  // Add existing sessions
   for (const session of sessions.values()) {
     const id = session.id();
     const lastActivityStr =
@@ -54,7 +53,6 @@ async function run(_noFlags: {}, agentSlug: string): Promise<void> {
     });
   }
 
-  // Add options for new sessions
   choices.push({
     name: colors.keyword("New: TUI session"),
     value: "new:tui",

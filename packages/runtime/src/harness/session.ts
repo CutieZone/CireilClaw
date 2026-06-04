@@ -24,38 +24,24 @@ abstract class BaseSession {
   public selectedProvider?: string;
 
   public history: Message[] = new Array<Message>();
-  // Index into history: messages from this index onward are sent to the LLM.
   // Pruning advances the cursor instead of mutating history, so tools like
   // read-session can still access the full conversation.
   public historyCursor = 0;
   public openedFiles: Set<string> = new Set<string>();
-  // Active section filters for pinned files: path → set of section IDs.
   public activeFileSections = new Map<string, Set<string>>();
-  // Topic compaction summaries for the session.
   public summaries: Summary[] = new Array<Summary>();
   public pendingToolMessages: Message[] = new Array<Message>();
-  // Images queued by tools (e.g. read) to be injected as a user message before the next generation.
   public pendingImages: ImageContent[] = new Array<ImageContent>();
-  // Videos queued from Discord attachments to be injected alongside pending images.
   public pendingVideos: VideoContent[] = new Array<VideoContent>();
 
-  // Concurrency gate — true while a turn (user or scheduled) is in progress.
   public busy = false;
-  // Set to true to request graceful termination of the current turn.
-  // Checked after each generation completes; the assistant message is
-  // committed to history (minus any unexecuted tool calls) and the loop exits.
   public stopRequested = false;
   // Timestamp (ms) of the last user-initiated message; used to resolve target = "last".
   public lastActivity = 0;
-  // Timestamp (ms) of the most recent heartbeat turn for this session.
   public lastHeartbeatAt?: number;
-  // Cursor value when the model was last asked to warn about imminent token pruning.
   public lastContextWarningCursor?: number;
-  // Timestamp (ms) marking the boundary for automatic history population.
-  // Channel-specific meaning: Discord uses it to exclude messages created before this time.
   public historyBarrier?: number;
 
-  // Optional hook checked by Harness.send() — return false to suppress delivery.
   public sendFilter?: (content: string) => boolean = undefined;
 
   public abstract id(): string;
@@ -124,7 +110,6 @@ class MatrixSession extends BaseSession {
   }
 }
 
-// Ephemeral session for isolated cron job execution — never persisted to DB.
 class InternalSession extends BaseSession {
   public override readonly channel = "internal";
   public override readonly ephemeral = true;
@@ -141,7 +126,6 @@ class InternalSession extends BaseSession {
   }
 }
 
-// Persistent session for heartbeats and named internal automation.
 class NamedInternalSession extends BaseSession {
   public override readonly channel = "internal";
   public override readonly ephemeral = false;

@@ -32,7 +32,6 @@ interface VideoContent {
   attachmentId: string;
   data: Uint8Array;
   mediaType: string;
-  // Cached base64 encoding.
   memoized?: { data: string };
   // Cached file-upload ID from a provider-specific files API (e.g. Kimi ms://).
   filesApiMemoized?: { fileId: string; mode: string };

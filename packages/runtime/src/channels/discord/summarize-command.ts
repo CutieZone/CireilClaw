@@ -63,7 +63,6 @@ async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): 
       return;
     }
 
-    // Slugify the name to check for existing summaries
     const slug = name
       .toLowerCase()
       .replaceAll(/[^a-z0-9]+/g, "-")
@@ -77,7 +76,6 @@ async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): 
       return;
     }
 
-    // Check if a summary with this slug already exists
     const existing = session.summaries.find((summary) => summary.slug === slug);
     if (existing !== undefined) {
       await interaction.createFollowup({

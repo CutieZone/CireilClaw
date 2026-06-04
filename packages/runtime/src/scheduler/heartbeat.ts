@@ -49,7 +49,6 @@ function isWithinActiveHours(current: string, start: string, end: string): boole
   return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
 }
 
-// Check whether the current time falls within the configured active hours window.
 function isInActiveHours(activeHours: NonNullable<HeartbeatConfig["activeHours"]>): boolean {
   try {
     const now = new Date();
@@ -105,7 +104,6 @@ async function runHeartbeat(agent: Agent, cfg: HeartbeatConfig): Promise<void> {
 
   session.busy = true;
 
-  // Capture the respond output and check for HEARTBEAT_OK.
   let capturedContent: string | undefined = undefined;
   const previousFilter = session.sendFilter;
   session.sendFilter = (content: string): boolean => {

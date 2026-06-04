@@ -50,8 +50,6 @@ async function toWebp(data: ArrayBuffer, mediaType?: string): Promise<Uint8Array
   return result;
 }
 
-// Scale a WebP image down so neither dimension exceeds the Anthropic API
-// limit (8000 px).  Returns the buffer unchanged when already within bounds.
 async function scaleForAnthropic(data: Uint8Array): Promise<Uint8Array> {
   const image = sharp(data);
   const meta = await image.metadata();

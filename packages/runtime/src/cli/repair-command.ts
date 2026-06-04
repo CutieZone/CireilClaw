@@ -19,7 +19,6 @@ const { Client, Intents } = createRequire(import.meta.url)(
   // oxlint-disable-next-line typescript/consistent-type-imports
 ) as typeof import("oceanic.js");
 
-// Type alias for the client from the CJS require
 type OceanicClient = InstanceType<typeof Client>;
 
 interface DiscordSessionRow {
@@ -47,13 +46,11 @@ async function run(): Promise<void> {
     return;
   }
 
-  // Select agent
   const agentSlug = await select({
     choices: slugs.map((slug) => ({ name: slug, value: slug })),
     message: "Which agent?",
   });
 
-  // Load Discord config
   let token: string | undefined = undefined;
   try {
     const { token: configToken } = await loadChannel("discord", agentSlug);
@@ -63,13 +60,10 @@ async function run(): Promise<void> {
     return;
   }
 
-  // Create Discord client and connect
   const client = createDiscordClient(token);
 
-  // Initialize DB for this agent
   initDb(agentSlug);
 
-  // Get Discord sessions from DB
   const db = getDb(agentSlug);
   const rows = db.select().from(sessions).all();
   const MetaSchema = vb.object({
@@ -96,18 +90,15 @@ async function run(): Promise<void> {
     return;
   }
 
-  // Connect to Discord
   info("Connecting to Discord...");
   await client.connect();
 
-  // Wait for ready
   await new Promise<void>((resolve) => {
     client.once("ready", () => {
       resolve();
     });
   });
 
-  // Fetch display names for all sessions
   info("Fetching session info...");
   const sessionChoices: { name: string; value: string }[] = [];
 
@@ -125,13 +116,11 @@ async function run(): Promise<void> {
     });
   }
 
-  // Select session to repair
   const sessionId = await select({
     choices: sessionChoices,
     message: "Which session to repair?",
   });
 
-  // Repair the session
   info("Repairing session", colors.keyword(sessionId), "...");
   const result = await repairSession(agentSlug, sessionId, client);
 
@@ -145,7 +134,6 @@ async function run(): Promise<void> {
     "skipped",
   );
 
-  // Disconnect
   client.disconnect(false);
 }
 

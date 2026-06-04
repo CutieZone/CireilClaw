@@ -14,7 +14,6 @@ const migration: ConfigMigration = {
       return;
     }
 
-    // Backup before moving
     await context.backupFile(oldPath);
 
     const tasksDir = join(agentPath, "tasks");

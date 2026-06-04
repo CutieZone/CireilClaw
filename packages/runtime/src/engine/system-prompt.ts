@@ -14,13 +14,9 @@ const NO_CAPABILITIES: ChannelCapabilities = {
   supportsReactions: false,
 };
 
-// Extracts the content of a named section from a file by finding the heading
-// or XML element with a matching id and returning lines until the next
-// same-or-higher-level boundary.
 function extractSectionContent(content: string, sectionId: string): string {
   const lines = content.split("\n");
 
-  // Try markdown heading match first (slugified id)
   const headingRegex = /^(#{1,6})\s+(.+)$/;
   let inSection = false;
   let currentLevel = 0;
@@ -44,7 +40,6 @@ function extractSectionContent(content: string, sectionId: string): string {
       }
 
       if (inSection && level <= currentLevel) {
-        // Next heading at same or higher level — section ends
         break;
       }
 
@@ -63,7 +58,6 @@ function extractSectionContent(content: string, sectionId: string): string {
     return result.join("\n");
   }
 
-  // Fallback: try XML element with matching id or name attribute
   const xmlRegex = new RegExp(
     `<\\w+[^>]*?(?:\\sid\\s*=\\s*"${sectionId.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}"|\\sname\\s*=\\s*"${sectionId.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}")[^>]*>`,
     "i",

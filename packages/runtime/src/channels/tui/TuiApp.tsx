@@ -26,7 +26,6 @@ function TuiApp({ bridge, agent, initialSessionId }: AppProps): ReactElement {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
 
-  // Calculate rows based on input content (min 1, max 10)
   const inputRows = Math.max(1, Math.min(10, input.split("\n").length));
 
   // Keep process alive by consuming stdin — Ink exits if nothing reads input
@@ -89,7 +88,6 @@ function TuiApp({ bridge, agent, initialSessionId }: AppProps): ReactElement {
         }
         agent.sessions.set(initialSessionId, session);
       } else if (session instanceof TuiSession) {
-        // Update bridge if it's an existing TUI session
         session.bridge = bridge;
       }
 
@@ -99,7 +97,7 @@ function TuiApp({ bridge, agent, initialSessionId }: AppProps): ReactElement {
         timestamp: Date.now(),
       } as UserMessage);
 
-      const historyLengthBeforeTurn = session.history.length - 1; // exclude the user message just pushed
+      const historyLengthBeforeTurn = session.history.length - 1;
       try {
         await agent.runTurn(session);
       } catch (error: unknown) {

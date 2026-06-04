@@ -183,8 +183,6 @@ async function formatUserMessage(msg: DiscordMessage): Promise<TextContent> {
   };
 }
 
-// Formats a message as historical context (different from user message - marks it
-// as history so the agent understands this is past conversation).
 // Includes attachment metadata so the model knows what files/images are present.
 async function formatHistoryContext(msg: DiscordMessage): Promise<TextContent> {
   const { username } = msg.author;
@@ -224,7 +222,6 @@ async function formatHistoryContext(msg: DiscordMessage): Promise<TextContent> {
   };
 }
 
-// Formats a bot's own message as assistant context for history loading.
 async function formatAssistantContext(msg: DiscordMessage): Promise<TextContent> {
   const timestamp = await formatDate(msg.createdAt);
 
@@ -234,15 +231,12 @@ async function formatAssistantContext(msg: DiscordMessage): Promise<TextContent>
   };
 }
 
-// Crawls the reply chain from a starting message, collecting all ancestor messages.
-// Returns messages in chronological order (oldest first).
 async function crawlReplyTree(
   client: OceanicClient,
   startMsg: DiscordMessage,
 ): Promise<DiscordMessage[]> {
   const messages: DiscordMessage[] = [];
   const seen = new Set<string>();
-  // Track the message ID we need to fetch next, not the message object itself
   let nextRef = startMsg.messageReference;
 
   while (nextRef?.channelID !== undefined && nextRef.messageID !== undefined) {
@@ -264,11 +258,9 @@ async function crawlReplyTree(
     }
   }
 
-  // Reverse to get chronological order (oldest first)
   return messages.toReversed();
 }
 
-// Checks if a Discord message ID already exists in session history.
 function isMessageInHistory(history: Message[], messageId: string): boolean {
   for (const entry of history) {
     if (entry.id === messageId) {
@@ -278,9 +270,7 @@ function isMessageInHistory(history: Message[], messageId: string): boolean {
   return false;
 }
 
-// Fetches image attachments from a Discord message in parallel, filtering to types
-// supported by the vision API and silently dropping any that fail to fetch.
-// Results are sorted by attachment ID for consistent ordering.
+// Silently drops failures and sorts by attachment ID for consistent ordering.
 async function fetchAttachmentImages(msg: DiscordMessage): Promise<ImageContent[]> {
   const fetchPromises = [...msg.attachments.values()].map(
     async (attachment): Promise<(ImageContent & { id: string }) | undefined> => {
@@ -319,9 +309,7 @@ async function fetchAttachmentImages(msg: DiscordMessage): Promise<ImageContent[
     .map(({ id: _id, ...imageContent }) => imageContent);
 }
 
-// Fetches sticker images from a Discord message in parallel, converting to WebP.
 // LOTTIE format stickers are skipped (cannot be displayed as raster images).
-// Results are sorted by sticker ID for consistent ordering.
 async function fetchStickerImages(msg: DiscordMessage): Promise<ImageContent[]> {
   if (!msg.stickerItems || msg.stickerItems.length === 0) {
     return [];
@@ -329,7 +317,6 @@ async function fetchStickerImages(msg: DiscordMessage): Promise<ImageContent[]> 
 
   const fetchPromises = msg.stickerItems.map(
     async (sticker): Promise<(ImageContent & { id: string }) | undefined> => {
-      // Skip LOTTIE format - vector format that can't be converted to raster
       if (sticker.format_type === StickerFormatTypes.LOTTIE) {
         return undefined;
       }
@@ -370,8 +357,6 @@ async function fetchStickerImages(msg: DiscordMessage): Promise<ImageContent[]> 
     .map(({ id: _id, ...imageContent }) => imageContent);
 }
 
-// Fetches both attachments and sticker images in parallel, with attachments
-// ordered first (sorted by ID), then stickers (sorted by ID).
 async function fetchAllImages(msg: DiscordMessage): Promise<ImageContent[]> {
   const [attachmentImages, stickerImages] = await Promise.all([
     fetchAttachmentImages(msg),
@@ -380,9 +365,7 @@ async function fetchAllImages(msg: DiscordMessage): Promise<ImageContent[]> {
   return [...attachmentImages, ...stickerImages];
 }
 
-// Fetches video attachments from a Discord message. Only called when the
-// agent's engine has supportsVideo enabled. Skips attachments that exceed
-// VIDEO_SIZE_CAP to avoid sending huge payloads to the API.
+// Skips attachments exceeding VIDEO_SIZE_CAP to avoid sending huge payloads to the API.
 async function fetchAttachmentVideos(msg: DiscordMessage): Promise<VideoContent[]> {
   const fetchPromises = [...msg.attachments.values()].map(
     async (attachment): Promise<(VideoContent & { sortId: string }) | undefined> => {
@@ -428,9 +411,6 @@ async function fetchAttachmentVideos(msg: DiscordMessage): Promise<VideoContent[
     .map(({ sortId: _sortId, ...videoContent }) => videoContent);
 }
 
-// Fetches the last N messages from a Discord channel, including images.
-// Returns messages in chronological order (oldest first). Messages are
-// formatted as reply context since they're historical conversation.
 async function fetchMessageHistory(
   client: OceanicClient,
   channelId: string,
@@ -440,7 +420,6 @@ async function fetchMessageHistory(
     const fetched = await client.rest.channels.getMessages(channelId, {
       limit,
     });
-    // Discord returns messages newest-first, reverse for chronological order
     return fetched.toReversed();
   } catch {
     // Channel may not be readable, permissions issues, etc.
@@ -449,16 +428,12 @@ async function fetchMessageHistory(
 }
 
 // Discord message flag for suppress notifications (silent messages)
-const SUPPRESS_NOTIFICATIONS = 4096; // 1 << 12
+const SUPPRESS_NOTIFICATIONS = 4096;
 
-// Checks if a message has the suppress notifications flag.
 function isSuppressNotifications(msg: DiscordMessage): boolean {
   return (msg.flags & SUPPRESS_NOTIFICATIONS) !== 0;
 }
 
-// Populates session history with recent Discord messages. Filters out the
-// current message (since it's being processed separately), empty messages,
-// and messages with SUPPRESS_NOTIFICATIONS flag (unless in reply chain).
 async function populateHistoryFromDiscord(
   client: OceanicClient,
   session: DiscordSession,
@@ -491,7 +466,6 @@ async function populateHistoryFromDiscord(
       continue;
     }
 
-    // Check if message has any content we care about
     const hasImages = msg.attachments.some(
       (attachment) =>
         attachment.contentType !== undefined &&
@@ -503,7 +477,6 @@ async function populateHistoryFromDiscord(
       continue;
     }
 
-    // Bot's own messages are assistant role, others are user role
     const isFromBot = msg.author.id === botId;
     const role = isFromBot ? ("assistant" as const) : ("user" as const);
 
@@ -522,10 +495,9 @@ async function populateHistoryFromDiscord(
   }
 }
 
-// Split a response on newline boundaries while respecting CHUNK_LIMIT.
-// When a split happens inside a fenced code block, the current chunk is
-// closed with ``` and the next chunk reopens with the same fence opener so
-// the reader never sees a dangling unclosed block.
+// When a split happens inside a fenced code block, close the chunk with
+// ``` and reopen the next chunk with the same fence so the reader never
+// sees a dangling unclosed block.
 function splitMessage(content: string): string[] {
   if (content.length <= CHUNK_LIMIT) {
     return [content];
@@ -537,7 +509,6 @@ function splitMessage(content: string): string[] {
   let currentLines: string[] = [];
   // Tracks currentLines.join("\n").length without recomputing each iteration.
   let currentLen = 0;
-  // The opening fence line we're currently inside (e.g. "```typescript"), or null.
   let openFence: string | undefined = undefined;
 
   function emit(): void {
@@ -551,7 +522,6 @@ function splitMessage(content: string): string[] {
   for (const line of lines) {
     const isFence = line.startsWith("```");
 
-    // How much currentLen would grow if we append this line.
     const addedLen = currentLines.length === 0 ? line.length : 1 + line.length;
     // If we're inside an open fence we'll need to close it ("\n```" = 4 chars)
     // before emitting, so account for that headroom.
@@ -562,7 +532,6 @@ function splitMessage(content: string): string[] {
         currentLines.push("```");
       }
       emit();
-      // Reopen the fence at the top of the new chunk.
       if (openFence !== undefined) {
         currentLines = [openFence];
         currentLen = openFence.length;
@@ -585,7 +554,6 @@ async function handleMessageCreate(
   { access, agentSlug, client, directMessages, owner, ownerId }: HandlerCtx,
   msg: DiscordMessage,
 ): Promise<void> {
-  // Ignore messages with no text and no image attachments.
   const hasAttachmentsWeWant = msg.attachments.some(
     (attachment) =>
       attachment.contentType !== undefined &&
@@ -600,38 +568,34 @@ async function handleMessageCreate(
 
   const userId = msg.author.id;
 
-  // Check access control (allowlist/denylist). Owner always bypasses.
+  // Owner always bypasses access control.
   if (userId !== ownerId) {
     const { mode, users } = access;
     if (mode === "allowlist" && !users.includes(userId)) {
       debug("Ignoring message from", colors.keyword(userId), ": not in allowlist");
-      return; // User not in allowlist
+      return;
     }
     if (mode === "denylist" && users.includes(userId)) {
       debug("Ignoring message from", colors.keyword(userId), ": denylisted");
-      return; // User is denylisted
+      return;
     }
   }
 
-  // Check if this is a DM (no guild ID)
   const isDm = (msg.guildID ?? undefined) === undefined;
 
-  // DMs bypass the mention/reply requirement but are still subject to mode restrictions
+  // DMs bypass the mention/reply requirement but are still subject to mode restrictions.
   const shouldProcess = isDm;
   if (isDm) {
     const { mode, users } = directMessages;
-
-    // Enforce DM mode
     if (mode === "owner" && userId !== ownerId) {
-      return; // Only owner can DM
+      return;
     }
     if (mode === "allowlist" && userId !== ownerId && !users.includes(userId)) {
-      return; // Only owner and allowlisted users can DM
+      return;
     }
     if (mode === "denylist" && userId !== ownerId && users.includes(userId)) {
-      return; // Only owner and non-denylisted users can DM
+      return;
     }
-    // mode === "public" allows anyone to DM
   }
 
   const isDirectMessage = isDm && msg.author.id === ownerId;
@@ -653,7 +617,6 @@ async function handleMessageCreate(
     }
   }
 
-  // Process if mentioned, replied to, or allowed via DM mode
   if (
     !(
       shouldProcess ||
@@ -715,7 +678,6 @@ async function handleMessageCreate(
 
   const guildId = msg.guildID ?? undefined;
 
-  // Find or create the session for this channel.
   const sessionId =
     guildId === undefined ? `discord:${msg.channelID}` : `discord:${msg.channelID}|${msg.guildID}`;
 
@@ -787,7 +749,6 @@ async function handleMessageCreate(
       // Crawl ancestors (messages older than the direct reply)
       const ancestors = await crawlReplyTree(client, directReply);
 
-      // Add ancestor messages that aren't already in history
       for (const ancestor of ancestors) {
         if (isMessageInHistory(ds.history, ancestor.id)) {
           continue;
@@ -812,7 +773,6 @@ async function handleMessageCreate(
         });
       }
 
-      // Add direct reply only if not already in history
       if (!isMessageInHistory(ds.history, directReply.id)) {
         if (
           ds.historyBarrier !== undefined &&
@@ -836,7 +796,6 @@ async function handleMessageCreate(
       }
     }
 
-    // Push user message into history, including any image/video attachments.
     const textContent = await formatUserMessage(msg);
     const imageContents = await fetchAllImages(msg);
 
@@ -925,15 +884,15 @@ async function handleMessageReactionAdd(
     const realMsg = await ctx.client.rest.channels.getMessage(msg.channelID, msg.id);
 
     if (realMsg.author.id !== ctx.client.application.id) {
-      return; // not us
+      return;
     }
 
     if (reactor.id !== ctx.ownerId) {
-      return; // not owner
+      return;
     }
 
     if (reaction.emoji.name !== "✨") {
-      return; // not ✨
+      return;
     }
 
     if (
@@ -1000,7 +959,6 @@ async function handleMessageUpdate(
     const botId = client.application.id;
     const isFromBot = realMsg.author.id === botId;
 
-    // Bot's own messages are assistant role, others are user role
     const role = isFromBot ? ("assistant" as const) : ("user" as const);
 
     // We should NOT update the role, but just the content.
@@ -1052,7 +1010,6 @@ async function handleMessageDelete(ctx: HandlerCtx, msg: PossiblyUncachedMessage
 
     session.history.splice(entryIndex, 1);
 
-    // If we deleted the last message, update the lastMessageId pointer
     if (session.lastMessageId === msg.id) {
       const lastUserMsg = session.history.findLast((historyMsg) => historyMsg.id !== undefined);
       session.lastMessageId = lastUserMsg?.id;
@@ -1183,7 +1140,6 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
 
       const messages = await client.rest.channels.getMessages(session.channelId, params);
 
-      // Map to HistoryMessage format with channel-specific formatting
       const results = await Promise.all(
         messages.map(async (msg) => {
           const formatted = await formatHistoryContext(msg);
@@ -1198,8 +1154,6 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
         }),
       );
 
-      // Discord returns newest-first for before/after, centered for around
-      // Always return chronological (oldest first)
       return direction === "after" ? results : results.toReversed();
     },
     react: async (session, emoji, messageId) => {
@@ -1215,7 +1169,6 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
       await client.rest.channels.createReaction(session.channelId, targetId, emoji);
     },
     resolveChannel: async (spec, sessions, ownerUserId) => {
-      // "owner" resolves to DM channel with the bot owner
       if (spec === "owner") {
         if (ownerUserId === undefined) {
           return { error: "ownerId not configured" };
@@ -1223,7 +1176,6 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
 
         try {
           const dmChannel = await client.rest.users.createDM(ownerUserId);
-          // Check for existing session with this DM channel
           const existing = sessions.get(`discord:${dmChannel.id}`);
           if (existing !== undefined) {
             return existing;
@@ -1238,7 +1190,6 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
         }
       }
 
-      // Explicit session ID like "discord:123|456" or "discord:123"
       const match = sessions.get(spec);
       return match ?? { error: `session not found: ${spec}` };
     },

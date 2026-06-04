@@ -19,7 +19,6 @@ const migration: ConfigMigration = {
     const dbPath = join(agentPath, "sessions.db");
     await context.backupFile(dbPath);
 
-    // Initialize DB for this agent (runs Drizzle migrations if needed)
     const db = initDb(agentSlug);
 
     const allSessions = db.select().from(sessions).all();
@@ -30,7 +29,6 @@ const migration: ConfigMigration = {
       let modified = false;
 
       for (const msg of history) {
-        // 1. Add ID to assistant messages from their <assistant-context> tag
         if (msg.role === "assistant" && msg.id === undefined) {
           const content = Array.isArray(msg.content) ? msg.content : [msg.content];
           for (const block of content) {
@@ -48,7 +46,6 @@ const migration: ConfigMigration = {
           }
         }
 
-        // 2. Add ID to user messages from their <history-context> or <msg> tag if missing
         if (msg.role === "user" && msg.id === undefined) {
           const content = Array.isArray(msg.content) ? msg.content : [msg.content];
           for (const block of content) {
@@ -66,7 +63,6 @@ const migration: ConfigMigration = {
           }
         }
 
-        // 3. Ensure persist is set correctly
         if (msg.role === "assistant" && msg.persist === undefined) {
           msg.persist = true;
           modified = true;

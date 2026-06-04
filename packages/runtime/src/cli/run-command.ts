@@ -16,9 +16,6 @@ import { destroyPlugins, initializePlugins } from "#plugin/loader.js";
 import { root } from "#util/paths.js";
 import { onShutdown, registerSigint } from "#util/shutdown.js";
 
-// Extracts agent slug from a config directory path
-// e.g., "/home/user/.cireilclaw/agents/mybot/config" -> "mybot"
-// Returns undefined for global config path
 function extractSlugFromPath(configPath: string): string | undefined {
   const agentsDir = path.join(root(), "agents");
   if (!configPath.startsWith(agentsDir)) {

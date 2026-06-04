@@ -72,7 +72,6 @@ export const openFile: ToolDef = {
       );
     }
 
-    // Handle section-based operations
     if (data.closeSections !== undefined && data.closeSections.length > 0) {
       const existing = ctx.session.activeFileSections.get(data.path);
       if (existing !== undefined) {
@@ -93,7 +92,6 @@ export const openFile: ToolDef = {
     ctx.session.openedFiles.add(data.path);
 
     if (data.all === true) {
-      // Open all sections from the outline
       const content = await readFile(realPath, "utf8");
       const outline = await generateOutline(data.path, ctx.agentSlug, content);
       if (outline === undefined) {
@@ -106,7 +104,6 @@ export const openFile: ToolDef = {
         );
       }
     } else if (data.sections !== undefined && data.sections.length > 0) {
-      // Validate sections against the file outline
       const content = await readFile(realPath, "utf8");
       const outline = await generateOutline(data.path, ctx.agentSlug, content);
       if (outline === undefined) {
@@ -124,7 +121,6 @@ export const openFile: ToolDef = {
         ctx.session.activeFileSections.set(data.path, new Set(data.sections));
       }
     } else {
-      // No sections specified — open the entire file
       ctx.session.activeFileSections.delete(data.path);
     }
 

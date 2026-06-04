@@ -1,10 +1,6 @@
 import type { BlockRule, Condition, PathRule } from "#config/schemas/conditions.js";
 import type { Session } from "#harness/session.js";
 
-/**
- * Evaluate a single condition against the session context.
- * Supports negation with a leading `!` (e.g., `!discord:nsfw`).
- */
 function evaluate(condition: Condition, session: Session): boolean {
   const negate = condition.startsWith("!");
   const base = negate ? condition.slice(1) : condition;
@@ -24,14 +20,11 @@ function evaluate(condition: Condition, session: Session): boolean {
       if (part1 === "nsfw") {
         result = session.isNsfw;
       } else if (part1 === "dm") {
-        // DM means no guildId
         if (session.guildId !== undefined) {
           result = false;
         } else if (parts.length === 2) {
-          // discord:dm matches any DM
           result = true;
         } else if (parts.length === 3 && part2 !== undefined) {
-          // discord:dm:<channelId> matches specific DM channel
           result = session.channelId === part2;
         } else {
           result = false;
@@ -53,9 +46,6 @@ function evaluate(condition: Condition, session: Session): boolean {
   return negate ? !result : result;
 }
 
-/**
- * Evaluate a rule's conditions against the session context.
- */
 function evaluateRule(
   rule: { when: Condition | readonly Condition[]; mode?: "and" | "or" },
   session: Session,
@@ -76,10 +66,6 @@ function evaluateRule(
     : conditions.some((cond) => evaluate(cond, session));
 }
 
-/**
- * Check which conditional blocks should be loaded for this session.
- * Returns an array of block names that match the conditions.
- */
 function getMatchingBlockNames(
   blocks: Record<string, BlockRule> | undefined,
   session: Session,
@@ -97,39 +83,21 @@ function getMatchingBlockNames(
   return matching;
 }
 
-/**
- * Check if a path should be accessible given the conditional rules.
- *
- * Evaluation order:
- * 1. Check for deny rules that match - if any match conditions, deny access
- * 2. Check for allow rules that match - if any match conditions, allow access
- * 3. If no rules match the path, default allow (baseline sandbox handles this)
- *
- * @param sandboxPath The area-relative sandbox path (e.g., "/nsfw/secret.md" within memories)
- * @param rules Record of path patterns to rules
- * @param session The current session
- * @returns true if access is allowed, false if denied
- */
 function checkPathAccess(
   sandboxPath: string,
   rules: Record<string, PathRule> | undefined,
   session: Session,
 ): boolean {
   if (rules === undefined) {
-    return true; // No rules means default allow
+    return true;
   }
 
-  // Find all rules that match this path (prefix or exact match)
   const matchingRules: { path: string; rule: PathRule }[] = [];
 
   for (const [rulePath, rule] of Object.entries(rules)) {
-    // Normalize rule path - ensure it starts with /
     const normalizedRulePath = rulePath.startsWith("/") ? rulePath : `/${rulePath}`;
 
-    // Check if the sandbox path matches this rule
-    // Rules ending with / match as prefix, others match exactly
     if (normalizedRulePath.endsWith("/")) {
-      // Prefix match: /nsfw/ matches /nsfw/ and /nsfw/anything.md
       if (
         sandboxPath.startsWith(normalizedRulePath) ||
         sandboxPath === normalizedRulePath.slice(0, -1)
@@ -137,31 +105,26 @@ function checkPathAccess(
         matchingRules.push({ path: normalizedRulePath, rule });
       }
     } else if (sandboxPath === normalizedRulePath) {
-      // Exact match
       matchingRules.push({ path: normalizedRulePath, rule });
     }
   }
 
   if (matchingRules.length === 0) {
-    return true; // No matching rules = default allow
+    return true;
   }
 
-  // Evaluate deny rules first - any matching deny blocks access
   for (const { rule } of matchingRules) {
     if (rule.action === "deny" && evaluateRule(rule, session)) {
       return false;
     }
   }
 
-  // Then evaluate allow rules - any matching allow grants access
   for (const { rule } of matchingRules) {
     if (rule.action === "allow" && evaluateRule(rule, session)) {
       return true;
     }
   }
 
-  // Rules exist for this path but none matched the conditions
-  // Default to deny for paths with rules
   return false;
 }
 

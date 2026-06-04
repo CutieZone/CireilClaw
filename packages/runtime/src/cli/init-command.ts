@@ -288,7 +288,6 @@ function buildToolsConfig(
     } else if (CORE_TOOLS.has(tool)) {
       obj[tool] = true;
     } else {
-      // Non-core built-ins are on for standard/full.
       obj[tool] = preset !== "minimal";
     }
   }
@@ -296,7 +295,6 @@ function buildToolsConfig(
   return obj;
 }
 
-// Returns an error message if the probe fails, undefined on success.
 async function probeToolChoice(
   apiBase: string,
   apiKey: string,
@@ -346,7 +344,6 @@ async function run(flags: Flags): Promise<void> {
 
   const base = root();
 
-  // Always ensure the root and global config directory exist.
   await mkdir(join(base, "config"), { recursive: true });
 
   // Resolve slug before asking anything else so we can catch conflicts early.
@@ -485,7 +482,6 @@ async function run(flags: Flags): Promise<void> {
     }
   }
 
-  // Channel setup
   const channel = await select<"none" | "discord">({
     choices: [
       { description: "Skip channel setup for now", name: "None", value: "none" },

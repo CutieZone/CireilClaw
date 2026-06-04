@@ -220,7 +220,6 @@ export async function runTurn(
   );
 
   let generationRetries = 0;
-  // Tracks consecutive failures per tool; disables the tool after hitting the threshold.
   const toolConsecutiveFailures = new Map<string, number>();
   const disabledTools = new Set<string>();
 
@@ -231,7 +230,6 @@ export async function runTurn(
     // AFTER pending tool responses. The OAI API only allows images/video in
     // user-role messages, and they must come after the matching tool responses.
 
-    // Deduplicate pending images by blake3 hash
     const seenImages = new Set<string>();
     const dedupedImages = session.pendingImages.filter((img) => {
       const hash = hashImage(img.data);
@@ -293,7 +291,6 @@ export async function runTurn(
     const openedFilesTokens =
       openedFilesBlock.length > 0 ? estimateSystemPrompt(openedFilesBlock) : 0;
 
-    // Reserve tokens for both stable system prompt and ephemeral opened files.
     const systemTokens = estimateSystemPrompt(prompt) + openedFilesTokens;
     const { modifiedHistory, newCursor } = pruneHistory(
       session.history,
@@ -463,7 +460,6 @@ export async function runTurn(
 
     logUsage(agentSlug, session.id(), context.systemPrompt.length, usage);
 
-    // Pending messages have been sent to the API in this call — commit them to history.
     for (const msg of session.pendingToolMessages) {
       msg.timestamp ??= Date.now();
     }
@@ -600,7 +596,6 @@ export async function runTurn(
     }
 
     if (done) {
-      // Prune: the respond tool's own response is the last thing in pending — flush it.
       for (const msg of session.pendingToolMessages) {
         msg.timestamp ??= Date.now();
       }

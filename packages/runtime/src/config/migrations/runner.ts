@@ -58,7 +58,6 @@ function isMigrationImport(maybe: unknown): maybe is { migration: ConfigMigratio
 async function loadMigrations(): Promise<ConfigMigration[]> {
   const migrations: ConfigMigration[] = [];
 
-  // Read all subdirectories in migrations directory
   const entries = await readdir(MIGRATIONS_DIR, { withFileTypes: true });
 
   for (const entry of entries) {
@@ -72,7 +71,6 @@ async function loadMigrations(): Promise<ConfigMigration[]> {
     }
 
     try {
-      // Dynamic import of the migration module
       const imported: unknown = await import(migrationPath);
 
       if (!isMigrationImport(imported)) {
@@ -87,7 +85,6 @@ async function loadMigrations(): Promise<ConfigMigration[]> {
     }
   }
 
-  // Sort by ID (timestamp prefix)
   migrations.sort((left, right) => left.id.localeCompare(right.id));
 
   return migrations;
@@ -143,7 +140,6 @@ function getBackupFilename(filePath: string): string {
   const filename = basename(filePath);
 
   if (filePath.includes("/agents/")) {
-    // Extract agent slug from path
     const parts = filePath.split("/agents/");
     if (parts.length > 1 && parts[1] !== undefined) {
       const [slug, ...rest] = parts[1].split("/");
@@ -179,20 +175,16 @@ async function applyMigrationToFile(
 
   const originalData = await readFile(configPath, { encoding: "utf8" });
 
-  // Create backup before modifying (only if not already backed up)
   if (!backedUpFiles.has(configPath)) {
     backedUpFiles.add(configPath);
     await createBackup(migration.id, configPath, originalData);
   }
 
-  // Parse TOML
   const { parse } = await import("smol-toml");
   const data = parse(originalData);
 
-  // Apply migration transformation
   const transformed = await migration.transform(data, context);
 
-  // Write back to file
   const newData = stringify(transformed);
   await writeFile(configPath, newData, { encoding: "utf8" });
 }
@@ -202,12 +194,10 @@ async function applyMigration(
   agentSlugs: string[],
   mode: MigrationMode,
 ): Promise<boolean> {
-  // Check if migration should be cancelled
   if (mode === "cancel") {
     return false;
   }
 
-  // Prompt for step-through mode
   if (mode === "step-through") {
     const shouldApply = await shouldApplyMigration(migration);
     if (!shouldApply) {
@@ -221,13 +211,11 @@ async function applyMigration(
   // Track backed up files to prevent overwriting original backups
   const backedUpFiles = new Set<string>();
 
-  // Helper to create backup function for this migration
   function createBackupHelper(): MigrationContext["backupFile"] {
     return async (filePath: string): Promise<void> => {
       if (!existsSync(filePath)) {
         return;
       }
-      // Skip if already backed up - preserve the original backup
       if (backedUpFiles.has(filePath)) {
         return;
       }
@@ -237,7 +225,6 @@ async function applyMigration(
     };
   }
 
-  // Apply to global configs
   const globalConfigFiles = ["integrations.toml", "plugins.toml", "engine.toml"] as const;
   for (const filename of globalConfigFiles) {
     if (migration.targets.includes(filename)) {
@@ -251,7 +238,6 @@ async function applyMigration(
     }
   }
 
-  // Apply to agent configs
   for (const slug of agentSlugs) {
     for (const target of migration.targets) {
       let configPath: string | undefined = undefined;
@@ -259,7 +245,6 @@ async function applyMigration(
       if (target === "channels/discord.toml") {
         configPath = join(root(), "agents", slug, "config", "channels", "discord.toml");
       } else if (target !== "integrations.toml" && target !== "plugins.toml") {
-        // engine.toml, tools.toml, heartbeat.toml, cron.toml
         configPath = join(root(), "agents", slug, "config", target);
       }
 
@@ -296,7 +281,6 @@ export async function runMigrations(dryRun = false): Promise<number> {
   const state = await getMigrationState();
   const migrations = await loadMigrations();
 
-  // Filter out already applied migrations
   const appliedSet = new Set(state.applied);
   const pendingMigrations = migrations.filter((migration) => !appliedSet.has(migration.id));
 
@@ -304,7 +288,6 @@ export async function runMigrations(dryRun = false): Promise<number> {
     return 0;
   }
 
-  // Get all agent slugs
   const agentsDir = join(root(), "agents");
   let agentSlugs: string[] = [];
 
@@ -313,7 +296,6 @@ export async function runMigrations(dryRun = false): Promise<number> {
     agentSlugs = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
   }
 
-  // Dry run: show what would happen without applying
   if (dryRun) {
     info("");
     info(
@@ -325,7 +307,6 @@ export async function runMigrations(dryRun = false): Promise<number> {
       info(`  ${colors.name(migration.id)}`);
       info(`    ${colors.debug(migration.description)}`);
 
-      // Show targeted files
       const globalFiles = migration.targets.filter(
         (tgt) => tgt === "integrations.toml" || tgt === "plugins.toml" || tgt === "engine.toml",
       );
@@ -346,7 +327,6 @@ export async function runMigrations(dryRun = false): Promise<number> {
     return pendingMigrations.length;
   }
 
-  // Prompt user for mode
   const mode = await promptForMode(pendingMigrations);
 
   if (mode === "cancel") {
@@ -354,7 +334,6 @@ export async function runMigrations(dryRun = false): Promise<number> {
     throw new Error("Migrations cancelled by user");
   }
 
-  // Apply migrations
   const newlyApplied: string[] = [];
 
   for (const migration of pendingMigrations) {
@@ -364,7 +343,6 @@ export async function runMigrations(dryRun = false): Promise<number> {
     }
   }
 
-  // Update state
   if (newlyApplied.length > 0) {
     state.applied.push(...newlyApplied);
     await saveMigrationState(state);

@@ -38,7 +38,6 @@ function initDb(agentSlug: string): Database {
   const db = drizzle({ client: sqlite, schema });
 
   try {
-    // Runs any pending migrations from the drizzle/ folder at startup.
     migrate(db, { migrationsFolder: new URL("../../drizzle", import.meta.url).pathname });
   } catch (error: unknown) {
     if (error instanceof Error) {

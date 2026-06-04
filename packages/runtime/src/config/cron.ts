@@ -2,10 +2,6 @@ import * as vb from "valibot";
 
 import { nonEmptyString } from "#config/schemas/shared.js";
 
-// Schedule variants:
-// every: run every N seconds (min 60)
-// cron: standard cron expression (parsed by croner)
-// at: one-shot at a specific ISO 8601 timestamp
 const EveryScheduleSchema = vb.strictObject({
   every: vb.pipe(vb.number(), vb.integer(), vb.minValue(60)),
 });
@@ -25,19 +21,15 @@ const ScheduleSchema = vb.union([
 ]);
 
 const CronJobConfigSchema = vb.strictObject({
-  // How to deliver the output of isolated jobs.
   delivery: vb.exactOptional(vb.picklist(["announce", "webhook", "none"]), "announce"),
   enabled: vb.exactOptional(vb.boolean(), true),
-  // Whether to run in the main session or an isolated one.
   execution: vb.exactOptional(vb.picklist(["main", "isolated"]), "isolated"),
   id: nonEmptyString,
   model: vb.exactOptional(nonEmptyString, undefined),
   prompt: nonEmptyString,
   provider: vb.exactOptional(nonEmptyString, undefined),
   schedule: ScheduleSchema,
-  // Session target for announce delivery.
   target: vb.exactOptional(nonEmptyString, "last"),
-  // Webhook URL — only required if delivery = "webhook".
   webhookUrl: vb.exactOptional(vb.pipe(vb.string(), vb.nonEmpty(), vb.url())),
 });
 

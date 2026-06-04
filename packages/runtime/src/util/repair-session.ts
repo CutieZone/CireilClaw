@@ -144,11 +144,9 @@ async function repairSession(
       if (caughtError instanceof Error && caughtError.message.includes("Unknown Message")) {
         skipped++;
       }
-      // else: failed, will be counted after parallel fetch
     }
   }
 
-  // Re-fetch images and convert to WebP.
   const imageResults = await Promise.all(
     imagesToFetch.map(async ({ msgId, url }) => {
       try {
@@ -166,7 +164,6 @@ async function repairSession(
     }),
   );
 
-  // Re-fetch Discord messages to get fresh video CDN URLs.
   const videoResults = await Promise.all(
     videoRefsToFetch.map(async ({ msgId, attachmentId }) => {
       try {
@@ -183,7 +180,7 @@ async function repairSession(
   );
 
   const newImages = new Map<string, Uint8Array>();
-  const newVideoUrls = new Map<string, string>(); // attachmentId -> fresh URL
+  const newVideoUrls = new Map<string, string>();
   let failed = 0;
   let updated = 0;
 

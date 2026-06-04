@@ -6,7 +6,6 @@ const migration: ConfigMigration = {
   targets: ["tools.toml"],
 
   transform(data) {
-    // Rename tool in tools.toml
     if (data["discord-download-attachments"] !== undefined) {
       data["download-attachments"] = data["discord-download-attachments"];
       delete data["discord-download-attachments"];

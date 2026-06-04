@@ -22,7 +22,6 @@ function wordWrap(text: string, width: number): string[] {
       if (currentLine) {
         lines.push(currentLine);
       }
-      // If single word is too long, break it
       if (word.length > width) {
         let remaining = word;
         while (remaining.length > width) {
@@ -76,10 +75,8 @@ export function MessageLine({ msg }: { msg: TuiMessage }): ReactElement {
   // Padding to align | with the : (time + space + label width)
   const colonAlignPadding = " ".repeat(5 + 1 + label.length);
 
-  // Calculate prefix widths
   const firstLinePrefixWidth = 5 + 1 + label.length + 1 + 1; // time + space + label + : + space
 
-  // Split by explicit newlines, then wrap each segment
   const explicitLines = msg.content.split("\n");
   const allLines: { text: string; isFirst: boolean; isFirstOfContent: boolean }[] = [];
 

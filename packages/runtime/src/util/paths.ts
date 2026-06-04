@@ -120,8 +120,6 @@ function sandboxToReal(path: string, agentSlug: string, mounts?: readonly Mount[
     throw new Error(`Access denied: path '${path}' escaped the ${expectedSubdir} sandbox area.`);
   }
 
-  // Resolve symlinks on the existing portion of the path,
-  // then reattach any not-yet-created tail segments.
   const segments: string[] = [];
   let current = normalizedPath;
 
@@ -174,7 +172,6 @@ function getMountEntriesAtPath(
       ? ""
       : sandboxPath.slice("/workspace/".length);
 
-  // If we're inside or exactly at a mount target, readdir on the resolved real path handles it.
   for (const mount of mounts) {
     if (rest === mount.target || rest.startsWith(`${mount.target}/`)) {
       return [];
@@ -185,13 +182,11 @@ function getMountEntriesAtPath(
 
   for (const mount of mounts) {
     if (rest === "") {
-      // At /workspace — first segment of each mount target is visible.
       const [firstSegment] = mount.target.split("/");
       if (firstSegment !== undefined) {
         entries.set(firstSegment, { name: firstSegment, type: "directory" });
       }
     } else if (mount.target.startsWith(`${rest}/`)) {
-      // At a subdirectory that is a prefix of a mount target.
       const remaining = mount.target.slice(rest.length + 1);
       const [firstSegment] = remaining.split("/");
       if (firstSegment !== undefined) {
@@ -208,23 +203,12 @@ function sanitizeError(err: unknown, agentSlug: string): string {
   return msg.replaceAll(agentRoot(agentSlug), "<sandbox>");
 }
 
-/**
- * Check conditional access for a path after baseline sandbox validation.
- * Throws an error if access is denied by conditional rules.
- *
- * @param sandboxPath The sandbox path to check
- * @param agentSlug The agent slug
- * @param conditions The conditions config
- * @param session The current session
- * @throws Error if access is denied
- */
 function checkConditionalAccess(
   sandboxPath: string,
   _agentSlug: string,
   conditions: ConditionsConfig,
   session: Session,
 ): void {
-  // Determine which ruleset to apply based on the path prefix
   let rules: Record<string, PathRule> | undefined = undefined;
   let relativePath = sandboxPath;
 
@@ -237,7 +221,7 @@ function checkConditionalAccess(
   }
 
   if (rules === undefined) {
-    return; // No conditional rules for this path
+    return;
   }
 
   if (!checkPathAccess(relativePath, rules, session)) {
@@ -252,15 +236,9 @@ function checkConditionalAccess(
   }
 }
 
-// Paths that are bound read-only into the exec sandbox (mirrors sandbox.ts bindings).
 // /bin is intentionally excluded — it is a synthetic sandbox dir, not a real host path.
 const EXEC_VISIBLE_PREFIXES = ["/usr", "/lib", "/lib64", "/nix"] as const;
 
-/**
- * Validates a system path that is accessible in the exec sandbox.
- * These paths are bound read-only from the host filesystem.
- * Returns the normalized real path, or throws if the path is not allowed.
- */
 function validateSystemPath(path: string): string {
   if (path.includes("..")) {
     throw new Error(`Access denied: path '${path}' contains path traversal.`);

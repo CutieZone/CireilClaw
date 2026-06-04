@@ -44,7 +44,6 @@ export const pruneBoundaries: ToolDef = {
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     const data = vb.parse(Schema, input);
 
-    // Validate message IDs exist in session history
     const messageIds = new Set(ctx.session.history.map((msg) => msg.id));
     const missing: string[] = [];
 
@@ -61,7 +60,6 @@ export const pruneBoundaries: ToolDef = {
       );
     }
 
-    // Validate that start comes before end
     const startIdx = ctx.session.history.findIndex((msg) => msg.id === data.start);
     const endIdx = ctx.session.history.findIndex((msg) => msg.id === data.end);
     if (startIdx === -1 || endIdx === -1 || startIdx > endIdx) {
@@ -71,7 +69,6 @@ export const pruneBoundaries: ToolDef = {
       );
     }
 
-    // Validate preserve IDs exist
     const invalidPreserve = data.preserve.filter((id) => !messageIds.has(id));
     if (invalidPreserve.length > 0) {
       throw new ToolError(
@@ -80,7 +77,6 @@ export const pruneBoundaries: ToolDef = {
       );
     }
 
-    // Slugify the identifier
     const slug = data.identifier
       .toLowerCase()
       .replaceAll(/[^a-z0-9]+/g, "-")

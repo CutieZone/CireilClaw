@@ -14,7 +14,6 @@ import colors from "#output/colors.js";
 import { debug } from "#output/log.js";
 import { agentRoot } from "#util/paths.js";
 
-// The system prompt given to the summarizer when identifying topic boundaries.
 const SUMMARIZER_SYSTEM_PROMPT = `You are a context compaction assistant for an AI agent system.
 The user wants to summarize a portion of the conversation to reduce context usage.
 
@@ -65,9 +64,6 @@ async function loadSummarizationConfig(agentSlug: string): Promise<Summarization
   }
 }
 
-// Runs a summarization turn using the configured (or default) provider.
-// The summarizer receives the recent history and the user's description,
-// then calls prune-boundaries to commit the compaction.
 async function runSummarizer(
   request: SummarizeRequest,
 ): Promise<SummarizeResult | { error: string }> {
@@ -75,7 +71,6 @@ async function runSummarizer(
 
   const sumCfg = await loadSummarizationConfig(request.agentSlug);
 
-  // Resolve provider: summarization.toml > engine default
   const providerName = sumCfg.provider;
   const selectedProvider = providerName === undefined ? undefined : providers[providerName];
 
@@ -107,9 +102,7 @@ async function runSummarizer(
   };
 }
 
-// Commits a summary to storage and updates the session's in-memory state.
 function commitSummary(agentSlug: string, session: Session, result: SummarizeResult): void {
-  // Remove any existing summary with the same slug
   const existingIdx = session.summaries.findIndex((summary) => summary.slug === result.slug);
   if (existingIdx !== -1) {
     debug(
@@ -155,7 +148,6 @@ function commitSummary(agentSlug: string, session: Session, result: SummarizeRes
   );
 }
 
-// Removes a summary by slug from storage and in-memory state.
 function removeSummary(agentSlug: string, session: Session, slug: string): boolean {
   const idx = session.summaries.findIndex((summary) => summary.slug === slug);
   if (idx === -1) {

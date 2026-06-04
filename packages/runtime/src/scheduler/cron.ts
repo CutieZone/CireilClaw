@@ -46,7 +46,6 @@ async function deliverOutput(
     return;
   }
 
-  // delivery === "announce"
   const target = await agent.resolveTarget(job.target);
   if (target === undefined) {
     debug("Cron: no target session to announce for job", colors.keyword(job.id));
