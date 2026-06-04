@@ -739,8 +739,6 @@ async function handleMessageCreate(
       channelId: msg.channelID,
       guildId: msg.guildID ?? undefined,
       isNsfw,
-      selectedModel: defaults.model.name,
-      selectedProvider: defaults.provider.name,
     });
 
     agent.sessions.set(sessionId, session);
@@ -1231,30 +1229,9 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
             return existing;
           }
 
-          const engine = await loadEngine(agentSlug);
-          const [defaultProvider] = Object.entries(engine)
-            .filter((kvp) => kvp[1].isGlobalDefault)
-            .map((it) => it[0]);
-
-          if (defaultProvider === undefined) {
-            throw new Error("Could not load a default provider from the engine config.");
-          }
-
-          const providerConfig = engine[defaultProvider];
-          if (providerConfig === undefined) {
-            throw new Error(
-              "This should not happen. A provider config for a provider we know exists turned out to not exist.",
-            );
-          }
-
-          const { defaultModel } = providerConfig;
-
-          // Return a new session for this DM channel
           return new DiscordSession({
             channelId: dmChannel.id,
             isNsfw: false,
-            selectedModel: defaultModel,
-            selectedProvider: defaultProvider,
           });
         } catch {
           return { error: "failed to create DM channel with owner" };
