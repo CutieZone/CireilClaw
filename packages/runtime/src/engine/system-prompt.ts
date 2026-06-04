@@ -1,3 +1,4 @@
+import type { Stats } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 
 import type { ConditionsConfig } from "#config/schemas/conditions.js";
@@ -76,6 +77,73 @@ function extractSectionContent(content: string, sectionId: string): string {
 
   // If no section found, return a placeholder so the agent knows something is wrong
   return `[Section "${sectionId}" not found in file content — outline may be stale. Re-read the file to refresh.]`;
+}
+
+async function buildOpenedFilesBlock(agentSlug: string, session: Session): Promise<string> {
+  const missingFiles: string[] = [];
+  const lines: string[] = [];
+
+  if (session.openedFiles.size > 0) {
+    lines.push("<opened_files>", "These are your currently open files:", "");
+
+    for (const file of session.openedFiles) {
+      const realPath = sandboxToReal(file, agentSlug);
+
+      let stats: Stats | undefined = undefined;
+      try {
+        stats = await stat(realPath);
+      } catch {
+        missingFiles.push(file);
+        session.openedFiles.delete(file);
+        session.activeFileSections.delete(file);
+        continue;
+      }
+
+      if (!stats.isFile()) {
+        missingFiles.push(file);
+        session.openedFiles.delete(file);
+        session.activeFileSections.delete(file);
+        continue;
+      }
+
+      const content = await readFile(realPath, "utf8");
+
+      const activeSections = session.activeFileSections.get(file);
+      if (activeSections !== undefined && activeSections.size > 0) {
+        // Render only the open sections with their IDs as labels
+        lines.push(
+          `<file path="${file}" size="${stats.size}" sections="${[...activeSections].join(", ")}">`,
+        );
+
+        for (const sectionId of activeSections) {
+          // Extract just the lines for this section by finding the heading/XML element
+          const sectionContent = extractSectionContent(content, sectionId);
+          lines.push(`<section id="${sectionId}">`, sectionContent, "</section>", "");
+        }
+      } else {
+        // No section filter — render the entire file
+        lines.push(`<file path="${file}" size="${stats.size}">`, content, "</file>", "");
+      }
+    }
+
+    lines.push("</opened_files>");
+  }
+
+  if (missingFiles.length > 0) {
+    session.pendingToolMessages.push({
+      content: {
+        content: missingFiles
+          .map(
+            (filePath) => `File ${filePath} moved/deleted while still open. Automatically closed.`,
+          )
+          .join("\n"),
+        type: "text",
+      },
+      role: "user",
+    });
+  }
+
+  return lines.join("\n");
 }
 
 async function buildSystemPrompt(
@@ -157,68 +225,6 @@ async function buildSystemPrompt(
     lines.push("</skills>");
   }
 
-  const missingFiles: string[] = [];
-
-  if (session.openedFiles.size > 0) {
-    lines.push("<opened_files>", "These are your currently open files:", "");
-
-    for (const file of session.openedFiles) {
-      const realPath = sandboxToReal(file, agentSlug);
-
-      let stats: Awaited<ReturnType<typeof stat>> | undefined = undefined;
-      try {
-        stats = await stat(realPath);
-      } catch {
-        missingFiles.push(file);
-        session.openedFiles.delete(file);
-        session.activeFileSections.delete(file);
-        continue;
-      }
-
-      if (!stats.isFile()) {
-        missingFiles.push(file);
-        session.openedFiles.delete(file);
-        session.activeFileSections.delete(file);
-        continue;
-      }
-
-      const content = await readFile(realPath, "utf8");
-
-      const activeSections = session.activeFileSections.get(file);
-      if (activeSections !== undefined && activeSections.size > 0) {
-        // Render only the open sections with their IDs as labels
-        lines.push(
-          `<file path="${file}" size="${stats.size}" sections="${[...activeSections].join(", ")}">`,
-        );
-
-        for (const sectionId of activeSections) {
-          // Extract just the lines for this section by finding the heading/XML element
-          const sectionContent = extractSectionContent(content, sectionId);
-          lines.push(`<section id="${sectionId}">`, sectionContent, "</section>", "");
-        }
-      } else {
-        // No section filter — render the entire file
-        lines.push(`<file path="${file}" size="${stats.size}">`, content, "</file>", "");
-      }
-    }
-
-    lines.push("</opened_files>");
-  }
-
-  if (missingFiles.length > 0) {
-    session.pendingToolMessages.push({
-      content: {
-        content: missingFiles
-          .map(
-            (filePath) => `File ${filePath} moved/deleted while still open. Automatically closed.`,
-          )
-          .join("\n"),
-        type: "text",
-      },
-      role: "user",
-    });
-  }
-
   lines.push("<metadata>", `The current session is on the platform: ${session.channel}`);
 
   if (session.channel === "discord") {
@@ -257,4 +263,4 @@ async function buildSystemPrompt(
   return lines.join("\n");
 }
 
-export { NO_CAPABILITIES, buildSystemPrompt };
+export { NO_CAPABILITIES, buildOpenedFilesBlock, buildSystemPrompt };

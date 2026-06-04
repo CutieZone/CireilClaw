@@ -53,7 +53,7 @@ import {
   pruneHistory,
   squashMessages,
 } from "./prune.js";
-import { buildSystemPrompt } from "./system-prompt.js";
+import { buildOpenedFilesBlock, buildSystemPrompt } from "./system-prompt.js";
 import { buildTools } from "./tools.js";
 
 const NO_CAPABILITIES: ChannelCapabilities = {
@@ -289,7 +289,12 @@ export async function runTurn(
       modelCfg.supportsVideo,
     );
 
-    const systemTokens = estimateSystemPrompt(prompt);
+    const openedFilesBlock = await buildOpenedFilesBlock(agentSlug, session);
+    const openedFilesTokens =
+      openedFilesBlock.length > 0 ? estimateSystemPrompt(openedFilesBlock) : 0;
+
+    // Reserve tokens for both stable system prompt and ephemeral opened files.
+    const systemTokens = estimateSystemPrompt(prompt) + openedFilesTokens;
     const { modifiedHistory, newCursor } = pruneHistory(
       session.history,
       session.historyCursor,
@@ -321,12 +326,15 @@ export async function runTurn(
       modelCfg.supportsVideo,
     );
 
+    // Opened files are now in `filteredMessages`, so only pass the stable
+    // system prompt tokens to avoid double-counting.
+    const stableSystemTokens = estimateSystemPrompt(prompt);
     const usageSnapshot = computeContextUsageSnapshot({
       contextBudget,
       contextHardBudget,
       contextWindow: effectiveContextWindow,
       messages: filteredMessages,
-      systemTokens,
+      systemTokens: stableSystemTokens,
     });
     const shouldWarnBeforePrune =
       usageSnapshot.shouldWarnBeforePrune &&
@@ -336,6 +344,14 @@ export async function runTurn(
     if (shouldWarnBeforePrune) {
       promptMetadata = `${promptMetadata}\n${formatContextPruneWarning(usageSnapshot)}`;
       session.lastContextWarningCursor = session.historyCursor;
+    }
+
+    // Inject opened files as ephemeral user message before metadata.
+    if (openedFilesBlock.length > 0) {
+      filteredMessages.push({
+        content: { content: openedFilesBlock, type: "text" },
+        role: "user",
+      });
     }
 
     // Append ephemeral prompt metadata so the LLM always sees current context
