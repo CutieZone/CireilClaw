@@ -106,22 +106,41 @@ async function buildOpenedFilesBlock(agentSlug: string, session: Session): Promi
         continue;
       }
 
-      const content = await readFile(realPath, "utf8");
+      // oxlint-disable-next-line init-declarations
+      let content: string;
+      try {
+        content = await readFile(realPath, "utf8");
+      } catch (error) {
+        // stat() succeeded but the file was removed before readFile —
+        // clean up the stale handle and skip without crashing the turn.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+          missingFiles.push(file);
+          session.openedFiles.delete(file);
+          session.activeFileSections.delete(file);
+          continue;
+        }
+        throw error;
+      }
 
       const activeSections = session.activeFileSections.get(file);
       if (activeSections !== undefined && activeSections.size > 0) {
-        // Render only the open sections with their IDs as labels
+        // Render only the actively-viewed sections to limit token budget
+        // and keep the engine focused on the relevant context.
         lines.push(
           `<file path="${file}" size="${stats.size}" sections="${[...activeSections].join(", ")}">`,
         );
 
         for (const sectionId of activeSections) {
-          // Extract just the lines for this section by finding the heading/XML element
+          // extractSectionContent reduces prompt noise by returning only
+          // the matching heading/XML element and its body, omitting the
+          // rest of the file.
           const sectionContent = extractSectionContent(content, sectionId);
           lines.push(`<section id="${sectionId}">`, sectionContent, "</section>", "");
         }
       } else {
-        // No section filter — render the entire file
+        // No active section filter — the whole file is relevant, so render
+        // it in full. Larger files will be caught by context pruning.
         lines.push(`<file path="${file}" size="${stats.size}">`, content, "</file>", "");
       }
     }
