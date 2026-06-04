@@ -98,7 +98,7 @@ export const readSections: ToolDef = {
           success: false,
         };
       }
-      added.push(...data.sections);
+      added.push(...data.sections.filter((id) => !(existing?.has(id) ?? false)));
     }
 
     if (added.length === 0) {

@@ -10,6 +10,7 @@ import ora from "ora";
 import { stringify } from "smol-toml";
 
 import { loadGlobalPluginConfig } from "#config/index.js";
+import type { ProviderKind } from "#engine/provider/index.js";
 import { getToolRegistry } from "#engine/tools/index.js";
 import colors from "#output/colors.js";
 import { info, warning } from "#output/log.js";
@@ -419,6 +420,23 @@ async function run(flags: Flags): Promise<void> {
     validate: (value) => value.length > 0 || "API base URL is required",
   });
 
+  const apiKind = await select<ProviderKind>({
+    choices: [
+      {
+        description: "OpenAI-Compatible API",
+        name: "OpenAI",
+        value: "openai",
+      },
+      {
+        description: "Anthropic-Compatible API",
+        name: "Anthropic",
+        value: "anthropic",
+      },
+      { description: "ChatGPT Codex Subscription", name: "Codex", value: "openai-codex" },
+    ],
+    message: "API Kind",
+  });
+
   const model = await input({
     message: "Model:",
     validate: (value) => value.length > 0 || "Model is required",
@@ -451,7 +469,8 @@ async function run(flags: Flags): Promise<void> {
 
   // Integrations (only relevant when brave-search is enabled)
   let braveApiKey: string | undefined = undefined;
-  if (preset !== "minimal") {
+  const hasBraveSearchPlugin = "brave-search" in getToolRegistry();
+  if (preset !== "minimal" && hasBraveSearchPlugin) {
     const existingBraveConfig = await loadGlobalPluginConfig("brave-search");
     if (existingBraveConfig === undefined || existingBraveConfig["apiKey"] === undefined) {
       const raw = await password({
@@ -510,7 +529,7 @@ async function run(flags: Flags): Promise<void> {
   await writeFile(
     join(agentRoot, "config", "engine.toml"),
     stringify({
-      default: { apiBase, apiKey, defaultModel: model, isGlobalDefault: true },
+      default: { apiBase, apiKey, defaultModel: model, isGlobalDefault: true, kind: apiKind },
     }),
     "utf8",
   );
@@ -543,7 +562,7 @@ async function run(flags: Flags): Promise<void> {
 
 export const initCommand = buildCommand({
   docs: {
-    brief: "Initialize cireilclaw and create the first agent",
+    brief: "Initialize CireilClaw and create the first agent",
   },
   func: run,
   parameters: {

@@ -308,9 +308,7 @@ async function handleAutocomplete(
           .filter(
             ({ name, id }) =>
               typeof focused.value === "string" &&
-              ((focused.value.length > 1 &&
-                (name.startsWith(focused.value) || id.startsWith(focused.value))) ||
-                focused.value.length === 0),
+              (name.startsWith(focused.value) || id.startsWith(focused.value)),
           )
           .map(({ name, id }) => ({ name, value: id }));
       } else if (selected !== undefined) {

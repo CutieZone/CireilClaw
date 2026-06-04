@@ -33,7 +33,7 @@ vi.mock("node:fs/promises", () => ({
 vi.stubEnv("HOME", "/home/test");
 
 function tomlBlock(description: string, body: string): string {
-  return `+++description="${description}"+++\n${body}`;
+  return `+++\ndescription="${description}"\n+++\n${body}`;
 }
 
 function yamlSkill(name: string, description: string, body: string): string {
