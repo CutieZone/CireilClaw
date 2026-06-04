@@ -22,6 +22,8 @@ maxTurns = 30
 # availableModels       (optional)  List of model names, or "analyze" for auto-resolution. Default: "analyze"
 # maxGenerationRetries  (optional)  How many times generation can fail before crashing. Default: 2
 # maxTurns              (optional)  Number of conversation turns sent to the API. Default: 30
+#                         Prefer setting contextWindow / contextBudget / contextHardBudget
+#                         in the [models] section below instead. maxTurns is legacy.
 # useFilesApi           (optional)  Use provider files API for media. "kimi" or false. Default: false
 # useJpegForImages      (optional)  Force JPEG over WEBP for images. Default: false
 # useToolChoiceAuto     (optional)  Prefer tool_choice: auto over required. Default: false
@@ -41,6 +43,7 @@ maxTurns = 30
 #   reasoning = true            # Enable reasoning (true/false), or set to an OpenRouter effort level: "xhigh", "high", "medium", "low", "minimal", "none". Default: true
 #   reasoningBudget = 16384     # Token budget for reasoning. Default: 16384
 #   supportsVideo = false       # Video support flag. Default: false
+#   supportsVision = true      # Vision support flag. Default: true
 #   toolFailThreshold = 3       # Max tool failures before giving up. Default: 3
 #   contextWindow = 128000      # Model context window in tokens. Explicit config is authoritative.
 #                                 When available (configured here, or discovered from provider metadata),
