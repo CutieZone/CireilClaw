@@ -1,0 +1,16 @@
+# Plugin registry
+# Copy this file to plugins.toml to use
+#
+# Each plugin entry must set exactly one of `name` (local directory under
+# ~/.cireilclaw/plugins/) or `package` (npm package name).
+
+# --- Npm package ---
+# [[plugins]]
+# package = "@cireilclaw/plugin-brave-search"
+
+# --- Local directory ---
+# [[plugins]]
+# name = "my-plugin"
+
+# --- Optional flags ---
+# allowOverride = true  # Permit this plugin's tools to shadow built-ins

@@ -1,0 +1,9 @@
+# Per-agent summarization configuration
+# Copy to ~/.cireilclaw/agents/{slug}/config/summarization.toml
+#
+# Overrides the default provider/model used when the engine compacts
+# conversation history via summarization. If omitted, the agent's default
+# provider and model are used.
+
+# provider = "my-provider"
+# model = "gpt-4o-mini"
