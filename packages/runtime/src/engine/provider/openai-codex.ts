@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { toJsonSchema } from "@valibot/to-json-schema";
 import * as vb from "valibot";
 
@@ -559,21 +561,36 @@ function translateCodexOutput(
         }),
         item,
       );
-      try {
+      const argsJson = parsed.arguments.trim();
+      if (argsJson.length === 0) {
         toolCalls.push({
           id: parsed.call_id,
-          input:
-            parsed.arguments.trim().length === 0
-              ? {}
-              : (parseRepairedJSON(parsed.arguments) as Record<string, unknown>),
+          input: {},
           name: parsed.name,
           type: "toolCall",
         });
-      } catch (error: unknown) {
-        throw new Error(
-          `Failed to parse tool-call arguments into a json object\n ${parsed.arguments}`,
-          { cause: error },
-        );
+      } else {
+        try {
+          const result = parseRepairedJSON(argsJson);
+          if (typeof result !== "object" || result === null || Array.isArray(result)) {
+            const hash = createHash("sha256").update(argsJson).digest("hex").slice(0, 8);
+            throw new Error(
+              `Tool-call arguments parsed to non-object: length=${argsJson.length} hash=${hash}`,
+            );
+          }
+          toolCalls.push({
+            id: parsed.call_id,
+            input: result,
+            name: parsed.name,
+            type: "toolCall",
+          });
+        } catch (error: unknown) {
+          const hash = createHash("sha256").update(argsJson).digest("hex").slice(0, 8);
+          throw new Error(
+            `Failed to parse tool-call arguments: length=${argsJson.length} hash=${hash}`,
+            { cause: error },
+          );
+        }
       }
     } else if (type === "reasoning") {
       const encrypted = item["encrypted_content"];

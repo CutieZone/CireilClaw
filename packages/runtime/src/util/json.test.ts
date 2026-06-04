@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseRepairedJSON, repairJsonEscapes } from "./json.js";
+import { parseRepairedJSON, repairJsonEscapes } from "#util/json.js";
 
 describe("repairJsonEscapes", () => {
   it("passes valid JSON through unchanged", () => {

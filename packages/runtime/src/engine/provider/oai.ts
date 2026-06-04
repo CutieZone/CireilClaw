@@ -543,9 +543,7 @@ export async function generate(
             return {
               id: it.id,
               input:
-                it.function.arguments.trim() === ""
-                  ? {}
-                  : (parseRepairedJSON(it.function.arguments) as Record<string, unknown>),
+                it.function.arguments.trim() === "" ? {} : parseRepairedJSON(it.function.arguments),
               name: it.function.name,
               type: "toolCall",
             } as ToolCallContent;
