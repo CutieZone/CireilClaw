@@ -53,7 +53,7 @@ import {
   pruneHistory,
   squashMessages,
 } from "./prune.js";
-import { buildOpenedFilesBlock, buildSystemPrompt } from "./system-prompt.js";
+import { buildOpenedFilesBlock, buildSystemPrompt } from "#engine/system-prompt.js";
 import { buildTools } from "./tools.js";
 
 const NO_CAPABILITIES: ChannelCapabilities = {
@@ -326,8 +326,17 @@ export async function runTurn(
       modelCfg.supportsVideo,
     );
 
-    // Opened files are now in `filteredMessages`, so only pass the stable
-    // system prompt tokens to avoid double-counting.
+    // Inject opened files before the context usage snapshot so token
+    // estimates and pruning warnings account for opened-file content.
+    if (openedFilesBlock.length > 0) {
+      filteredMessages.push({
+        content: { content: openedFilesBlock, type: "text" },
+        role: "user",
+      });
+    }
+
+    // Only pass the stable system prompt tokens to avoid double-counting
+    // now that opened files are in filteredMessages.
     const stableSystemTokens = estimateSystemPrompt(prompt);
     const usageSnapshot = computeContextUsageSnapshot({
       contextBudget,
@@ -344,14 +353,6 @@ export async function runTurn(
     if (shouldWarnBeforePrune) {
       promptMetadata = `${promptMetadata}\n${formatContextPruneWarning(usageSnapshot)}`;
       session.lastContextWarningCursor = session.historyCursor;
-    }
-
-    // Inject opened files as ephemeral user message before metadata.
-    if (openedFilesBlock.length > 0) {
-      filteredMessages.push({
-        content: { content: openedFilesBlock, type: "text" },
-        role: "user",
-      });
     }
 
     // Append ephemeral prompt metadata so the LLM always sees current context
