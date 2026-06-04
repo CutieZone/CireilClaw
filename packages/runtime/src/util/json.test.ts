@@ -51,7 +51,9 @@ describe("repairJsonEscapes", () => {
 
   it(String.raw`repairs \s to \\s (regex whitespace)`, () => {
     const raw = String.raw`{"pattern": "\s+word"}`;
-    expect(() => JSON.parse(raw)).toThrow();
+    expect(() => {
+      JSON.parse(raw);
+    }).toThrow();
     const repaired = repairJsonEscapes(raw);
     expect(repaired).toBe(String.raw`{"pattern": "\\s+word"}`);
     expect(JSON.parse(repaired)).toEqual({ pattern: "\\s+word" });
@@ -59,16 +61,20 @@ describe("repairJsonEscapes", () => {
 
   it(String.raw`repairs \( to \\( (regex group)`, () => {
     const raw = String.raw`{"pattern": "\(group\)"}`;
-    expect(() => JSON.parse(raw)).toThrow();
+    expect(() => {
+      JSON.parse(raw);
+    }).toThrow();
     const repaired = repairJsonEscapes(raw);
     expect(JSON.parse(repaired)).toEqual({ pattern: "\\(group\\)" });
   });
 
   it("repairs the exact error case from grep arguments", () => {
     const raw = String.raw`{"command": "grep", "args": ["-n","-i","not.*but\|isn't.*it's\|is not.*it is","file.md"]}`;
-    expect(() => JSON.parse(raw)).toThrow();
+    expect(() => {
+      JSON.parse(raw);
+    }).toThrow();
     const repaired = repairJsonEscapes(raw);
-    const parsed = JSON.parse(repaired);
+    const parsed: unknown = JSON.parse(repaired);
     expect(parsed).toEqual({
       args: ["-n", "-i", String.raw`not.*but\|isn't.*it's\|is not.*it is`, "file.md"],
       command: "grep",
@@ -77,14 +83,18 @@ describe("repairJsonEscapes", () => {
 
   it(String.raw`repairs \d to \\d (regex digit)`, () => {
     const raw = String.raw`{"pattern": "\d+"}`;
-    expect(() => JSON.parse(raw)).toThrow();
+    expect(() => {
+      JSON.parse(raw);
+    }).toThrow();
     const repaired = repairJsonEscapes(raw);
     expect(JSON.parse(repaired)).toEqual({ pattern: "\\d+" });
   });
 
   it(String.raw`repairs \w to \\w (regex word)`, () => {
     const raw = String.raw`{"pattern": "\w+"}`;
-    expect(() => JSON.parse(raw)).toThrow();
+    expect(() => {
+      JSON.parse(raw);
+    }).toThrow();
     const repaired = repairJsonEscapes(raw);
     expect(JSON.parse(repaired)).toEqual({ pattern: "\\w+" });
   });
@@ -96,21 +106,28 @@ describe("repairJsonEscapes", () => {
     const raw = '{"key": "trailing\\';
     const repaired = repairJsonEscapes(raw);
     expect(repaired).toBe(String.raw`{"key": "trailing\\`);
-    expect(() => JSON.parse(repaired)).toThrow();
+    expect(() => {
+      JSON.parse(repaired);
+    }).toThrow();
   });
 
   it(String.raw`preserves already-correct \\|`, () => {
     const raw = String.raw`{"pattern": "\\|"}`;
-    expect(() => JSON.parse(raw)).not.toThrow();
+    expect(() => {
+      JSON.parse(raw);
+    }).not.toThrow();
     expect(JSON.parse(raw)).toEqual({ pattern: "\\|" });
     expect(repairJsonEscapes(raw)).toBe(raw);
   });
 
   it("handles mixed valid and invalid escapes", () => {
     const raw = String.raw`{"a": "\n\t", "b": "\|"}`;
-    expect(() => JSON.parse(raw)).toThrow();
+    expect(() => {
+      JSON.parse(raw);
+    }).toThrow();
     const repaired = repairJsonEscapes(raw);
-    const parsed = JSON.parse(repaired);
+    const parsed: unknown = JSON.parse(repaired);
+    // oxlint-disable-next-line id-length
     expect(parsed).toEqual({ a: "\n\t", b: "\\|" });
   });
 
