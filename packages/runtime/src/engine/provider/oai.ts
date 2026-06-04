@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import type { KeyPool } from "@cireilclaw/sdk";
 import { toJsonSchema } from "@valibot/to-json-schema";
 import { OpenAI } from "openai/client.js";
@@ -548,8 +550,12 @@ export async function generate(
               type: "toolCall",
             } as ToolCallContent;
           } catch (error: unknown) {
+            const hash = createHash("sha256")
+              .update(it.function.arguments)
+              .digest("hex")
+              .slice(0, 8);
             throw new Error(
-              `Failed to parse tool-call arguments into a json object\n ${it.function.arguments}`,
+              `Failed to parse tool-call arguments: length=${it.function.arguments.length} hash=${hash}`,
               { cause: error },
             );
           }
