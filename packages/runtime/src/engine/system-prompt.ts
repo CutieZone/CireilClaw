@@ -138,6 +138,8 @@ async function buildOpenedFilesBlock(agentSlug: string, session: Session): Promi
           const sectionContent = extractSectionContent(content, sectionId);
           lines.push(`<section id="${sectionId}">`, sectionContent, "</section>", "");
         }
+
+        lines.push("</file>", "");
       } else {
         // No active section filter — the whole file is relevant, so render
         // it in full. Larger files will be caught by context pruning.
