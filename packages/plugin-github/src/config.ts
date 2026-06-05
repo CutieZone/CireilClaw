@@ -13,6 +13,21 @@ const ConfigSchema = vb.strictObject({
 let cachedConfig: Config | undefined = undefined;
 let loadPromise: Promise<Config> | undefined = undefined;
 
+function parseInstallationId(raw: string): number {
+  if (!/^\d+$/u.test(raw)) {
+    throw new ToolError(
+      `Invalid installationId "${raw}" in GitHub plugin config: expected a positive integer.`,
+    );
+  }
+  const value = Number.parseInt(raw, 10);
+  if (!Number.isInteger(value) || value < 1) {
+    throw new ToolError(
+      `Invalid installationId "${raw}" in GitHub plugin config: must be a positive integer.`,
+    );
+  }
+  return value;
+}
+
 async function inner(ctx: Pick<PluginToolContext, "cfg">): Promise<Config> {
   const rawConfig = await ctx.cfg.globalPlugin("github");
   if (rawConfig === undefined) {
@@ -28,7 +43,7 @@ async function inner(ctx: Pick<PluginToolContext, "cfg">): Promise<Config> {
     appId: parsed.appId,
     installationId:
       typeof parsed.installationId === "string"
-        ? Number.parseInt(parsed.installationId, 10)
+        ? parseInstallationId(parsed.installationId)
         : parsed.installationId,
     privateKey: parsed.privateKey,
   };
