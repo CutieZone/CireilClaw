@@ -119,7 +119,11 @@ const githubSearchCode: ToolDef = {
     const params = new URLSearchParams();
     params.set("per_page", String(limit));
     params.set("q", query);
-    const result = await ghParse<GHSearchResult<GHCodeItem>>(ctx, "GET", `/search/code?${String(params)}`);
+    const result = await ghParse<GHSearchResult<GHCodeItem>>(
+      ctx,
+      "GET",
+      `/search/code?${String(params)}`,
+    );
     const results = result.items.map((item) => ({
       htmlUrl: item.html_url,
       name: item.name,
