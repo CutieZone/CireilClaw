@@ -115,6 +115,7 @@ export const listSessions: ToolDef = {
             }
           }
         } else {
+          // Not used for HTML; this is fine to leave as-is.
           let text = textContent.content.replaceAll(/<[^>]*>/gu, "").trim();
           if (text === "") {
             // If stripping tags left nothing, maybe it's just tags or metadata.
