@@ -132,7 +132,25 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
         // Typing setup failed — proceed without it
       }
 
-      await agent.runTurn(session);
+      // Save history length before the turn so we can roll back if it fails.
+      // Unlike the normal Discord turn path (discord.ts), the reroll has
+      // already deleted the original bot message from Discord and spliced
+      // history — we cannot restore the message, but we can restore session
+      // state back to the user message the reroll was triggered from.
+      const historyLengthBeforeTurn = session.history.length;
+
+      try {
+        await agent.runTurn(session);
+      } catch (error) {
+        // Roll back any history entries the failed turn may have pushed, clear
+        // pending tool/media state, and re-throw so the outer catch sends the
+        // error response to the user.
+        session.history.length = historyLengthBeforeTurn;
+        session.pendingToolMessages.length = 0;
+        session.pendingVideos.length = 0;
+        session.lastMessageId = session.history.findLast((entry) => entry.id !== undefined)?.id;
+        throw error;
+      }
     } finally {
       if (typingInterval !== undefined) {
         clearInterval(typingInterval);

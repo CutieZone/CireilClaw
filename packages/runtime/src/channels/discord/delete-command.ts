@@ -74,12 +74,18 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
       return;
     }
 
-    await targetMsg.delete("Deleted by owner");
+    session.busy = true;
+    saveSession(ctx.agentSlug, session);
+    try {
+      await targetMsg.delete("Deleted by owner");
 
-    const msgIndex = session.history.findIndex((entry) => entry.id === targetMsg.id);
-    if (msgIndex !== -1) {
-      session.history.splice(msgIndex, 1);
-      session.lastMessageId = session.history.findLast((entry) => entry.id !== undefined)?.id;
+      const msgIndex = session.history.findIndex((entry) => entry.id === targetMsg.id);
+      if (msgIndex !== -1) {
+        session.history.splice(msgIndex, 1);
+        session.lastMessageId = session.history.findLast((entry) => entry.id !== undefined)?.id;
+      }
+    } finally {
+      session.busy = false;
       saveSession(ctx.agentSlug, session);
     }
 
