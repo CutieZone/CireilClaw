@@ -1244,14 +1244,19 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
             )
           : undefined;
 
+      const sentIds: string[] = [];
       for (const [idx, chunk] of chunks.entries()) {
         const isLast = idx === chunks.length - 1;
-        await client.rest.channels.createMessage(ds.channelId, {
+        const sent = await client.rest.channels.createMessage(ds.channelId, {
           content: chunk,
           flags,
           ...(isLast && files !== undefined ? { files } : {}),
         });
+        sentIds.push(sent.id);
       }
+      // Store sent message IDs so the engine can assign them to the
+      // assistant history entry after it's pushed.
+      ds.lastSentMessageIds = sentIds;
     },
   };
 
