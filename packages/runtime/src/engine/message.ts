@@ -17,6 +17,9 @@ interface BaseMessage {
   timestamp?: number;
   // Optional unique ID for message deduplication across turns.
   id?: string;
+  // Additional message IDs for the same logical message (e.g. chunked Discord messages).
+  // The primary `id` holds the first chunk's ID; messageIds holds all chunk IDs.
+  messageIds?: string[];
 }
 
 type UserContent = TextContent | ImageContent | ImageRef | VideoContent | VideoRef;

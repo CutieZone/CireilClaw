@@ -42,6 +42,11 @@ abstract class BaseSession {
   public lastContextWarningCursor?: number;
   public historyBarrier?: number;
 
+  // Temporary storage for message IDs from the most recent send call.
+  // Used by the Discord channel handler to pass sent message IDs back to the
+  // engine so the assistant history entry gets its `id` and `messageIds` set.
+  public lastSentMessageIds?: string[];
+
   public sendFilter?: (content: string) => boolean = undefined;
 
   public abstract id(): string;
@@ -58,6 +63,7 @@ abstract class BaseSession {
     this.pendingVideos = [];
     this.lastContextWarningCursor = undefined;
     this.stopRequested = false;
+    this.lastSentMessageIds = undefined;
   }
 }
 
