@@ -149,6 +149,7 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
         // error response to the user.
         session.history.length = historyLengthBeforeTurn;
         session.pendingToolMessages.length = 0;
+        session.pendingImages.length = 0;
         session.pendingVideos.length = 0;
         session.lastMessageId = session.history.findLast((entry) => entry.id !== undefined)?.id;
         didRollback = true;
