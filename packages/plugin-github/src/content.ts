@@ -19,6 +19,8 @@ const readFileSchema = vb.strictObject({
   repo: vb.pipe(vb.string(), vb.nonEmpty()),
 });
 
+const MAX_RAW_FALLBACK_BYTES = 10 * 1024 * 1024;
+
 const githubReadFile: ToolDef = {
   description: "Read a file's contents from a GitHub repository.",
   async execute(raw: unknown, ctx): Promise<ToolResult> {
@@ -37,6 +39,11 @@ const githubReadFile: ToolDef = {
     }
 
     if (data.encoding !== "base64" || data.content === "") {
+      if (data.size > MAX_RAW_FALLBACK_BYTES) {
+        throw new ToolError(
+          `File "${path}" is ${String(data.size)} bytes (max ${String(MAX_RAW_FALLBACK_BYTES)}). Use github-read-file with a ref or clone the repo locally.`,
+        );
+      }
       // Fall back to raw endpoint for non-base64 encodings
       const refQuery = ref === undefined ? "" : `?ref=${encodeURIComponent(ref)}`;
       const rawResponse = await gh(
@@ -59,7 +66,7 @@ const githubReadFile: ToolDef = {
         name: data.name,
         path: data.path,
         sha: data.sha,
-        size: rawContent.length,
+        size: data.size,
         success: true,
       };
     }
