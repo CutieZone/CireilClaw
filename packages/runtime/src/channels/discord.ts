@@ -6,6 +6,7 @@ import path from "node:path";
 
 import type {
   AnyInteractionGateway,
+  AnyTextableChannel,
   Client as OceanicClient,
   CommandInteraction,
   Message as DiscordMessage,
@@ -911,17 +912,97 @@ async function handleMessageReactionAdd(
       return;
     }
 
-    if (reaction.emoji.name !== "✨") {
+    if (reaction.emoji.name === "✨") {
+      if (
+        realMsg.content.startsWith("⚠️ Engine error") ||
+        realMsg.content.startsWith(":warning: Engine error") ||
+        realMsg.content.startsWith("⚠️ Discord error") ||
+        realMsg.content.startsWith(":warning: Discord error")
+      ) {
+        await realMsg.delete("No longer necessary");
+      }
       return;
     }
 
-    if (
-      realMsg.content.startsWith("⚠️ Engine error") ||
-      realMsg.content.startsWith(":warning: Engine error") ||
-      realMsg.content.startsWith("⚠️ Discord error") ||
-      realMsg.content.startsWith(":warning: Discord error")
-    ) {
-      await realMsg.delete("No longer necessary");
+    // ❌ delete-only vs 🔄 delete + reroll: shared history cleanup
+    if (reaction.emoji.name === "❌" || reaction.emoji.name === "🔄") {
+      const isReroll = reaction.emoji.name === "🔄";
+
+      const agent = ctx.owner.agents.get(ctx.agentSlug);
+      if (agent === undefined) {
+        return;
+      }
+
+      const sessionId =
+        msg.guildID === undefined
+          ? `discord:${msg.channelID}`
+          : `discord:${msg.channelID}|${msg.guildID}`;
+
+      const session = agent.sessions.get(sessionId);
+      if (session === undefined || !(session instanceof DiscordSession)) {
+        return;
+      }
+
+      if (session.busy) {
+        return;
+      }
+
+      const msgIndex = session.history.findIndex((entry) => entry.id === msg.id);
+      if (msgIndex === -1) {
+        return;
+      }
+
+      await realMsg.delete(isReroll ? "Reroll triggered by owner" : "Deleted by owner");
+
+      // Wipe the message and everything that followed so history is consistent
+      session.history.splice(msgIndex);
+      session.pendingToolMessages = [];
+      session.pendingVideos = [];
+
+      // Point lastMessageId at the preceding user message so future turns work
+      const lastUserMsg = session.history.findLast(
+        (entry) => entry.role === "user" && entry.id !== undefined,
+      );
+      session.lastMessageId = lastUserMsg?.id;
+
+      if (!isReroll) {
+        // ❌ — delete only
+        saveSession(ctx.agentSlug, session);
+        return;
+      }
+
+      // 🔄 — reroll: regenerate response to the last user message
+      if (lastUserMsg === undefined) {
+        saveSession(ctx.agentSlug, session);
+        return;
+      }
+
+      session.stopRequested = false;
+
+      // Keep the channel alive while the turn runs
+      const channel = await runDiscordRestWithRetries(
+        "GET /channels/{id}",
+        async () => await ctx.client.rest.channels.get(msg.channelID),
+      );
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      const textChannel = channel as AnyTextableChannel;
+      await textChannel.sendTyping();
+
+      const typingInterval = setInterval(() => {
+        // oxlint-disable-next-line promise/prefer-await-to-then
+        textChannel.sendTyping().catch(() => {
+          // Intentionally ignored
+        });
+      }, TYPING_INTERVAL_MS);
+
+      session.busy = true;
+      try {
+        await agent.runTurn(session);
+      } finally {
+        clearInterval(typingInterval);
+        session.busy = false;
+        saveSession(ctx.agentSlug, session);
+      }
     }
   } catch (error: unknown) {
     warning(
