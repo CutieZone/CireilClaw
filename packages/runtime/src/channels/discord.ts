@@ -963,7 +963,10 @@ async function handleMessageUpdate(
       return;
     }
 
-    const entryIndex = session.history.findIndex((historyMsg) => historyMsg.id === msg.id);
+    const entryIndex = session.history.findIndex(
+      (historyMsg) =>
+        historyMsg.id === msg.id || (historyMsg.messageIds?.includes(msg.id) ?? false),
+    );
     if (entryIndex === -1) {
       return;
     }
@@ -1030,7 +1033,10 @@ async function handleMessageDelete(ctx: HandlerCtx, msg: PossiblyUncachedMessage
       return;
     }
 
-    const entryIndex = session.history.findIndex((historyMsg) => historyMsg.id === msg.id);
+    const entryIndex = session.history.findIndex(
+      (historyMsg) =>
+        historyMsg.id === msg.id || (historyMsg.messageIds?.includes(msg.id) ?? false),
+    );
     if (entryIndex === -1) {
       return;
     }
