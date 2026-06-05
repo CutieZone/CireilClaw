@@ -40,9 +40,7 @@ export interface Config {
   installationId: number;
 }
 
-export async function loadConfig(
-  ctx: Pick<PluginToolContext, "cfg">,
-): Promise<Config> {
+export async function loadConfig(ctx: Pick<PluginToolContext, "cfg">): Promise<Config> {
   if (cachedConfig !== undefined) {
     return cachedConfig;
   }

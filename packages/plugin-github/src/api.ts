@@ -51,4 +51,3 @@ async function ghParse<TData>(
 }
 
 export { gh, ghParse };
-

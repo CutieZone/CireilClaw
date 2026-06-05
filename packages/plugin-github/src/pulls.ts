@@ -16,7 +16,11 @@ const githubReadPr: ToolDef = {
   description: "Get detailed information about a specific pull request.",
   async execute(raw: unknown, ctx): Promise<ToolResult> {
     const { owner, repo, number } = vb.parse(readPrSchema, raw);
-    const pr = await ghParse<GHPullRequest>(ctx, "GET", `/repos/${owner}/${repo}/pulls/${String(number)}`);
+    const pr = await ghParse<GHPullRequest>(
+      ctx,
+      "GET",
+      `/repos/${owner}/${repo}/pulls/${String(number)}`,
+    );
     return {
       additions: pr.additions,
       base: pr.base.ref,

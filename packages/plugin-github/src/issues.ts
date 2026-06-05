@@ -51,7 +51,11 @@ const githubReadIssue: ToolDef = {
   description: "Get detailed information about a specific issue.",
   async execute(raw: unknown, ctx): Promise<ToolResult> {
     const { owner, repo, number } = vb.parse(readIssueSchema, raw);
-    const issue = await ghParse<GHIssue>(ctx, "GET", `/repos/${owner}/${repo}/issues/${String(number)}`);
+    const issue = await ghParse<GHIssue>(
+      ctx,
+      "GET",
+      `/repos/${owner}/${repo}/issues/${String(number)}`,
+    );
     return {
       assignees: issue.assignees.map((user) => user.login),
       body: issue.body,
@@ -128,7 +132,11 @@ const githubListIssues: ToolDef = {
       params.set("assignee", assignee);
     }
 
-    const items = await ghParse<GHIssue[]>(ctx, "GET", `/repos/${owner}/${repo}/issues?${String(params)}`);
+    const items = await ghParse<GHIssue[]>(
+      ctx,
+      "GET",
+      `/repos/${owner}/${repo}/issues?${String(params)}`,
+    );
     const issues = items
       .filter((item) => item.pull_request === undefined)
       .map((item) => ({
@@ -226,7 +234,11 @@ const githubSearchIssues: ToolDef = {
     const params = new URLSearchParams();
     params.set("per_page", String(limit));
     params.set("q", query);
-    const result = await ghParse<GHSearchResult<GHIssue>>(ctx, "GET", `/search/issues?${String(params)}`);
+    const result = await ghParse<GHSearchResult<GHIssue>>(
+      ctx,
+      "GET",
+      `/search/issues?${String(params)}`,
+    );
     const results = result.items.map((item) => ({
       htmlUrl: item.html_url,
       number: item.number,

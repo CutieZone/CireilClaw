@@ -159,4 +159,4 @@ export type {
   GHRepo,
   GHSearchResult,
   GHUser,
-}
+};
