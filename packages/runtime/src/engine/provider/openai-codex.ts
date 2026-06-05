@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { toJsonSchema } from "@valibot/to-json-schema";
+import { toJsonSchemaSafe } from "#util/schema.js";
 import * as vb from "valibot";
 
 import type { ImageContent, RedactedThinkingContent, ToolCallContent } from "#engine/content.js";
@@ -224,7 +224,7 @@ async function translateUserContent(
 function translateTool(tool: Tool): Record<string, unknown> {
   const schema =
     tool.jsonSchema ??
-    toJsonSchema(tool.parameters, {
+    toJsonSchemaSafe(tool.parameters, {
       target: "openapi-3.0",
       typeMode: "input",
     });
