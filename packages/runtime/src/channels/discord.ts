@@ -6,7 +6,6 @@ import path from "node:path";
 
 import type {
   AnyInteractionGateway,
-  AnyTextableChannel,
   Client as OceanicClient,
   CommandInteraction,
   Message as DiscordMessage,
@@ -18,6 +17,7 @@ import type {
   AutocompleteInteraction,
 } from "oceanic.js";
 import {
+  ApplicationCommandTypes,
   ChannelTypes,
   InteractionTypes,
   MessageFlags,
@@ -27,10 +27,12 @@ import {
 
 import * as clearCommand from "#channels/discord/clear-command.js";
 import * as closeCommand from "#channels/discord/close-command.js";
+import * as deleteCommand from "#channels/discord/delete-command.js";
 import type { HandlerCtx } from "#channels/discord/handler-ctx.js";
 import * as inviteCommand from "#channels/discord/invite-command.js";
 import * as modelCommand from "#channels/discord/model-command.js";
 import * as repairCommand from "#channels/discord/repair-command.js";
+import * as rerollCommand from "#channels/discord/reroll-command.js";
 import { runDiscordRestWithRetries } from "#channels/discord/rest-retry.js";
 import * as stopCommand from "#channels/discord/stop-command.js";
 import * as summarizeCommand from "#channels/discord/summarize-command.js";
@@ -63,26 +65,31 @@ const { Client, Intents } = createRequire(import.meta.url)(
 const CHUNK_LIMIT = 1800;
 const TYPING_INTERVAL_MS = 5000;
 
-// All registered slash commands. Add new command modules here — the hash
-// check on startup will detect changes and re-register with Discord's API.
-const SLASH_COMMANDS = [
+// All registered application commands (slash + message). Add new command
+// modules here — the hash check on startup will detect changes and
+// re-register with Discord's API.
+const COMMANDS = [
   clearCommand.definition,
   closeCommand.definition,
+  deleteCommand.definition,
   inviteCommand.definition,
   modelCommand.definition,
   repairCommand.definition,
+  rerollCommand.definition,
   stopCommand.definition,
   summarizeCommand.definition,
   unsummarizeCommand.definition,
 ];
 
-type SlashHandler = (interaction: CommandInteraction, ctx: HandlerCtx) => Promise<void>;
-const SLASH_HANDLERS = new Map<string, SlashHandler>([
+type CommandHandler = (interaction: CommandInteraction, ctx: HandlerCtx) => Promise<void>;
+const HANDLERS = new Map<string, CommandHandler>([
   ["clear", clearCommand.handle],
   ["close", closeCommand.handleCommand],
+  ["Delete Message", deleteCommand.handle],
   ["invite", inviteCommand.handle],
   ["model", modelCommand.handleCommand],
   ["repair", repairCommand.handle],
+  ["Reroll Response", rerollCommand.handle],
   ["stop", stopCommand.handle],
   ["summarize", summarizeCommand.handleCommand],
   ["unsummarize", unsummarizeCommand.handleCommand],
@@ -96,8 +103,8 @@ const AUTOCOMPLETE_HANDLERS = new Map<string, AutocompleteHandler>([
   ["model", modelCommand.handleAutocomplete],
 ]);
 
-// Persisted hash of SLASH_COMMANDS to avoid re-registering on every startup.
-const COMMANDS_HASH = createHash("sha256").update(JSON.stringify(SLASH_COMMANDS)).digest("hex");
+// Persisted hash of COMMANDS to avoid re-registering on every startup.
+const COMMANDS_HASH = createHash("sha256").update(JSON.stringify(COMMANDS)).digest("hex");
 
 function commandsHashFile(agentSlug: string): string {
   return path.join(agentRoot(agentSlug), "discord-commands.hash");
@@ -912,104 +919,23 @@ async function handleMessageReactionAdd(
       return;
     }
 
-    if (reaction.emoji.name === "✨") {
-      if (
-        realMsg.content.startsWith("⚠️ Engine error") ||
-        realMsg.content.startsWith(":warning: Engine error") ||
-        realMsg.content.startsWith("⚠️ Discord error") ||
-        realMsg.content.startsWith(":warning: Discord error")
-      ) {
-        await realMsg.delete("No longer necessary");
-      }
+    if (reaction.emoji.name !== "✨") {
       return;
     }
 
-    // ❌ delete-only vs 🔄 delete + reroll: shared history cleanup
-    if (reaction.emoji.name === "❌" || reaction.emoji.name === "🔄") {
-      const isReroll = reaction.emoji.name === "🔄";
-
-      const agent = ctx.owner.agents.get(ctx.agentSlug);
-      if (agent === undefined) {
-        return;
-      }
-
-      const sessionId =
-        msg.guildID === undefined
-          ? `discord:${msg.channelID}`
-          : `discord:${msg.channelID}|${msg.guildID}`;
-
-      const session = agent.sessions.get(sessionId);
-      if (session === undefined || !(session instanceof DiscordSession)) {
-        return;
-      }
-
-      if (session.busy) {
-        return;
-      }
-
-      const msgIndex = session.history.findIndex((entry) => entry.id === msg.id);
-      if (msgIndex === -1) {
-        return;
-      }
-
-      await realMsg.delete(isReroll ? "Reroll triggered by owner" : "Deleted by owner");
-
-      if (!isReroll) {
-        // ❌ — delete only: just remove this single message
-        session.history.splice(msgIndex, 1);
-        session.lastMessageId = session.history.findLast((entry) => entry.id !== undefined)?.id;
-        saveSession(ctx.agentSlug, session);
-        return;
-      }
-
-      // 🔄 — delete + reroll: wipe this message and everything after, then regenerate
-      session.history.splice(msgIndex);
-      session.pendingToolMessages = [];
-      session.pendingVideos = [];
-
-      const lastUserMsg = session.history.findLast(
-        (entry) => entry.role === "user" && entry.id !== undefined,
-      );
-      session.lastMessageId = lastUserMsg?.id;
-
-      if (lastUserMsg === undefined) {
-        saveSession(ctx.agentSlug, session);
-        return;
-      }
-
-      session.stopRequested = false;
-
-      // Keep the channel alive while the turn runs
-      const channel = await runDiscordRestWithRetries(
-        "GET /channels/{id}",
-        async () => await ctx.client.rest.channels.get(msg.channelID),
-      );
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      const textChannel = channel as AnyTextableChannel;
-      await textChannel.sendTyping();
-
-      const typingInterval = setInterval(() => {
-        // oxlint-disable-next-line promise/prefer-await-to-then
-        textChannel.sendTyping().catch(() => {
-          // Intentionally ignored
-        });
-      }, TYPING_INTERVAL_MS);
-
-      session.busy = true;
-      try {
-        await agent.runTurn(session);
-      } finally {
-        clearInterval(typingInterval);
-        session.busy = false;
-        saveSession(ctx.agentSlug, session);
-      }
+    if (
+      realMsg.content.startsWith("\u26A0\uFE0F Engine error") ||
+      realMsg.content.startsWith(":warning: Engine error") ||
+      realMsg.content.startsWith("\u26A0\uFE0F Discord error") ||
+      realMsg.content.startsWith(":warning: Discord error")
+    ) {
+      await realMsg.delete("No longer necessary");
     }
   } catch (error: unknown) {
     warning(
       "Failed during reaction add handler:",
       error instanceof Error ? error.message : String(error),
     );
-
     if (error instanceof Error) {
       warning(error);
     }
@@ -1137,11 +1063,16 @@ async function handleInteractionCreate(
   }
 
   if (interaction.type === InteractionTypes.APPLICATION_COMMAND) {
-    const handler = SLASH_HANDLERS.get(interaction.data.name);
+    // Message commands (right-click → Apps) always respond ephemerally.
+    // Slash commands use the SILENT_COMMANDS set.
+    const isEphemeral =
+      interaction.data.type === ApplicationCommandTypes.MESSAGE ||
+      SILENT_COMMANDS.has(interaction.data.name);
+    const deferFlags = isEphemeral ? MessageFlags.EPHEMERAL : 0;
+
+    const handler = HANDLERS.get(interaction.data.name);
     if (handler !== undefined) {
-      await interaction.defer(
-        SILENT_COMMANDS.has(interaction.data.name) ? MessageFlags.EPHEMERAL : 0,
-      );
+      await interaction.defer(deferFlags);
 
       await handler(interaction, ctx);
     }
@@ -1336,9 +1267,9 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
     const storedHash = readCommandsHash(agentSlug);
     if (storedHash !== commandsFingerprint) {
       try {
-        await client.rest.applications.bulkEditGlobalCommands(appId, SLASH_COMMANDS);
+        await client.rest.applications.bulkEditGlobalCommands(appId, COMMANDS);
         writeCommandsHash(agentSlug, commandsFingerprint);
-        info("Registered Discord slash commands");
+        info("Registered Discord application commands");
       } catch (error) {
         warning(
           "Failed to register slash commands:",
