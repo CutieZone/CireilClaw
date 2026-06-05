@@ -18,12 +18,14 @@ function b64url(obj: unknown): string {
 }
 
 function resolvePrivateKey(keyOrPath: string): string {
-  if (keyOrPath.startsWith("-----BEGIN ")) {
-    return keyOrPath;
+  const trimmed = keyOrPath.trim();
+
+  if (trimmed.startsWith("-----BEGIN ")) {
+    return trimmed;
   }
 
   try {
-    return readFileSync(keyOrPath, "utf8");
+    return readFileSync(trimmed, "utf8");
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     throw new ToolError(
