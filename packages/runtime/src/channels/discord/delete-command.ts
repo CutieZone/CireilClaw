@@ -77,7 +77,9 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
     session.busy = true;
     saveSession(ctx.agentSlug, session);
     try {
-      const msgIndex = session.history.findIndex((entry) => entry.id === targetMsg.id);
+      const msgIndex = session.history.findIndex(
+        (entry) => entry.id === targetMsg.id || (entry.messageIds?.includes(targetMsg.id) ?? false),
+      );
       if (msgIndex === -1) {
         await interaction.createFollowup({
           content: "Cannot delete a message not found in session history.",

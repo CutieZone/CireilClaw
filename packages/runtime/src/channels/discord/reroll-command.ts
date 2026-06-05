@@ -83,7 +83,9 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
     session.busy = true;
     let typingInterval: ReturnType<typeof setInterval> | undefined = undefined;
     try {
-      const msgIndex = session.history.findIndex((entry) => entry.id === targetMsg.id);
+      const msgIndex = session.history.findIndex(
+        (entry) => entry.id === targetMsg.id || (entry.messageIds?.includes(targetMsg.id) ?? false),
+      );
       if (msgIndex === -1) {
         await interaction.createFollowup({
           content: "Could not find this message in session history.",
