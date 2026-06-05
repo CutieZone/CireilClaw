@@ -1,7 +1,7 @@
 import type { ToolDef, ToolResult } from "@cireilclaw/sdk";
 import { vb } from "@cireilclaw/sdk";
 
-import { ghParse } from "./api.js";
+import { ghPaginate, ghParse } from "./api.js";
 import type { GHPullRequest, GHPrFile } from "./types.js";
 
 // ── github-read-pr ──────────────────────────────────────────────────
@@ -139,10 +139,9 @@ const githubListPrFiles: ToolDef = {
   description: "List files changed in a pull request.",
   async execute(raw: unknown, ctx): Promise<ToolResult> {
     const { owner, repo, number } = vb.parse(listPrFilesSchema, raw);
-    const items = await ghParse<GHPrFile[]>(
+    const items = await ghPaginate<GHPrFile>(
       ctx,
-      "GET",
-      `/repos/${owner}/${repo}/pulls/${String(number)}/files`,
+      `/repos/${owner}/${repo}/pulls/${String(number)}/files?per_page=100`,
     );
     const files = items.map((file) => ({
       additions: file.additions,
