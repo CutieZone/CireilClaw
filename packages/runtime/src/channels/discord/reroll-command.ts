@@ -20,6 +20,8 @@ const definition: CreateApplicationCommandOptions = {
 };
 
 async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise<void> {
+  // Track whether a rollback occurred so the error message can report it.
+  let didRollback = false;
   try {
     const { target } = interaction.data;
     if (!target || !("author" in target)) {
@@ -149,6 +151,7 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
         session.pendingToolMessages.length = 0;
         session.pendingVideos.length = 0;
         session.lastMessageId = session.history.findLast((entry) => entry.id !== undefined)?.id;
+        didRollback = true;
         throw error;
       }
     } finally {
@@ -159,8 +162,14 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
       saveSession(ctx.agentSlug, session);
     }
   } catch (error) {
+    // didRollback is set inside a nested catch before re-throw; TS can't
+    // track assignments through that control-flow path into this outer catch.
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
+    const rollbackNote = didRollback
+      ? " Session state has been rolled back to before the reroll target."
+      : "";
     await interaction.createFollowup({
-      content: `Reroll failed: ${sanitizeError(error, ctx.agentSlug)}`,
+      content: `Reroll failed: ${sanitizeError(error, ctx.agentSlug)}${rollbackNote}`,
       flags: MessageFlags.EPHEMERAL,
     });
   }
