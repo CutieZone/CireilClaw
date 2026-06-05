@@ -32,12 +32,12 @@ const DEFAULT_OUTLINE_THRESHOLD_TOKENS = 2000;
 // Built-in extractors
 // ---------------------------------------------------------------------------
 
-const HEADING_RE = /^(#{1,6})\s+(.+)$/gm;
-const SETEXT_H1_RE = /^(.+)\n=+\s*$/gm;
-const SETEXT_H2_RE = /^(.+)\n-+\s*$/gm;
+const HEADING_RE = /^(#{1,6})\s+(.+)$/gmu;
+const SETEXT_H1_RE = /^(.+)\n=+\s*$/gmu;
+const SETEXT_H2_RE = /^(.+)\n-+\s*$/gmu;
 
 function stripMarkdownLinks(text: string): string {
-  return text.replaceAll(/\[([^\]]+)\]\([^)]+\)/g, "$1").trim();
+  return text.replaceAll(/\[([^\]]+)\]\([^)]+\)/gu, "$1").trim();
 }
 
 function markdownExtractor(_filePath: string, content: string): Section[] {
@@ -53,8 +53,8 @@ function markdownExtractor(_filePath: string, content: string): Section[] {
     const lineNum = content.slice(0, match.index).split("\n").length;
     const id = text
       .toLowerCase()
-      .replaceAll(/[^a-z0-9]+/g, "-")
-      .replaceAll(/^-+|-+$/g, "");
+      .replaceAll(/[^a-z0-9]+/gu, "-")
+      .replaceAll(/^-+|-+$/gu, "");
 
     sections.push({
       id,
@@ -73,8 +73,8 @@ function markdownExtractor(_filePath: string, content: string): Section[] {
     sections.push({
       id: text
         .toLowerCase()
-        .replaceAll(/[^a-z0-9]+/g, "-")
-        .replaceAll(/^-+|-+$/g, ""),
+        .replaceAll(/[^a-z0-9]+/gu, "-")
+        .replaceAll(/^-+|-+$/gu, ""),
       label: text,
       line: lineNum,
       lines: 0,
@@ -89,8 +89,8 @@ function markdownExtractor(_filePath: string, content: string): Section[] {
     sections.push({
       id: text
         .toLowerCase()
-        .replaceAll(/[^a-z0-9]+/g, "-")
-        .replaceAll(/^-+|-+$/g, ""),
+        .replaceAll(/[^a-z0-9]+/gu, "-")
+        .replaceAll(/^-+|-+$/gu, ""),
       label: text,
       line: lineNum,
       lines: 0,
@@ -112,7 +112,7 @@ function markdownExtractor(_filePath: string, content: string): Section[] {
   return sections;
 }
 
-const XML_TAG_RE = /<(\w+)[^>]*?(?:\sid\s*=\s*"([^"]+)"|\sname\s*=\s*"([^"]+)")[^>]*>/g;
+const XML_TAG_RE = /<(\w+)[^>]*?(?:\sid\s*=\s*"([^"]+)"|\sname\s*=\s*"([^"]+)")[^>]*>/gu;
 
 function xmlExtractor(_filePath: string, content: string): Section[] {
   const sections: Section[] = [];

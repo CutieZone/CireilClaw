@@ -15,13 +15,13 @@ import { DiscordSession, NamedInternalSession, TuiSession } from "#harness/sessi
 import { Scheduler } from "#scheduler/index.js";
 
 export class Agent {
-  private readonly _slug: string;
-  private readonly _sessions: Map<string, Session>;
-  private readonly _channelHandlers = new Map<string, ChannelHandler>();
-  private _conditions: ConditionsConfig;
-  private _discordClient?: OceanicClient;
-  private _ownerId?: string;
-  private readonly _scheduler?: Scheduler;
+  public readonly slug: string;
+  public readonly sessions: Map<string, Session>;
+  public readonly channelHandlers = new Map<string, ChannelHandler>();
+  public conditions: ConditionsConfig;
+  public discordClient?: OceanicClient;
+  public ownerId?: string;
+  public readonly scheduler?: Scheduler;
 
   public constructor(
     slug: string,
@@ -29,53 +29,21 @@ export class Agent {
     signal?: AbortSignal,
     conditions?: ConditionsConfig,
   ) {
-    this._slug = slug;
-    this._sessions = sessions;
-    this._conditions = conditions ?? { blocks: {}, memories: {}, workspace: {} };
+    this.slug = slug;
+    this.sessions = sessions;
+    this.conditions = conditions ?? { blocks: {}, memories: {}, workspace: {} };
 
     if (signal !== undefined) {
-      this._scheduler = new Scheduler(this, signal);
+      this.scheduler = new Scheduler(this, signal);
     }
   }
 
   public async updateConditions(): Promise<void> {
-    this._conditions = await loadConditions(this._slug);
-  }
-
-  public get conditions(): ConditionsConfig {
-    return this._conditions;
-  }
-
-  public get slug(): string {
-    return this._slug;
-  }
-
-  public get scheduler(): Scheduler | undefined {
-    return this._scheduler;
-  }
-
-  public get sessions(): Map<string, Session> {
-    return this._sessions;
-  }
-
-  public setDiscordClient(client: OceanicClient): void {
-    this._discordClient = client;
-  }
-
-  public get discordClient(): OceanicClient | undefined {
-    return this._discordClient;
-  }
-
-  public setOwnerId(ownerId: string): void {
-    this._ownerId = ownerId;
-  }
-
-  public get ownerId(): string | undefined {
-    return this._ownerId;
+    this.conditions = await loadConditions(this.slug);
   }
 
   public registerChannel(channel: string, handler: ChannelHandler): void {
-    this._channelHandlers.set(channel, handler);
+    this.channelHandlers.set(channel, handler);
   }
 
   public async resolveTarget(target: string): Promise<Session | undefined> {
@@ -85,7 +53,7 @@ export class Agent {
 
     if (target === "last") {
       let best: Session | undefined = undefined;
-      for (const session of this._sessions.values()) {
+      for (const session of this.sessions.values()) {
         if (best === undefined || session.lastActivity > best.lastActivity) {
           best = session;
         }
@@ -93,20 +61,20 @@ export class Agent {
       return best;
     }
 
-    const existing = this._sessions.get(target);
+    const existing = this.sessions.get(target);
     if (existing !== undefined) {
       return existing;
     }
 
     if (target.startsWith("internal:")) {
       const session = new NamedInternalSession(target.slice("internal:".length));
-      this._sessions.set(target, session);
+      this.sessions.set(target, session);
       return session;
     }
 
     if (target === "tui") {
       const session = new TuiSession();
-      this._sessions.set(target, session);
+      this.sessions.set(target, session);
       return session;
     }
 
@@ -118,20 +86,20 @@ export class Agent {
           channelId,
           guildId: guildId ?? undefined,
         });
-        this._sessions.set(target, session);
+        this.sessions.set(target, session);
         return session;
       }
     }
 
     if (target === "owner") {
-      if (this._ownerId === undefined || this._discordClient === undefined) {
+      if (this.ownerId === undefined || this.discordClient === undefined) {
         return undefined;
       }
 
       try {
-        const dmChannel = await this._discordClient.rest.users.createDM(this._ownerId);
+        const dmChannel = await this.discordClient.rest.users.createDM(this.ownerId);
         const sessionId = `discord:${dmChannel.id}`;
-        const prior = this._sessions.get(sessionId);
+        const prior = this.sessions.get(sessionId);
         if (prior !== undefined) {
           return prior;
         }
@@ -139,7 +107,7 @@ export class Agent {
         const session = new DiscordSession({
           channelId: dmChannel.id,
         });
-        this._sessions.set(sessionId, session);
+        this.sessions.set(sessionId, session);
         return session;
       } catch {
         return undefined;
@@ -149,8 +117,8 @@ export class Agent {
     return undefined;
   }
 
-  private _getHandler(session: Session): ChannelHandler {
-    return this._channelHandlers.get(session.channel) ?? MINIMAL_HANDLER;
+  private getHandler(session: Session): ChannelHandler {
+    return this.channelHandlers.get(session.channel) ?? MINIMAL_HANDLER;
   }
 
   public async send(
@@ -163,7 +131,7 @@ export class Agent {
       return;
     }
 
-    const handler = this._getHandler(session);
+    const handler = this.getHandler(session);
     await handler.send(session, content, attachments, flags);
   }
 
@@ -175,7 +143,7 @@ export class Agent {
 
     if (spec === "last") {
       let best: Session | undefined = undefined;
-      for (const session of this._sessions.values()) {
+      for (const session of this.sessions.values()) {
         if (best === undefined || session.lastActivity > best.lastActivity) {
           best = session;
         }
@@ -183,17 +151,17 @@ export class Agent {
       return best ?? { error: "no active sessions found" };
     }
 
-    const handler = this._getHandler(currentSession);
+    const handler = this.getHandler(currentSession);
     if (handler.resolveChannel !== undefined) {
-      const result = handler.resolveChannel(spec, this._sessions, this._ownerId);
+      const result = handler.resolveChannel(spec, this.sessions, this.ownerId);
       return result;
     }
 
-    return this._sessions.get(spec) ?? { error: `session not found: ${spec}` };
+    return this.sessions.get(spec) ?? { error: `session not found: ${spec}` };
   }
 
   public async runTurn(session: Session): Promise<void> {
-    const handler = this._getHandler(session);
+    const handler = this.getHandler(session);
 
     const send = async (content: string, attachments?: string[]): Promise<void> => {
       await this.send(session, content, attachments);
@@ -240,7 +208,7 @@ export class Agent {
 
     await runTurn(
       session,
-      this._slug,
+      this.slug,
       {},
       send,
       sendTo,
@@ -249,7 +217,7 @@ export class Agent {
       fetchHistory,
       resolveChannel,
       handler.capabilities,
-      this._conditions,
+      this.conditions,
     );
   }
 }

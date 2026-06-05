@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 
 import { blake3 } from "@noble/hashes/blake3.js";
 import { and, eq, inArray, notInArray } from "drizzle-orm";
@@ -30,12 +30,12 @@ const MEDIA_TYPE_EXT: Record<string, string> = {
 };
 
 function imageDir(agentSlug: string): string {
-  return join(agentRoot(agentSlug), "images");
+  return path.join(agentRoot(agentSlug), "images");
 }
 
 function imagePath(agentSlug: string, id: string, mediaType: string): string {
   const ext = MEDIA_TYPE_EXT[mediaType] ?? ".bin";
-  return join(imageDir(agentSlug), `${id}${ext}`);
+  return path.join(imageDir(agentSlug), `${id}${ext}`);
 }
 
 function hashImage(data: Uint8Array): string {
@@ -65,8 +65,8 @@ function serializeHistory(
     if (isImageContent(ct)) {
       const img = ct;
       const id = hashImage(img.data);
-      const path = imagePath(agentSlug, id, img.mediaType);
-      pendingImages.push({ data: img.data, id, mediaType: img.mediaType, path });
+      const pth = imagePath(agentSlug, id, img.mediaType);
+      pendingImages.push({ data: img.data, id, mediaType: img.mediaType, path: pth });
       return { id, mediaType: img.mediaType, type: "image_ref" } satisfies ImageRef;
     }
     // Videos are not stored on disk — just keep the URL and attachmentId as a ref.
@@ -95,14 +95,14 @@ function serializeHistory(
 
 async function deserializeHistory(json: string, agentSlug: string): Promise<Message[]> {
   function deserializeImageRef(ref: ImageRef): ImageContent | undefined {
-    const path = imagePath(agentSlug, ref.id, ref.mediaType);
+    const pth = imagePath(agentSlug, ref.id, ref.mediaType);
     try {
-      const data = readFileSync(path);
+      const data = readFileSync(pth);
       return { data, mediaType: ref.mediaType, type: "image" } satisfies ImageContent;
     } catch (error) {
       warning(
         "Failed to restore image for session:",
-        path,
+        pth,
         error instanceof Error ? error.message : String(error),
       );
       // Drop the image from the restored message rather than making the whole session unreadable.
@@ -235,18 +235,18 @@ const DEBOUNCE_MS = 2000;
 
 // Store the flush callback so flushAllSessions() can drain without needing
 // to re-fetch the session from somewhere.
-const _pending = new Map<string, { timer: NodeJS.Timeout; flush: () => void }>();
+const pending = new Map<string, { timer: NodeJS.Timeout; flush(this: void): void }>();
 
 // Flushes all pending debounced saves immediately — call before process exit
 // so in-flight data isn't lost.
 function flushAllSessions(): void {
-  for (const { timer, flush } of _pending.values()) {
+  for (const { timer, flush } of pending.values()) {
     clearTimeout(timer);
     flush();
   }
 }
 
-function _flushSession(agentSlug: string, session: Session): void {
+function flushSession(agentSlug: string, session: Session): void {
   // Ephemeral sessions are never persisted.
   if (session.ephemeral) {
     return;
@@ -289,8 +289,8 @@ function _flushSession(agentSlug: string, session: Session): void {
     session.lastActivity > 0 ? new Date(session.lastActivity).toISOString() : undefined;
 
   const activeFileSections: Record<string, string[]> = {};
-  for (const [path, sections] of session.activeFileSections) {
-    activeFileSections[path] = [...sections];
+  for (const [pth, sections] of session.activeFileSections) {
+    activeFileSections[pth] = [...sections];
   }
 
   // Upsert the session row first so that the images FK constraint is satisfied.
@@ -350,8 +350,8 @@ async function loadSessions(agentSlug: string): Promise<Map<string, Session>> {
     );
     const activeFileSections = new Map<string, Set<string>>();
     if (activeFileSectionsRaw.success) {
-      for (const [path, sections] of Object.entries(activeFileSectionsRaw.output)) {
-        activeFileSections.set(path, new Set(sections));
+      for (const [pth, sections] of Object.entries(activeFileSectionsRaw.output)) {
+        activeFileSections.set(pth, new Set(sections));
       }
     }
 
@@ -493,9 +493,9 @@ function deleteSession(agentSlug: string, sessionId: string): void {
       if (stillShared.has(img.id)) {
         continue;
       }
-      const path = imagePath(agentSlug, img.id, img.mediaType);
+      const pth = imagePath(agentSlug, img.id, img.mediaType);
       try {
-        unlinkSync(path);
+        unlinkSync(pth);
       } catch {
         // Already gone — fine.
       }
@@ -533,9 +533,9 @@ function resetSession(agentSlug: string, sessionId: string): void {
       if (stillShared.has(img.id)) {
         continue;
       }
-      const path = imagePath(agentSlug, img.id, img.mediaType);
+      const pth = imagePath(agentSlug, img.id, img.mediaType);
       try {
-        unlinkSync(path);
+        unlinkSync(pth);
       } catch {
         // Already gone.
       }
@@ -554,17 +554,17 @@ function resetSession(agentSlug: string, sessionId: string): void {
 // rapid back-to-back turns only produce one write.
 function saveSession(agentSlug: string, session: Session): void {
   const key = `${agentSlug}:${session.id()}`;
-  const existing = _pending.get(key);
+  const existing = pending.get(key);
   if (existing !== undefined) {
     clearTimeout(existing.timer);
   }
 
   function flush(): void {
-    _pending.delete(key);
-    _flushSession(agentSlug, session);
+    pending.delete(key);
+    flushSession(agentSlug, session);
   }
 
-  _pending.set(key, { flush, timer: setTimeout(flush, DEBOUNCE_MS) });
+  pending.set(key, { flush, timer: setTimeout(flush, DEBOUNCE_MS) });
 }
 
 function updateSessionImages(
@@ -640,8 +640,8 @@ function updateSessionImages(
       if (msg.role === "user" && msg.id !== undefined) {
         const data = newImages.get(msg.id);
         if (data !== undefined) {
-          const path = imagePath(agentSlug, block.id, block.mediaType);
-          pendingImages.push({ data, id: block.id, mediaType: block.mediaType, path });
+          const pth = imagePath(agentSlug, block.id, block.mediaType);
+          pendingImages.push({ data, id: block.id, mediaType: block.mediaType, path: pth });
         }
       }
     }
@@ -689,9 +689,9 @@ function updateSessionImages(
       continue;
     }
 
-    const path = imagePath(agentSlug, img.id, img.mediaType);
+    const pth = imagePath(agentSlug, img.id, img.mediaType);
     try {
-      unlinkSync(path);
+      unlinkSync(pth);
     } catch {
       // Already gone — fine.
     }

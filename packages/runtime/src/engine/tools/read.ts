@@ -1,5 +1,5 @@
 import { readFile, stat } from "node:fs/promises";
-import { extname } from "node:path";
+import path from "node:path";
 
 import * as vb from "valibot";
 
@@ -40,7 +40,7 @@ export const read: ToolDef = {
 
     const { size } = await stat(realPath);
 
-    const mediaType = IMAGE_EXT_TO_MEDIA_TYPE[extname(data.path).toLowerCase()];
+    const mediaType = IMAGE_EXT_TO_MEDIA_TYPE[path.extname(data.path).toLowerCase()];
     if (mediaType !== undefined) {
       const buf = await readFile(realPath);
       const webp = await toWebp(

@@ -1,6 +1,4 @@
-import { Chalk } from "chalk";
-
-const chalk = new Chalk();
+import chalk from "chalk";
 
 const number = chalk.green;
 const path = chalk.blue;

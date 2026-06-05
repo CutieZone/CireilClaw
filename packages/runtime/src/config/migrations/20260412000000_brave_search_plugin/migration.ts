@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import path from "node:path";
 
 import { parse, stringify } from "smol-toml";
 import type { TomlTable } from "smol-toml";
@@ -38,12 +38,12 @@ export const migration: ConfigMigration = {
 
     const { apiKey } = parsed.output.brave;
 
-    const pluginsDir = join(root(), "config", "plugins");
+    const pluginsDir = path.join(root(), "config", "plugins");
     if (!existsSync(pluginsDir)) {
       await mkdir(pluginsDir, { recursive: true });
     }
 
-    const pluginConfigPath = join(pluginsDir, "brave-search.toml");
+    const pluginConfigPath = path.join(pluginsDir, "brave-search.toml");
     if (!existsSync(pluginConfigPath)) {
       await context.backupFile(pluginConfigPath);
       const apiKeyToml =
@@ -53,7 +53,7 @@ export const migration: ConfigMigration = {
       await writeFile(pluginConfigPath, apiKeyToml, "utf8");
     }
 
-    const pluginsTomlPath = join(root(), "config", "plugins.toml");
+    const pluginsTomlPath = path.join(root(), "config", "plugins.toml");
     await context.backupFile(pluginsTomlPath);
 
     let pluginsToml: Record<string, unknown> = { plugins: [] };

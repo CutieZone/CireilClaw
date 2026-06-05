@@ -10,7 +10,7 @@ const DirectMessagesModeSchema = vb.pipe(
 const DirectMessagesSchema = vb.exactOptional(
   vb.strictObject({
     mode: DirectMessagesModeSchema,
-    users: vb.exactOptional(vb.array(vb.pipe(nonEmptyString, vb.regex(/[0-9]+/))), []),
+    users: vb.exactOptional(vb.array(vb.pipe(nonEmptyString, vb.regex(/[0-9]+/u))), []),
   }),
   {
     mode: "owner",
@@ -28,7 +28,7 @@ const AccessSchema = vb.exactOptional(
   vb.strictObject({
     mode: AccessModeSchema,
     users: vb.pipe(
-      vb.exactOptional(vb.array(vb.pipe(vb.string(), vb.regex(/[0-9]+/))), []),
+      vb.exactOptional(vb.array(vb.pipe(vb.string(), vb.regex(/[0-9]+/u))), []),
       vb.description("An array of discord user IDs"),
     ),
   }),
@@ -46,7 +46,7 @@ const DiscordConfigSchema = vb.strictObject({
   ownerId: vb.pipe(
     vb.string(),
     vb.nonEmpty(),
-    vb.regex(/[0-9]+/),
+    vb.regex(/[0-9]+/u),
     vb.description("The ID of the 'owner' of the agent."),
   ),
   timeout: vb.optional(

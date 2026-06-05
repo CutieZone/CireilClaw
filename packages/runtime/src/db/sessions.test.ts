@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 
 import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -23,11 +23,11 @@ afterEach(() => {
 });
 
 function initTestDb(): { slug: string } {
-  const home = mkdtempSync(join(tmpdir(), "cireilclaw-db-test-"));
+  const home = mkdtempSync(path.join(tmpdir(), "cireilclaw-db-test-"));
   vi.stubEnv("HOME", home);
 
   const slug = `agent-${randomUUID()}`;
-  mkdirSync(join(home, ".cireilclaw", "agents", slug), { recursive: true });
+  mkdirSync(path.join(home, ".cireilclaw", "agents", slug), { recursive: true });
   initDb(slug);
   return { slug };
 }

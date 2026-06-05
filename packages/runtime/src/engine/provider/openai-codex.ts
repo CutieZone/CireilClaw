@@ -215,8 +215,8 @@ async function translateUserContent(
     case "video_ref":
       throw new Error("The OpenAI Codex provider does not support video input.");
     default: {
-      const _exhaustive: never = content;
-      throw new Error(`Unsupported user content: ${String(_exhaustive)}`);
+      const exhaustive: never = content;
+      throw new Error(`Unsupported user content: ${String(exhaustive)}`);
     }
   }
 }
@@ -307,8 +307,8 @@ async function translateMessagesForCodex(
         break;
       }
       default: {
-        const _exhaustive: never = message;
-        throw new Error(`Unsupported message role: ${String(_exhaustive)}`);
+        const exhaustive: never = message;
+        throw new Error(`Unsupported message role: ${String(exhaustive)}`);
       }
     }
   }

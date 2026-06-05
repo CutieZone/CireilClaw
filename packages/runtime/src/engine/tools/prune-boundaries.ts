@@ -79,8 +79,8 @@ export const pruneBoundaries: ToolDef = {
 
     const slug = data.identifier
       .toLowerCase()
-      .replaceAll(/[^a-z0-9]+/g, "-")
-      .replaceAll(/^-+|-+$/g, "");
+      .replaceAll(/[^a-z0-9]+/gu, "-")
+      .replaceAll(/^-+|-+$/gu, "");
 
     if (slug.length === 0) {
       throw new ToolError(

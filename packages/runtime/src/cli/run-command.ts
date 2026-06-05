@@ -1,5 +1,5 @@
 import { watch } from "node:fs/promises";
-import path, { join } from "node:path";
+import path from "node:path";
 
 import { buildCommand } from "@stricli/core";
 
@@ -66,7 +66,7 @@ interface Flags {
 }
 
 async function runWatcher(agentSlug: string, signal: AbortSignal): Promise<void> {
-  const agentDir = join(root(), "agents", agentSlug, "config");
+  const agentDir = path.join(root(), "agents", agentSlug, "config");
   const watcher = watch(agentDir, {
     encoding: "utf8",
     recursive: true,

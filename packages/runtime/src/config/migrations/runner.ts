@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { join, basename } from "node:path";
+import path from "node:path";
 
 import { confirm, select } from "@inquirer/prompts";
 import { stringify } from "smol-toml";
@@ -12,8 +12,8 @@ import { info } from "#output/log.js";
 import { root } from "#util/paths.js";
 
 const MIGRATIONS_DIR = import.meta.dirname;
-const STATE_FILE = join(root(), "config", "migrations.json");
-const BACKUPS_DIR = join(root(), "config", "backups");
+const STATE_FILE = path.join(root(), "config", "migrations.json");
+const BACKUPS_DIR = path.join(root(), "config", "backups");
 
 const MigrationStateSchema = vb.object({
   applied: vb.array(vb.string()),
@@ -38,7 +38,7 @@ async function getMigrationState(): Promise<MigrationState> {
 }
 
 async function saveMigrationState(state: MigrationState): Promise<void> {
-  const dir = join(STATE_FILE, "..");
+  const dir = path.join(STATE_FILE, "..");
   if (!existsSync(dir)) {
     await mkdir(dir, { recursive: true });
   }
@@ -65,7 +65,7 @@ async function loadMigrations(): Promise<ConfigMigration[]> {
       continue;
     }
 
-    const migrationPath = join(MIGRATIONS_DIR, entry.name, "migration.ts");
+    const migrationPath = path.join(MIGRATIONS_DIR, entry.name, "migration.ts");
     if (!existsSync(migrationPath)) {
       continue;
     }
@@ -137,7 +137,7 @@ async function shouldApplyMigration(migration: ConfigMigration): Promise<boolean
 }
 
 function getBackupFilename(filePath: string): string {
-  const filename = basename(filePath);
+  const filename = path.basename(filePath);
 
   if (filePath.includes("/agents/")) {
     const parts = filePath.split("/agents/");
@@ -153,13 +153,13 @@ function getBackupFilename(filePath: string): string {
 }
 
 async function createBackup(migrationId: string, filePath: string, content: string): Promise<void> {
-  const backupDir = join(BACKUPS_DIR, migrationId);
+  const backupDir = path.join(BACKUPS_DIR, migrationId);
   if (!existsSync(backupDir)) {
     await mkdir(backupDir, { recursive: true });
   }
 
   const backupFilename = getBackupFilename(filePath);
-  const backupPath = join(backupDir, backupFilename);
+  const backupPath = path.join(backupDir, backupFilename);
   await writeFile(backupPath, content, { encoding: "utf8" });
 }
 
@@ -228,7 +228,7 @@ async function applyMigration(
   const globalConfigFiles = ["integrations.toml", "plugins.toml", "engine.toml"] as const;
   for (const filename of globalConfigFiles) {
     if (migration.targets.includes(filename)) {
-      const configPath = join(root(), "config", filename);
+      const configPath = path.join(root(), "config", filename);
       const context: MigrationContext = {
         backupFile: createBackupHelper(),
         configPath,
@@ -243,9 +243,9 @@ async function applyMigration(
       let configPath: string | undefined = undefined;
 
       if (target === "channels/discord.toml") {
-        configPath = join(root(), "agents", slug, "config", "channels", "discord.toml");
+        configPath = path.join(root(), "agents", slug, "config", "channels", "discord.toml");
       } else if (target !== "integrations.toml" && target !== "plugins.toml") {
-        configPath = join(root(), "agents", slug, "config", target);
+        configPath = path.join(root(), "agents", slug, "config", target);
       }
 
       if (configPath !== undefined) {
@@ -262,7 +262,7 @@ async function applyMigration(
 
   if (migration.migrateAgent !== undefined) {
     for (const slug of agentSlugs) {
-      const agentPath = join(root(), "agents", slug);
+      const agentPath = path.join(root(), "agents", slug);
       const context: MigrationContext = {
         agentSlug: slug,
         backupFile: createBackupHelper(),
@@ -288,7 +288,7 @@ export async function runMigrations(dryRun = false): Promise<number> {
     return 0;
   }
 
-  const agentsDir = join(root(), "agents");
+  const agentsDir = path.join(root(), "agents");
   let agentSlugs: string[] = [];
 
   if (existsSync(agentsDir)) {

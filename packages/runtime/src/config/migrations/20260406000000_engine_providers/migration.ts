@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import path from "node:path";
 
 import type { TomlTable } from "smol-toml";
 import * as vb from "valibot";
@@ -105,7 +105,7 @@ export const migration: ConfigMigration = {
   async migrateAgent(agentSlug, agentPath, context) {
     const extra = extraProviders.get(agentSlug);
     if (extra !== undefined && Object.keys(extra).length > 0) {
-      const enginePath = join(agentPath, "config", "engine.toml");
+      const enginePath = path.join(agentPath, "config", "engine.toml");
       if (existsSync(enginePath)) {
         await context.backupFile(enginePath);
         const { parse, stringify } = await import("smol-toml");
