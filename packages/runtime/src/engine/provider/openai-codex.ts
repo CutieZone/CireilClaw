@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 
-import { toJsonSchemaSafe } from "#util/schema.js";
 import * as vb from "valibot";
 
 import type { ImageContent, RedactedThinkingContent, ToolCallContent } from "#engine/content.js";
@@ -12,6 +11,7 @@ import { debug, warning } from "#output/log.js";
 import { encode } from "#util/base64.js";
 import { toJpeg } from "#util/image.js";
 import { parseRepairedJSON } from "#util/json.js";
+import { toJsonSchemaSafe } from "#util/schema.js";
 
 import { getChatGptAccountId, getValidCodexAuth } from "./openai-codex-auth.js";
 

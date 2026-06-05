@@ -1,5 +1,4 @@
 import type { KeyPool } from "@cireilclaw/sdk";
-import { toJsonSchemaSafe } from "#util/schema.js";
 import * as vb from "valibot";
 
 import { DefaultReasoningBudget } from "#config/schemas/engine.js";
@@ -18,6 +17,7 @@ import type { Tool } from "#engine/tool.js";
 import { debug, warning } from "#output/log.js";
 import { encode } from "#util/base64.js";
 import { scaleForAnthropic } from "#util/image.js";
+import { toJsonSchemaSafe } from "#util/schema.js";
 
 interface AnthropicTextBlock {
   cache_control?: { type: "ephemeral" };

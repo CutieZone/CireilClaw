@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 
 import type { KeyPool } from "@cireilclaw/sdk";
-import { toJsonSchemaSafe } from "#util/schema.js";
 import { OpenAI } from "openai/client.js";
 import { APIError } from "openai/error.js";
 import type {
@@ -23,6 +22,7 @@ import { debug, warning } from "#output/log.js";
 import { encode } from "#util/base64.js";
 import { toJpeg } from "#util/image.js";
 import { parseRepairedJSON } from "#util/json.js";
+import { toJsonSchemaSafe } from "#util/schema.js";
 
 // Per-apiBase JPEG requirement flag. Set on first WebP rejection so subsequent
 // turns skip the doomed WebP attempt entirely.
