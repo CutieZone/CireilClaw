@@ -22,7 +22,7 @@ const Schema = vb.strictObject({
   id: vb.pipe(
     vb.string(),
     vb.nonEmpty(),
-    vb.regex(/^[a-z0-9-]+$/, "ID must be lowercase alphanumeric with hyphens"),
+    vb.regex(/^[a-z0-9-]+$/u, "ID must be lowercase alphanumeric with hyphens"),
     vb.description(
       "Unique slug-format identifier for this job (e.g. meeting-reminder). Lowercase alphanumeric with hyphens.",
     ),

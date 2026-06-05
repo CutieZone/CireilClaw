@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { mkdir, rename } from "node:fs/promises";
-import { join } from "node:path";
+import path from "node:path";
 
 import type { ConfigMigration } from "#config/migrations/index.js";
 
@@ -9,17 +9,17 @@ const migration: ConfigMigration = {
   id: "20260311120000_tasks_folder",
 
   async migrateAgent(_agentSlug, agentPath, context) {
-    const oldPath = join(agentPath, "workspace", "HEARTBEAT.md");
+    const oldPath = path.join(agentPath, "workspace", "HEARTBEAT.md");
     if (!existsSync(oldPath)) {
       return;
     }
 
     await context.backupFile(oldPath);
 
-    const tasksDir = join(agentPath, "tasks");
+    const tasksDir = path.join(agentPath, "tasks");
     await mkdir(tasksDir, { recursive: true });
 
-    const newPath = join(tasksDir, "HEARTBEAT.md");
+    const newPath = path.join(tasksDir, "HEARTBEAT.md");
     await rename(oldPath, newPath);
   },
 

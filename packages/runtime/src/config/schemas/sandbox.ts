@@ -1,4 +1,4 @@
-import { isAbsolute } from "node:path";
+import path from "node:path";
 
 import * as vb from "valibot";
 
@@ -8,7 +8,7 @@ const MountSchema = vb.object({
     vb.string(),
     vb.minLength(1),
     vb.check(
-      (it) => it.startsWith("~/") || isAbsolute(it),
+      (it) => it.startsWith("~/") || path.isAbsolute(it),
       "source must be an absolute path or start with ~/",
     ),
   ),

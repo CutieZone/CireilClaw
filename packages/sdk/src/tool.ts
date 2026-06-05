@@ -41,30 +41,30 @@ interface PluginToolContext {
   session: BasicSession;
   agentSlug: string;
   reply: {
-    send: (content: string, attachments?: string[]) => Promise<void>;
-    react?: (emoji: string, messageId?: string) => Promise<void>;
+    send(this: void, content: string, attachments?: string[]): Promise<void>;
+    react?(this: void, emoji: string, messageId?: string): Promise<void>;
   };
   channel: {
-    resolveChannel: (spec: string) => Promise<ChannelResolution>;
+    resolveChannel(this: void, spec: string): Promise<ChannelResolution>;
   };
   cfg: {
-    globalPlugin: (name: string) => Promise<Record<string, unknown> | undefined>;
-    agentPlugin: (name: string) => Promise<Record<string, unknown> | undefined>;
+    globalPlugin(this: void, name: string): Promise<Record<string, unknown> | undefined>;
+    agentPlugin(this: void, name: string): Promise<Record<string, unknown> | undefined>;
   };
-  createKeyPool: (keys: string | string[], cooldownMs?: number) => KeyPool;
+  createKeyPool(this: void, keys: string | string[], cooldownMs?: number): KeyPool;
   // Plugins should use ctx.net.fetch instead of the global fetch. This is the mediation point
   // for future isolation (worker/subprocess); today it's a passthrough.
   net: {
     fetch: typeof fetch;
   };
   mounts?: readonly Mount[];
-  addImage: (data: Uint8Array, mediaType: string) => void;
-  addVideo: (data: Uint8Array, mediaType: string) => void;
-  addToolMessage: (content: string) => void;
+  addImage(this: void, data: Uint8Array, mediaType: string): void;
+  addVideo(this: void, data: Uint8Array, mediaType: string): void;
+  addToolMessage(this: void, content: string): void;
   paths: {
-    resolve: (sandboxPath: string) => Promise<string>;
-    checkWriteAccess: (sandboxPath: string) => Promise<void>;
-    checkConditionalAccess: (sandboxPath: string) => Promise<void>;
+    resolve(this: void, sandboxPath: string): Promise<string>;
+    checkWriteAccess(this: void, sandboxPath: string): Promise<void>;
+    checkConditionalAccess(this: void, sandboxPath: string): Promise<void>;
   };
 }
 

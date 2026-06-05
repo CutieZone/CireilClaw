@@ -35,8 +35,7 @@ async function toWebp(data: ArrayBuffer, mediaType?: string): Promise<Uint8Array
       // implementation calls `.slice()` and spreads the result, which only
       // works on typed arrays. Wrapping in Uint8Array fixes the runtime error;
       // the cast silences the type mismatch.
-      // oxlint-disable-next-line no-unsafe-type-assertion
-      buffer: new Uint8Array(data) as unknown as ArrayBufferLike,
+      buffer: new Uint8Array(data),
     });
     const result = await sharp(Buffer.from(raw.buffer, raw.byteOffset, raw.byteLength), {
       raw: { channels: 4, height, width },

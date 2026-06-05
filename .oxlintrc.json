@@ -25,6 +25,7 @@
     }
   ],
   "rules": {
+    "eslint/prefer-named-capture-group": "off",
     "eslint/no-useless-assignment": "off",
     "import/no-named-export": "off",
     "import/no-relative-parent-imports": "off",
@@ -57,6 +58,13 @@
     "unicorn/prefer-ternary": "off",
     "unicorn/prefer-event-target": "off",
     "unicorn/no-useless-undefined": "off",
+    "typescript/method-signature-style": ["warn", "method"],
+    "typescript/no-invalid-void-type": [
+      "warn",
+      {
+        "allowAsThisParameter": true
+      }
+    ],
     "eslint/no-console": [
       "error",
       {

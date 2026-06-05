@@ -425,8 +425,8 @@ export async function runTurn(
         }
 
         default: {
-          const _exhaustive: never = selectedProvider.kind;
-          throw new Error(`Unsupported provider type: ${String(_exhaustive)}`);
+          const exhaustive: never = selectedProvider.kind;
+          throw new Error(`Unsupported provider type: ${String(exhaustive)}`);
         }
       }
     } catch (error) {

@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import path from "node:path";
 
 import type { TomlTable } from "smol-toml";
 import { parse } from "smol-toml";
@@ -26,7 +26,7 @@ import { ToolsConfigSchema } from "./schemas/tools.js";
 import type { ToolsConfig } from "./schemas/tools.js";
 
 async function loadTools(agentSlug: string): Promise<ToolsConfig> {
-  const file = join(root(), "agents", agentSlug, "config", "tools.toml");
+  const file = path.join(root(), "agents", agentSlug, "config", "tools.toml");
 
   if (existsSync(file)) {
     const data = await readFile(file, { encoding: "utf8" });
@@ -41,7 +41,7 @@ async function loadTools(agentSlug: string): Promise<ToolsConfig> {
 async function loadEngine(agentSlug?: string): Promise<ProvidersConfig> {
   let obj: TomlTable | undefined = undefined;
   if (agentSlug === undefined) {
-    const file = join(root(), "config", "engine.toml");
+    const file = path.join(root(), "config", "engine.toml");
 
     if (existsSync(file)) {
       const data = await readFile(file, { encoding: "utf8" });
@@ -51,7 +51,7 @@ async function loadEngine(agentSlug?: string): Promise<ProvidersConfig> {
       throw new Error(`Could not find config file at path: ${colors.path(file)}`);
     }
   } else {
-    const file = join(root(), "agents", agentSlug, "config", "engine.toml");
+    const file = path.join(root(), "agents", agentSlug, "config", "engine.toml");
 
     if (existsSync(file)) {
       const data = await readFile(file, { encoding: "utf8" });
@@ -104,7 +104,7 @@ async function loadChannel<Key extends ChannelType>(
   agentSlug: string,
 ): Promise<ChannelConfigMap[Key]> {
   const origin = root();
-  let path: string | undefined = undefined;
+  let pth: string | undefined = undefined;
   let schema: vb.GenericSchema | undefined = undefined;
 
   // oxlint-disable-next-line typescript/switch-exhaustiveness-check
@@ -117,14 +117,14 @@ async function loadChannel<Key extends ChannelType>(
       throw new Error(`Channel ${channel} is unimplemented.`);
   }
 
-  const maybe = join(origin, "agents", agentSlug, "config", "channels", `${channel}.toml`);
+  const maybe = path.join(origin, "agents", agentSlug, "config", "channels", `${channel}.toml`);
   if (existsSync(maybe)) {
-    path = maybe;
+    pth = maybe;
   } else {
     throw new Error(`No channel config found for ${channel}.`);
   }
 
-  const tomlData = await readFile(path, "utf8");
+  const tomlData = await readFile(pth, "utf8");
   const obj = parse(tomlData);
 
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
@@ -132,7 +132,7 @@ async function loadChannel<Key extends ChannelType>(
 }
 
 async function loadHeartbeat(agentSlug: string): Promise<HeartbeatConfig> {
-  const file = join(root(), "agents", agentSlug, "config", "heartbeat.toml");
+  const file = path.join(root(), "agents", agentSlug, "config", "heartbeat.toml");
 
   if (!existsSync(file)) {
     return vb.parse(HeartbeatConfigSchema, {});
@@ -145,7 +145,7 @@ async function loadHeartbeat(agentSlug: string): Promise<HeartbeatConfig> {
 }
 
 async function loadCron(agentSlug: string): Promise<CronConfig> {
-  const file = join(root(), "agents", agentSlug, "config", "cron.toml");
+  const file = path.join(root(), "agents", agentSlug, "config", "cron.toml");
 
   if (!existsSync(file)) {
     return vb.parse(CronConfigSchema, {});
@@ -158,7 +158,7 @@ async function loadCron(agentSlug: string): Promise<CronConfig> {
 }
 
 async function loadAgents(): Promise<string[]> {
-  const agentsDir = join(root(), "agents");
+  const agentsDir = path.join(root(), "agents");
 
   if (!existsSync(agentsDir)) {
     return [];
@@ -169,7 +169,7 @@ async function loadAgents(): Promise<string[]> {
 }
 
 async function loadConditions(agentSlug: string): Promise<ConditionsConfig> {
-  const file = join(root(), "agents", agentSlug, "config", "conditions.toml");
+  const file = path.join(root(), "agents", agentSlug, "config", "conditions.toml");
 
   if (!existsSync(file)) {
     return { blocks: {}, memories: {}, workspace: {} };
@@ -184,7 +184,7 @@ async function loadConditions(agentSlug: string): Promise<ConditionsConfig> {
 type SystemConfig = vb.InferOutput<typeof SystemConfigSchema>;
 
 async function loadSystem(): Promise<SystemConfig> {
-  const file = join(root(), "config", "system.toml");
+  const file = path.join(root(), "config", "system.toml");
 
   if (!existsSync(file)) {
     return vb.parse(SystemConfigSchema, {});
@@ -196,19 +196,19 @@ async function loadSystem(): Promise<SystemConfig> {
   return vb.parse(SystemConfigSchema, obj);
 }
 
-function expandTilde(path: string): string {
-  if (path.startsWith("~/")) {
+function expandTilde(pth: string): string {
+  if (pth.startsWith("~/")) {
     const home = process.env["HOME"];
     if (home === undefined) {
       throw new Error("Cannot expand ~ in path: $HOME is not set");
     }
-    return home + path.slice(1);
+    return home + pth.slice(1);
   }
-  return path;
+  return pth;
 }
 
 async function loadSandboxConfig(agentSlug: string): Promise<SandboxConfig> {
-  const file = join(root(), "agents", agentSlug, "config", "sandbox.toml");
+  const file = path.join(root(), "agents", agentSlug, "config", "sandbox.toml");
 
   if (!existsSync(file)) {
     return { mounts: [] };
@@ -234,7 +234,7 @@ async function loadSandboxConfig(agentSlug: string): Promise<SandboxConfig> {
 }
 
 async function loadGlobalPluginConfig(name: string): Promise<Record<string, unknown> | undefined> {
-  const file = join(root(), "config", "plugins", `${name}.toml`);
+  const file = path.join(root(), "config", "plugins", `${name}.toml`);
 
   if (!existsSync(file)) {
     return undefined;
@@ -250,7 +250,7 @@ async function loadAgentPluginConfig(
   agentSlug: string,
   name: string,
 ): Promise<Record<string, unknown> | undefined> {
-  const file = join(root(), "agents", agentSlug, "config", "plugins", `${name}.toml`);
+  const file = path.join(root(), "agents", agentSlug, "config", "plugins", `${name}.toml`);
 
   if (!existsSync(file)) {
     return undefined;

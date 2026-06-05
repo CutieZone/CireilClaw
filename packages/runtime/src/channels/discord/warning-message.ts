@@ -6,7 +6,7 @@ const DISCORD_WARNING_CONTENT_LIMIT = 1800;
 interface DiscordWarningClient {
   rest: {
     channels: {
-      createMessage: (
+      createMessage(
         channelID: string,
         options: {
           allowedMentions: { repliedUser: true };
@@ -17,7 +17,7 @@ interface DiscordWarningClient {
             messageID: string;
           };
         },
-      ) => Promise<{ createReaction: (emoji: string) => Promise<unknown> }>;
+      ): Promise<{ createReaction(emoji: string): Promise<unknown> }>;
     };
   };
 }

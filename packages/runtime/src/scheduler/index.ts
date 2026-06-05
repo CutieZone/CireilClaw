@@ -24,35 +24,35 @@ function fromTimeout(timer: NodeJS.Timeout): StopHandle {
 }
 
 export class Scheduler {
-  private readonly _agent: Agent;
-  private readonly _signal: AbortSignal;
-  private _heartbeatHandle: StopHandle | undefined = undefined;
-  private readonly _cronHandles = new Map<string, StopHandle>();
+  private readonly agent: Agent;
+  private readonly signal: AbortSignal;
+  private heartbeatHandle: StopHandle | undefined = undefined;
+  private readonly cronHandles = new Map<string, StopHandle>();
 
   public constructor(agent: Agent, signal: AbortSignal) {
-    this._agent = agent;
-    this._signal = signal;
+    this.agent = agent;
+    this.signal = signal;
   }
 
   public async start(): Promise<void> {
-    if (this._signal.aborted) {
+    if (this.signal.aborted) {
       return;
     }
 
     const [heartbeatCfg, cronCfg] = await Promise.all([
-      loadHeartbeat(this._agent.slug),
-      loadCron(this._agent.slug),
+      loadHeartbeat(this.agent.slug),
+      loadCron(this.agent.slug),
     ]);
 
-    this._scheduleHeartbeat(heartbeatCfg);
+    this.scheduleHeartbeat(heartbeatCfg);
 
     for (const job of cronCfg.jobs) {
       if (job.enabled) {
-        this._scheduleCronJob(job);
+        this.scheduleCronJob(job);
       }
     }
 
-    for (const row of getAgentCronJobs(this._agent.slug)) {
+    for (const row of getAgentCronJobs(this.agent.slug)) {
       if (row.type !== "one-shot" || row.status !== "pending") {
         continue;
       }
@@ -61,7 +61,7 @@ export class Scheduler {
       }
       try {
         const cfg = vb.parse(CronJobConfigSchema, JSON.parse(row.config));
-        this._scheduleCronJob(cfg);
+        this.scheduleCronJob(cfg);
       } catch (error) {
         warning(
           "Scheduler: failed to parse persisted cron job",
@@ -73,34 +73,33 @@ export class Scheduler {
   }
 
   public stop(): void {
-    this._heartbeatHandle?.stop();
-    this._heartbeatHandle = undefined;
+    this.heartbeatHandle?.stop();
+    this.heartbeatHandle = undefined;
 
-    for (const [id, handle] of this._cronHandles) {
+    for (const [id, handle] of this.cronHandles) {
       handle.stop();
       debug("Scheduler: stopped cron job", colors.keyword(id));
     }
-    this._cronHandles.clear();
+    this.cronHandles.clear();
   }
 
   public async reload(): Promise<void> {
     this.stop();
     await this.start();
-    debug("Scheduler: reloaded for agent", colors.keyword(this._agent.slug));
+    debug("Scheduler: reloaded for agent", colors.keyword(this.agent.slug));
   }
 
   public scheduleDynamic(job: CronJobConfig): void {
-    this._scheduleCronJob(job);
+    this.scheduleCronJob(job);
   }
 
-  private _scheduleHeartbeat(cfg: HeartbeatConfig): void {
-    if (!cfg.enabled || this._signal.aborted) {
+  private scheduleHeartbeat(cfg: HeartbeatConfig): void {
+    if (!cfg.enabled || this.signal.aborted) {
       return;
     }
 
     const intervalMs = cfg.interval * 1000;
-    const agent = this._agent;
-    const signal = this._signal;
+    const { agent, signal } = this;
     // oxlint-disable-next-line no-this-alias no-this-assignment
     const parent = this;
 
@@ -124,13 +123,13 @@ export class Scheduler {
 
         if (!signal.aborted) {
           const timer = setTimeout(fire, intervalMs);
-          parent._heartbeatHandle = fromTimeout(timer);
+          parent.heartbeatHandle = fromTimeout(timer);
         }
       })();
     }
 
     const timer = setTimeout(fire, intervalMs);
-    this._heartbeatHandle = fromTimeout(timer);
+    this.heartbeatHandle = fromTimeout(timer);
     debug(
       "Scheduler: heartbeat scheduled for agent",
       colors.keyword(agent.slug),
@@ -138,15 +137,15 @@ export class Scheduler {
     );
   }
 
-  private _scheduleCronJob(job: CronJobConfig): void {
-    if (this._signal.aborted) {
+  private scheduleCronJob(job: CronJobConfig): void {
+    if (this.signal.aborted) {
       return;
     }
 
     const { schedule } = job;
 
     if ("cron" in schedule) {
-      this._scheduleCronExpression(job, schedule.cron);
+      this.scheduleCronExpression(job, schedule.cron);
       return;
     }
 
@@ -165,8 +164,7 @@ export class Scheduler {
       }
     }
 
-    const agent = this._agent;
-    const signal = this._signal;
+    const { agent, signal } = this;
 
     const fire = (): void => {
       if (signal.aborted) {
@@ -191,24 +189,23 @@ export class Scheduler {
       // oxlint-disable-next-line typescript/no-unnecessary-condition
       if (recurring && !signal.aborted) {
         const timer = setTimeout(fire, delayMs);
-        this._cronHandles.set(job.id, fromTimeout(timer));
+        this.cronHandles.set(job.id, fromTimeout(timer));
       } else {
-        this._cronHandles.delete(job.id);
+        this.cronHandles.delete(job.id);
       }
     };
 
     const timer = setTimeout(fire, delayMs);
-    this._cronHandles.set(job.id, fromTimeout(timer));
+    this.cronHandles.set(job.id, fromTimeout(timer));
     debug("Scheduler: cron job", colors.keyword(job.id), "scheduled in", `${delayMs}ms`);
   }
 
-  private _scheduleCronExpression(job: CronJobConfig, expression: string): void {
-    if (this._signal.aborted) {
+  private scheduleCronExpression(job: CronJobConfig, expression: string): void {
+    if (this.signal.aborted) {
       return;
     }
 
-    const agent = this._agent;
-    const signal = this._signal;
+    const { agent, signal } = this;
 
     const cronJob = new Cron(expression, async () => {
       if (signal.aborted) {
@@ -226,7 +223,7 @@ export class Scheduler {
       }
     });
 
-    this._cronHandles.set(job.id, cronJob);
+    this.cronHandles.set(job.id, cronJob);
     debug("Scheduler: cron expression job", colors.keyword(job.id), "scheduled:", expression);
   }
 }

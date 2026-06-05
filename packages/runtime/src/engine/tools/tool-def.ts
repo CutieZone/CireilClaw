@@ -17,15 +17,24 @@ interface InternalToolContext extends PluginToolContext {
     sandbox: SandboxConfig;
   };
   reply: PluginToolContext["reply"] & {
-    sendTo: (targetSession: Session, content: string, attachments?: string[]) => Promise<void>;
+    sendTo(
+      this: void,
+      targetSession: Session,
+      content: string,
+      attachments?: string[],
+    ): Promise<void>;
   };
   channel: PluginToolContext["channel"] & {
-    downloadAttachments?: (messageId: string) => Promise<{ filename: string; data: Buffer }[]>;
-    fetchHistory?: (
+    downloadAttachments?(
+      this: void,
+      messageId: string,
+    ): Promise<{ filename: string; data: Buffer }[]>;
+    fetchHistory?(
+      this: void,
       messageId: string,
       direction: HistoryDirection,
       limit?: number,
-    ) => Promise<HistoryMessage[]>;
+    ): Promise<HistoryMessage[]>;
   };
   scheduler?: Scheduler;
 }

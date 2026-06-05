@@ -17,7 +17,7 @@ const NO_CAPABILITIES: ChannelCapabilities = {
 function extractSectionContent(content: string, sectionId: string): string {
   const lines = content.split("\n");
 
-  const headingRegex = /^(#{1,6})\s+(.+)$/;
+  const headingRegex = /^(#{1,6})\s+(.+)$/u;
   let inSection = false;
   let currentLevel = 0;
   const result: string[] = [];
@@ -29,8 +29,8 @@ function extractSectionContent(content: string, sectionId: string): string {
       const text = headingMatch[2] ?? "";
       const id = text
         .toLowerCase()
-        .replaceAll(/[^a-z0-9]+/g, "-")
-        .replaceAll(/^-+|-+$/g, "");
+        .replaceAll(/[^a-z0-9]+/gu, "-")
+        .replaceAll(/^-+|-+$/gu, "");
 
       if (id === sectionId) {
         inSection = true;
@@ -59,8 +59,8 @@ function extractSectionContent(content: string, sectionId: string): string {
   }
 
   const xmlRegex = new RegExp(
-    `<\\w+[^>]*?(?:\\sid\\s*=\\s*"${sectionId.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}"|\\sname\\s*=\\s*"${sectionId.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}")[^>]*>`,
-    "i",
+    `<\\w+[^>]*?(?:\\sid\\s*=\\s*"${sectionId.replaceAll(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`)}"|\\sname\\s*=\\s*"${sectionId.replaceAll(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`)}")[^>]*>`,
+    "iu",
   );
   const xmlMatch = xmlRegex.exec(content);
   if (xmlMatch !== null) {
