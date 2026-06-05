@@ -145,7 +145,10 @@ async function resolveDisplayName(msg: DiscordMessage): Promise<string> {
 // agent has full context about who sent what and when, without needing to
 // parse it out of the message history separately. Includes attachment metadata
 // so the model knows what files/images are present.
-async function formatUserMessage(msg: DiscordMessage): Promise<TextContent> {
+async function formatUserMessage(
+  msg: DiscordMessage,
+  opts?: { directReply?: DiscordMessage; isMentioned?: boolean },
+): Promise<TextContent> {
   const { username } = msg.author;
   const authorId = msg.author.id;
   const displayName = await resolveDisplayName(msg);
@@ -177,8 +180,22 @@ async function formatUserMessage(msg: DiscordMessage): Promise<TextContent> {
     innerContent += `\n${stickerInfo}`;
   }
 
+  // Build optional attributes for reply/mention context
+  let replyAttr = "";
+  if (opts?.directReply !== undefined) {
+    const isReplyingToBot = opts.directReply.author.id === msg.client.application.id;
+    if (isReplyingToBot) {
+      replyAttr = ` in-reply-to="YOU"`;
+    } else {
+      const replyDisplayName = await resolveDisplayName(opts.directReply);
+      replyAttr = ` in-reply-to="${replyDisplayName}"`;
+    }
+  }
+
+  const mentionAttr = (opts?.isMentioned ?? false) ? ` mentions="YOU"` : "";
+
   return {
-    content: `<msg msgId="${msg.id}" from="${username} <${authorId}>" displayName="${displayName}" timestamp="${timestamp}">${innerContent}</msg>`,
+    content: `<msg msgId="${msg.id}" from="${username} <${authorId}>" displayName="${displayName}" timestamp="${timestamp}"${replyAttr}${mentionAttr}>${innerContent}</msg>`,
     type: "text",
   };
 }
@@ -796,7 +813,10 @@ async function handleMessageCreate(
       }
     }
 
-    const textContent = await formatUserMessage(msg);
+    const textContent = await formatUserMessage(msg, {
+      directReply,
+      isMentioned: memberIdMentioned || userIdMentioned,
+    });
     const imageContents = await fetchAllImages(msg);
 
     const engineConfig = await loadEngine(agentSlug);
