@@ -77,13 +77,24 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
     session.busy = true;
     saveSession(ctx.agentSlug, session);
     try {
-      await targetMsg.delete("Deleted by owner");
-
       const msgIndex = session.history.findIndex((entry) => entry.id === targetMsg.id);
-      if (msgIndex !== -1) {
-        session.history.splice(msgIndex, 1);
-        session.lastMessageId = session.history.findLast((entry) => entry.id !== undefined)?.id;
+      if (msgIndex === -1) {
+        await interaction.createFollowup({
+          content: "Cannot delete a message not found in session history.",
+          flags: MessageFlags.EPHEMERAL,
+        });
+        return;
       }
+
+      // Adjust cursor if it points past the removed entry
+      if (session.historyCursor > msgIndex) {
+        session.historyCursor--;
+      }
+
+      session.history.splice(msgIndex, 1);
+      session.lastMessageId = session.history.findLast((entry) => entry.id !== undefined)?.id;
+      saveSession(ctx.agentSlug, session);
+      await targetMsg.delete("Deleted by owner");
     } finally {
       session.busy = false;
       saveSession(ctx.agentSlug, session);
