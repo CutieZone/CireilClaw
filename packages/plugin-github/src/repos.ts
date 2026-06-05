@@ -1,16 +1,37 @@
 import type { ToolDef, ToolResult } from "@cireilclaw/sdk";
-import { vb } from "@cireilclaw/sdk";
+import { ToolError, vb } from "@cireilclaw/sdk";
 
-import { ghParse } from "./api.js";
-import type { GHRepo, GHInstallationRepos } from "./types.js";
+import { gh, ghParse, parseLinkNext } from "./api.js";
+import type { GHRepo } from "./types.js";
 
 // ── github-list-repos ───────────────────────────────────────────────
+
+interface GHInstallationReposPage {
+  repositories: GHRepo[];
+  total_count: number;
+}
 
 const githubListRepos: ToolDef = {
   description: "List repositories the GitHub App installation has access to.",
   async execute(_raw: unknown, ctx): Promise<ToolResult> {
-    const result = await ghParse<GHInstallationRepos>(ctx, "GET", "/installation/repositories");
-    const repos = result.repositories.map((repo) => ({
+    const allRepos: GHRepo[] = [];
+    let nextUrl: string | undefined = "/installation/repositories?per_page=100";
+
+    while (nextUrl !== undefined) {
+      const response = await gh(ctx, "GET", nextUrl);
+      if (!response.ok) {
+        const text = await response.text();
+        throw new ToolError(`GitHub API error (${response.status}): ${text}`);
+      }
+
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      const data = (await response.json()) as GHInstallationReposPage;
+      allRepos.push(...data.repositories);
+
+      nextUrl = parseLinkNext(response.headers.get("link") ?? undefined);
+    }
+
+    const repos = allRepos.map((repo) => ({
       defaultBranch: repo.default_branch,
       description: repo.description,
       fullName: repo.full_name,
