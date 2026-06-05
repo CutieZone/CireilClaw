@@ -18,7 +18,7 @@
     "@inquirer/prompts": "^8.5.2",
     "@noble/hashes": "^2.2.0",
     "@stricli/core": "^1.2.6",
-    "@valibot/to-json-schema": "^1.6.0",
+    "@valibot/to-json-schema": "^1.7.0",
     "better-sqlite3": "^12.9.0",
     "chalk": "^5.6.2",
     "croner": "^10.0.1",
