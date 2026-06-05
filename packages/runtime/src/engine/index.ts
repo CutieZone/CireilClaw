@@ -596,6 +596,20 @@ export async function runTurn(
     }
 
     if (done) {
+      // Apply sent message IDs from the channel handler to the assistant
+      // history entry, so delete/reroll commands can look up by Discord ID.
+      if (session.lastSentMessageIds !== undefined && session.lastSentMessageIds.length > 0) {
+        const lastAssistant = session.history.findLast(
+          (entry) => entry.role === "assistant" && entry.id === undefined,
+        );
+        if (lastAssistant !== undefined) {
+          const [firstId, ...restIds] = session.lastSentMessageIds;
+          lastAssistant.id = firstId;
+          lastAssistant.messageIds = restIds.length > 0 ? session.lastSentMessageIds : undefined;
+        }
+        session.lastSentMessageIds = undefined;
+      }
+
       for (const msg of session.pendingToolMessages) {
         msg.timestamp ??= Date.now();
       }
