@@ -15,7 +15,6 @@ function stripRegexFlags(value: unknown): unknown {
   if (value instanceof RegExp) {
     // Flags like /u are meaningless for JSON Schema pattern. The source is
     // all that matters.
-    // oxlint-disable-next-line require-unicode-regexp
     return new RegExp(value.source);
   }
   if (Array.isArray(value)) {
