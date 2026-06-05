@@ -954,24 +954,24 @@ async function handleMessageReactionAdd(
 
       await realMsg.delete(isReroll ? "Reroll triggered by owner" : "Deleted by owner");
 
-      // Wipe the message and everything that followed so history is consistent
+      if (!isReroll) {
+        // ❌ — delete only: just remove this single message
+        session.history.splice(msgIndex, 1);
+        session.lastMessageId = session.history.findLast((entry) => entry.id !== undefined)?.id;
+        saveSession(ctx.agentSlug, session);
+        return;
+      }
+
+      // 🔄 — delete + reroll: wipe this message and everything after, then regenerate
       session.history.splice(msgIndex);
       session.pendingToolMessages = [];
       session.pendingVideos = [];
 
-      // Point lastMessageId at the preceding user message so future turns work
       const lastUserMsg = session.history.findLast(
         (entry) => entry.role === "user" && entry.id !== undefined,
       );
       session.lastMessageId = lastUserMsg?.id;
 
-      if (!isReroll) {
-        // ❌ — delete only
-        saveSession(ctx.agentSlug, session);
-        return;
-      }
-
-      // 🔄 — reroll: regenerate response to the last user message
       if (lastUserMsg === undefined) {
         saveSession(ctx.agentSlug, session);
         return;
