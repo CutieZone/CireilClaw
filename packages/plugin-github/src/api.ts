@@ -8,6 +8,7 @@ async function gh(
   method: string,
   path: string,
   body?: unknown,
+  extraHeaders?: Record<string, string>,
 ): Promise<Response> {
   const token = await getInstallationToken(ctx);
   const url = new URL(path, "https://api.github.com");
@@ -16,6 +17,7 @@ async function gh(
     Accept: "application/vnd.github+json",
     Authorization: `Bearer ${token}`,
     "User-Agent": "cireilclaw-github-plugin",
+    ...extraHeaders,
   };
 
   const options: RequestInit = { headers, method };
@@ -50,4 +52,39 @@ async function ghParse<TData>(
   return (await response.json()) as TData;
 }
 
-export { gh, ghParse };
+function parseLinkNext(linkHeader: string | undefined): string | undefined {
+  if (linkHeader === undefined) {
+    return undefined;
+  }
+
+  for (const part of linkHeader.split(",")) {
+    const match = /<([^>]+)>;\s*rel="next"/u.exec(part.trim());
+    if (match?.[1] !== undefined) {
+      return match[1];
+    }
+  }
+  return undefined;
+}
+
+async function ghPaginate<TItem>(ctx: PluginToolContext, path: string): Promise<TItem[]> {
+  const results: TItem[] = [];
+  let nextUrl: string | undefined = path;
+
+  while (nextUrl !== undefined) {
+    const response = await gh(ctx, "GET", nextUrl);
+    if (!response.ok) {
+      const text = await response.text();
+      throw new ToolError(`GitHub API error (${response.status}): ${text}`);
+    }
+
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const data = (await response.json()) as TItem[];
+    results.push(...data);
+
+    nextUrl = parseLinkNext(response.headers.get("link") ?? undefined);
+  }
+
+  return results;
+}
+
+export { gh, ghPaginate, ghParse, parseLinkNext };

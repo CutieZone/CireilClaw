@@ -1,7 +1,7 @@
 import type { ToolDef, ToolResult } from "@cireilclaw/sdk";
 import { ToolError, vb } from "@cireilclaw/sdk";
 
-import { ghParse } from "./api.js";
+import { gh, ghParse } from "./api.js";
 import type { GHContent, GHSearchResult, GHCodeItem } from "./types.js";
 
 // ── github-read-file ────────────────────────────────────────────────
@@ -34,6 +34,34 @@ const githubReadFile: ToolDef = {
       throw new ToolError(
         `Path "${path}" is a ${data.type}, not a file. Use github-list-contents to list it.`,
       );
+    }
+
+    if (data.encoding !== "base64" || data.content === "") {
+      // Fall back to raw endpoint for non-base64 encodings
+      const refQuery = ref === undefined ? "" : `?ref=${encodeURIComponent(ref)}`;
+      const rawResponse = await gh(
+        ctx,
+        "GET",
+        `/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}${refQuery}`,
+        undefined,
+        { Accept: "application/vnd.github.v3.raw" },
+      );
+      if (!rawResponse.ok) {
+        throw new ToolError(
+          `Failed to read file "${path}": encoding is "${data.encoding}" and raw fallback returned ${String(rawResponse.status)}.`,
+        );
+      }
+      const rawContent = await rawResponse.text();
+      return {
+        content: rawContent,
+        encoding: data.encoding,
+        htmlUrl: data.html_url,
+        name: data.name,
+        path: data.path,
+        sha: data.sha,
+        size: rawContent.length,
+        success: true,
+      };
     }
 
     const content = Buffer.from(data.content, "base64").toString("utf8");
