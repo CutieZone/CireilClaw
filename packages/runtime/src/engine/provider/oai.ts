@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 import type { KeyPool } from "@cireilclaw/sdk";
-import { toJsonSchema } from "@valibot/to-json-schema";
+import { toJsonSchemaSafe } from "#util/schema.js";
 import { OpenAI } from "openai/client.js";
 import { APIError } from "openai/error.js";
 import type {
@@ -292,7 +292,7 @@ function translateMsg(message: Message): ChatCompletionMessageParam {
 function translateTool(tool: Tool): ChatCompletionTool {
   const schema =
     tool.jsonSchema ??
-    toJsonSchema(tool.parameters, {
+    toJsonSchemaSafe(tool.parameters, {
       target: "openapi-3.0",
       typeMode: "input",
     });

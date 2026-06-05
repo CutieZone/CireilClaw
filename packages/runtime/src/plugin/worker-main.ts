@@ -14,7 +14,7 @@ import type {
   PluginFactory,
   PluginToolContext,
 } from "@cireilclaw/sdk";
-import { toJsonSchema } from "@valibot/to-json-schema";
+import { toJsonSchemaSafe } from "#util/schema.js";
 
 import { RpcChannel } from "./rpc.js";
 
@@ -199,7 +199,7 @@ async function main(parent: NonNullable<typeof parentPort>, init: WorkerInit): P
     manifestEntries.push({
       description: def.description,
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- JsonSchema is structurally compatible with Record<string, unknown>
-      jsonSchema: toJsonSchema(def.parameters, {
+      jsonSchema: toJsonSchemaSafe(def.parameters, {
         target: "openapi-3.0",
         typeMode: "input",
       }) as unknown as Record<string, unknown>,

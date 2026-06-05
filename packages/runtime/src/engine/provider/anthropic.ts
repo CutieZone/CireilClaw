@@ -1,5 +1,5 @@
 import type { KeyPool } from "@cireilclaw/sdk";
-import { toJsonSchema } from "@valibot/to-json-schema";
+import { toJsonSchemaSafe } from "#util/schema.js";
 import * as vb from "valibot";
 
 import { DefaultReasoningBudget } from "#config/schemas/engine.js";
@@ -267,7 +267,7 @@ async function translateMessages(
 function translateTool(tool: Tool): Record<string, unknown> {
   const inputSchema =
     tool.jsonSchema ??
-    toJsonSchema(tool.parameters, {
+    toJsonSchemaSafe(tool.parameters, {
       target: "openapi-3.0",
       typeMode: "input",
     });
