@@ -65,8 +65,8 @@ async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): 
 
     const slug = name
       .toLowerCase()
-      .replaceAll(/[^a-z0-9]+/g, "-")
-      .replaceAll(/^-+|-+$/g, "");
+      .replaceAll(/[^a-z0-9]+/gu, "-")
+      .replaceAll(/^-+|-+$/gu, "");
 
     if (slug.length === 0) {
       await interaction.createFollowup({

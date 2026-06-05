@@ -297,19 +297,19 @@ describe("validateSystemPath", () => {
   });
 });
 
-describe("checkConditionalAccess", () => {
-  function makeSession(opts: {
-    channelId: string;
-    guildId?: string;
-    isNsfw?: boolean;
-  }): DiscordSession {
-    return new DiscordSession({
-      channelId: opts.channelId,
-      guildId: opts.guildId,
-      isNsfw: opts.isNsfw ?? false,
-    });
-  }
+function makeSession(opts: {
+  channelId: string;
+  guildId?: string;
+  isNsfw?: boolean;
+}): DiscordSession {
+  return new DiscordSession({
+    channelId: opts.channelId,
+    guildId: opts.guildId,
+    isNsfw: opts.isNsfw ?? false,
+  });
+}
 
+describe("checkConditionalAccess", () => {
   it("allows /blocks paths unconditionally (no rules)", () => {
     const session = makeSession({ channelId: "123" });
     const conditions: ConditionsConfig = { blocks: {}, memories: {}, workspace: {} };

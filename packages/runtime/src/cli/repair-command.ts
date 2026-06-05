@@ -13,7 +13,7 @@ import { fetchSessionDisplayName, repairSession } from "#util/repair-session.js"
 
 // oceanic.js's ESM shim breaks under tsx's module loader (.default.default chain
 // resolves to undefined). Force CJS to get the real constructors.
-// oxlint-disable-next-line typescript/no-unsafe-type-assertions
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion
 const { Client, Intents } = createRequire(import.meta.url)(
   "oceanic.js",
   // oxlint-disable-next-line typescript/consistent-type-imports

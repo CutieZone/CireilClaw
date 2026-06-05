@@ -7,17 +7,17 @@ function isTextContent(ct: unknown): ct is { content: string; type: "text" } {
   return typeof ct === "object" && ct !== null && "type" in ct && ct.type === "text";
 }
 
-describe("applyTopicSubstitution", () => {
-  function makeMsg(id: string, role: "user" | "assistant" | "toolResponse" = "user"): Message {
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    return {
-      content: { content: `message ${id}`, type: "text" },
-      id,
-      role,
-      timestamp: 1,
-    } as unknown as Message;
-  }
+function makeMsg(id: string, role: "user" | "assistant" | "toolResponse" = "user"): Message {
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return {
+    content: { content: `message ${id}`, type: "text" },
+    id,
+    role,
+    timestamp: 1,
+  } as unknown as Message;
+}
 
+describe("applyTopicSubstitution", () => {
   test("returns messages unchanged when no summaries", () => {
     const messages = [makeMsg("a"), makeMsg("b"), makeMsg("c")];
     const result = applyTopicSubstitution(messages, []);

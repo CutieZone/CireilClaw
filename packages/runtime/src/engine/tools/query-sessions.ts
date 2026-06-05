@@ -47,13 +47,13 @@ function getMatchFn(query: string, mode: "raw" | "glob" | "regex"): (text: strin
     case "raw":
       return (text) => text.includes(query);
     case "glob": {
-      const escaped = query.replaceAll(/[.+^${}()|[\]\\]/g, String.raw`\$&`);
+      const escaped = query.replaceAll(/[.+^${}()|[\]\\]/gu, String.raw`\$&`);
       const regexStr = escaped.replaceAll(String.raw`\*`, ".*").replaceAll(String.raw`\?`, ".");
-      const regex = new RegExp(`^${regexStr}$`, "i");
+      const regex = new RegExp(`^${regexStr}$`, "iu");
       return (text) => regex.test(text);
     }
     case "regex": {
-      const regex = new RegExp(query, "i");
+      const regex = new RegExp(query, "iu");
       return (text) => regex.test(text);
     }
     default:

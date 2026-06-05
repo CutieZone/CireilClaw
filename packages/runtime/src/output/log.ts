@@ -7,7 +7,7 @@ import {
   renameSync,
   statSync,
 } from "node:fs";
-import { dirname } from "node:path";
+import path from "node:path";
 
 import color from "#output/colors.js";
 
@@ -22,9 +22,9 @@ const config: LogConfig = { level: "debug" };
 const MAX_BYTES = 10 * 1024 * 1024;
 const MAX_BACKUPS = 5;
 
-let _fd: number | undefined = undefined;
-let _filePath: string | undefined = undefined;
-let _bytesWritten = 0;
+let fd: number | undefined = undefined;
+let filePath: string | undefined = undefined;
+let bytesWritten = 0;
 
 // oxlint-disable-next-line no-control-regex
 const ANSI_RE = /\u001B\[[0-9;]*m/gu;
@@ -54,35 +54,35 @@ function serializeArgs(level: Level, data: unknown[]): Record<string, unknown> {
   return { level, msg, ts: new Date().toISOString(), ...extra };
 }
 
-function rotate(filePath: string): void {
+function rotate(filePth: string): void {
   for (let idx = MAX_BACKUPS - 1; idx >= 1; idx--) {
-    const from = `${filePath}.${idx}`;
-    const to = `${filePath}.${idx + 1}`;
+    const from = `${filePth}.${idx}`;
+    const to = `${filePth}.${idx + 1}`;
     if (existsSync(from)) {
       renameSync(from, to);
     }
   }
-  if (_fd !== undefined) {
-    closeSync(_fd);
-    _fd = undefined;
+  if (fd !== undefined) {
+    closeSync(fd);
+    fd = undefined;
   }
-  if (existsSync(filePath)) {
-    renameSync(filePath, `${filePath}.1`);
+  if (existsSync(filePth)) {
+    renameSync(filePth, `${filePth}.1`);
   }
-  _fd = openSync(filePath, "a");
-  _bytesWritten = 0;
+  fd = openSync(filePth, "a");
+  bytesWritten = 0;
 }
 
 function writeToFile(level: Level, data: unknown[]): void {
-  if (_fd === undefined || _filePath === undefined) {
+  if (fd === undefined || filePath === undefined) {
     return;
   }
   try {
     const line = `${JSON.stringify(serializeArgs(level, data))}\n`;
-    appendFileSync(_fd, line);
-    _bytesWritten += Buffer.byteLength(line);
-    if (_bytesWritten >= MAX_BYTES) {
-      rotate(_filePath);
+    appendFileSync(fd, line);
+    bytesWritten += Buffer.byteLength(line);
+    if (bytesWritten >= MAX_BYTES) {
+      rotate(filePath);
     }
   } catch {
     // Never let a log write failure crash the application.
@@ -95,15 +95,15 @@ function isEnabled(callLevel: Level): boolean {
   return LEVEL_RANK[callLevel] >= LEVEL_RANK[config.level];
 }
 
-function setLogFile(filePath: string): void {
-  mkdirSync(dirname(filePath), { recursive: true });
-  _filePath = filePath;
-  _fd = openSync(filePath, "a");
+function setLogFile(filePth: string): void {
+  mkdirSync(path.dirname(filePth), { recursive: true });
+  filePath = filePth;
+  fd = openSync(filePth, "a");
   // Seed _bytesWritten from any pre-existing file size so rotation triggers correctly.
   try {
-    _bytesWritten = statSync(filePath).size;
+    bytesWritten = statSync(filePth).size;
   } catch {
-    _bytesWritten = 0;
+    bytesWritten = 0;
   }
 }
 

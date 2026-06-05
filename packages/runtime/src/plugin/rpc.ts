@@ -4,9 +4,9 @@
 import type { MessagePort, Worker } from "node:worker_threads";
 
 interface PortLike {
-  postMessage: (message: unknown) => void;
-  on: (event: "message", handler: (message: unknown) => void) => unknown;
-  off: (event: "message", handler: (message: unknown) => void) => unknown;
+  postMessage(message: unknown): void;
+  on(event: "message", handler: (message: unknown) => void): unknown;
+  off(event: "message", handler: (message: unknown) => void): unknown;
 }
 
 interface RpcRequest {
@@ -64,8 +64,8 @@ class RpcChannel {
   private readonly pending = new Map<
     number,
     {
-      resolve: (value: unknown) => void;
-      reject: (error: Error) => void;
+      resolve(this: void, value: unknown): void;
+      reject(this: void, error: Error): void;
       timer?: NodeJS.Timeout;
     }
   >();
@@ -91,8 +91,8 @@ class RpcChannel {
     const id = this.nextId++;
     return await new Promise<T>((resolve, reject) => {
       const entry: {
-        resolve: (value: unknown) => void;
-        reject: (error: Error) => void;
+        resolve(value: unknown): void;
+        reject(error: Error): void;
         timer?: NodeJS.Timeout;
       } = {
         reject,
@@ -200,9 +200,9 @@ class RpcChannel {
 // Structural compatibility checks — fail at type-check time if Node's Worker/MessagePort drift.
 type _WorkerCompat = Worker extends PortLike ? true : false;
 type _MessagePortCompat = MessagePort extends PortLike ? true : false;
-const _compatCheck: [_WorkerCompat, _MessagePortCompat] = [true, true];
+const compatCheck: [_WorkerCompat, _MessagePortCompat] = [true, true];
 // oxlint-disable-next-line eslint/no-void -- sink unused type-level marker
-void _compatCheck;
+void compatCheck;
 
 export type { PortLike };
 export { RpcChannel };

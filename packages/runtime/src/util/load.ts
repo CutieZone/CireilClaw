@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
-import { format, join } from "node:path";
+import path from "node:path";
 
 import { parse } from "smol-toml";
 import * as vb from "valibot";
@@ -22,7 +22,7 @@ type Frontmatter = Omit<MemoryBlock, "content" | "label" | "metadata" | "filePat
 function parseBlockFrontmatter(
   content: string,
   displayName: string,
-  path: string,
+  filePath: string,
   subject = "Base file",
 ): {
   body: string;
@@ -30,14 +30,14 @@ function parseBlockFrontmatter(
 } {
   if (content.indexOf("+++", 0) !== 0) {
     throw new Error(
-      `${subject} ${colors.keyword(displayName)} at path ${colors.path(path)} has an invalid frontmatter (expected TOML, but file does not start with '${colors.keyword("+++")}')`,
+      `${subject} ${colors.keyword(displayName)} at path ${colors.path(filePath)} has an invalid frontmatter (expected TOML, but file does not start with '${colors.keyword("+++")}')`,
     );
   }
 
   const ending = content.indexOf("+++", 3);
   if (ending === -1) {
     throw new Error(
-      `${subject} ${colors.keyword(displayName)} at path ${colors.path(path)} has an invalid frontmatter (expected closing '${colors.keyword("+++")}', but none found)`,
+      `${subject} ${colors.keyword(displayName)} at path ${colors.path(filePath)} has an invalid frontmatter (expected closing '${colors.keyword("+++")}', but none found)`,
     );
   }
 
@@ -59,12 +59,12 @@ const labels = ["soul", "identity", "person", "long-term", "style-notes"] as con
 type BlockLabel = (typeof labels)[number];
 
 async function loadBlocks(slug: string): Promise<Record<BlockLabel, MemoryBlock>> {
-  const rootPath = join(root(), "agents", slug, "blocks");
+  const rootPath = path.join(root(), "agents", slug, "blocks");
 
   const files = new Map<BlockLabel, MemoryBlock>();
 
   for (const label of labels) {
-    const it = format({
+    const it = path.format({
       dir: rootPath,
       ext: ".md",
       name: label,
@@ -95,9 +95,9 @@ async function loadBlocks(slug: string): Promise<Record<BlockLabel, MemoryBlock>
 }
 
 async function loadBaseInstructions(slug: string): Promise<string> {
-  const rootPath = join(root(), "agents", slug);
+  const rootPath = path.join(root(), "agents", slug);
 
-  const it = format({
+  const it = path.format({
     dir: rootPath,
     ext: ".md",
     name: "core",
@@ -125,7 +125,7 @@ const FrontmatterSchema = vb.object({
 });
 
 async function loadSkills(agentSlug: string): Promise<Skill[]> {
-  const skillsPath = join(root(), "agents", agentSlug, "skills");
+  const skillsPath = path.join(root(), "agents", agentSlug, "skills");
 
   if (!existsSync(skillsPath)) {
     return [];
@@ -140,7 +140,7 @@ async function loadSkills(agentSlug: string): Promise<Skill[]> {
     }
 
     const slug = entry.name;
-    const filePath = join(skillsPath, slug, "SKILL.md");
+    const filePath = path.join(skillsPath, slug, "SKILL.md");
 
     if (!existsSync(filePath)) {
       continue;
@@ -183,7 +183,7 @@ async function loadConditionalBlocks(
     return [];
   }
 
-  const conditionalPath = join(root(), "agents", agentSlug, "blocks", "conditional");
+  const conditionalPath = path.join(root(), "agents", agentSlug, "blocks", "conditional");
   if (!existsSync(conditionalPath)) {
     return [];
   }
@@ -191,7 +191,7 @@ async function loadConditionalBlocks(
   const blocks: MemoryBlock[] = [];
 
   for (const name of matchingNames) {
-    const filePath = join(conditionalPath, `${name}.md`);
+    const filePath = path.join(conditionalPath, `${name}.md`);
 
     if (!existsSync(filePath)) {
       continue;

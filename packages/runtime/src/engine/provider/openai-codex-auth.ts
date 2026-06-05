@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import type { Server } from "node:http";
-import { join } from "node:path";
+import path from "node:path";
 
 import * as vb from "valibot";
 
@@ -49,12 +49,12 @@ function validateAuthId(authId: string): void {
 }
 
 function codexAuthDir(): string {
-  return join(root(), "config", "openai-codex");
+  return path.join(root(), "config", "openai-codex");
 }
 
 function codexAuthPath(authId: string): string {
   validateAuthId(authId);
-  return join(codexAuthDir(), `${authId}.json`);
+  return path.join(codexAuthDir(), `${authId}.json`);
 }
 
 function base64Url(buffer: Buffer): string {
@@ -167,19 +167,19 @@ async function refreshAccessToken(refreshToken: string): Promise<CodexAuth> {
 }
 
 async function readCodexAuth(authId: string): Promise<CodexAuth | undefined> {
-  const path = codexAuthPath(authId);
-  if (!existsSync(path)) {
+  const authPath = codexAuthPath(authId);
+  if (!existsSync(authPath)) {
     return undefined;
   }
-  return vb.parse(CodexAuthSchema, JSON.parse(await readFile(path, { encoding: "utf8" })));
+  return vb.parse(CodexAuthSchema, JSON.parse(await readFile(authPath, { encoding: "utf8" })));
 }
 
 async function writeCodexAuth(authId: string, auth: CodexAuth): Promise<void> {
   const dir = codexAuthDir();
   await mkdir(dir, { mode: 0o700, recursive: true });
-  const path = codexAuthPath(authId);
-  await writeFile(path, JSON.stringify(auth, undefined, 2), { encoding: "utf8", mode: 0o600 });
-  await chmod(path, 0o600);
+  const authPath = codexAuthPath(authId);
+  await writeFile(authPath, JSON.stringify(auth, undefined, 2), { encoding: "utf8", mode: 0o600 });
+  await chmod(authPath, 0o600);
 }
 
 async function deleteCodexAuth(authId: string): Promise<void> {

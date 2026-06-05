@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import path from "node:path";
 
 import type { Agent } from "#agent/index.js";
 import type { HeartbeatConfig } from "#config/heartbeat.js";
@@ -79,7 +79,7 @@ async function runHeartbeat(agent: Agent, cfg: HeartbeatConfig): Promise<void> {
     return;
   }
 
-  const checklistPath = join(agentRoot(agent.slug), "tasks", "HEARTBEAT.md");
+  const checklistPath = path.join(agentRoot(agent.slug), "tasks", "HEARTBEAT.md");
   if (!existsSync(checklistPath)) {
     debug("Heartbeat: no HEARTBEAT.md found — skipping");
     return;

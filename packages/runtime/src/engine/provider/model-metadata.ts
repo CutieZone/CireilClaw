@@ -134,8 +134,8 @@ async function fetchModelMetadataUncached(provider: ProviderConfig): Promise<Mod
     case "openai-codex":
       return OPENAI_CODEX_MODELS.map((id) => ({ id, name: id }));
     default: {
-      const _exhaustive: never = provider.kind;
-      throw new Error(`Unsupported provider type: ${String(_exhaustive)}`);
+      const exhaustive: never = provider.kind;
+      throw new Error(`Unsupported provider type: ${String(exhaustive)}`);
     }
   }
 }

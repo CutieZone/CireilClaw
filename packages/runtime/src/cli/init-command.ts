@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, rename, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import path from "node:path";
 
 import { confirm, input, password, select } from "@inquirer/prompts";
 import { buildCommand } from "@stricli/core";
@@ -26,20 +26,20 @@ function slugify(name: string): string {
   return name
     .toLowerCase()
     .trim()
-    .replaceAll(/[^a-z0-9]+/g, "-")
-    .replaceAll(/^-+|-+$/g, "");
+    .replaceAll(/[^a-z0-9]+/gu, "-")
+    .replaceAll(/^-+|-+$/gu, "");
 }
 
-async function renameOld(path: string): Promise<void> {
+async function renameOld(pth: string): Promise<void> {
   let randoms = randomBytes(8).toString("hex");
 
-  while (existsSync(`${path}.${randoms}`)) {
+  while (existsSync(`${pth}.${randoms}`)) {
     randoms = randomBytes(8).toString("hex");
   }
 
-  const dest = `${path}.${randoms}`;
-  await rename(path, dest);
-  warning("Moved", colors.path(path));
+  const dest = `${pth}.${randoms}`;
+  await rename(pth, dest);
+  warning("Moved", colors.path(pth));
   warning("To", colors.path(dest));
 }
 
@@ -344,7 +344,7 @@ async function run(flags: Flags): Promise<void> {
 
   const base = root();
 
-  await mkdir(join(base, "config"), { recursive: true });
+  await mkdir(path.join(base, "config"), { recursive: true });
 
   // Resolve slug before asking anything else so we can catch conflicts early.
   const name = await input({ message: "Agent name:" });
@@ -357,7 +357,7 @@ async function run(flags: Flags): Promise<void> {
   info("Agent slug:", colors.keyword(slug));
 
   // Override check is at the agent level, not the root level.
-  const agentRoot = join(base, "agents", slug);
+  const agentRoot = path.join(base, "agents", slug);
   if (existsSync(agentRoot)) {
     warning("Agent", colors.keyword(slug), "already exists at", colors.path(agentRoot));
     warning(
@@ -499,7 +499,7 @@ async function run(flags: Flags): Promise<void> {
     });
     const ownerId = await input({
       message: "Discord owner ID (your user ID):",
-      validate: (value) => /^[0-9]+$/.test(value) || "Must be a numeric Discord user ID",
+      validate: (value) => /^[0-9]+$/u.test(value) || "Must be a numeric Discord user ID",
     });
     discordConfig = { ownerId, token };
   }
@@ -507,47 +507,51 @@ async function run(flags: Flags): Promise<void> {
   const writeSpinner = ora("Writing agent files...").start();
 
   for (const dir of ["blocks", "config", "memories", "skills", "tasks", "workspace"]) {
-    await mkdir(join(agentRoot, dir), { recursive: true });
+    await mkdir(path.join(agentRoot, dir), { recursive: true });
   }
 
-  await mkdir(join(agentRoot, "skills", "create-skill"), { recursive: true });
-  await writeFile(join(agentRoot, "skills", "create-skill", "SKILL.md"), createSkillStub(), "utf8");
+  await mkdir(path.join(agentRoot, "skills", "create-skill"), { recursive: true });
+  await writeFile(
+    path.join(agentRoot, "skills", "create-skill", "SKILL.md"),
+    createSkillStub(),
+    "utf8",
+  );
 
   for (const label of blockLabels) {
     await writeFile(
-      join(agentRoot, "blocks", `${label}.md`),
+      path.join(agentRoot, "blocks", `${label}.md`),
       blockStub(label, name, description),
       "utf8",
     );
   }
 
-  await writeFile(join(agentRoot, "core.md"), baseInstructionStub(), "utf8");
+  await writeFile(path.join(agentRoot, "core.md"), baseInstructionStub(), "utf8");
   await writeFile(
-    join(agentRoot, "config", "engine.toml"),
+    path.join(agentRoot, "config", "engine.toml"),
     stringify({
       default: { apiBase, apiKey, defaultModel: model, isGlobalDefault: true, kind: apiKind },
     }),
     "utf8",
   );
   await writeFile(
-    join(agentRoot, "config", "tools.toml"),
+    path.join(agentRoot, "config", "tools.toml"),
     stringify(buildToolsConfig(preset, execBinaries)),
     "utf8",
   );
 
   if (braveApiKey !== undefined) {
-    await mkdir(join(base, "config", "plugins"), { recursive: true });
+    await mkdir(path.join(base, "config", "plugins"), { recursive: true });
     await writeFile(
-      join(base, "config", "plugins", "brave-search.toml"),
+      path.join(base, "config", "plugins", "brave-search.toml"),
       stringify({ apiKey: braveApiKey }),
       "utf8",
     );
   }
 
   if (discordConfig !== undefined) {
-    await mkdir(join(agentRoot, "config", "channels"), { recursive: true });
+    await mkdir(path.join(agentRoot, "config", "channels"), { recursive: true });
     await writeFile(
-      join(agentRoot, "config", "channels", "discord.toml"),
+      path.join(agentRoot, "config", "channels", "discord.toml"),
       stringify(discordConfig),
       "utf8",
     );

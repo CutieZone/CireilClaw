@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import path from "node:path";
 
 import * as vb from "valibot";
 
@@ -35,7 +35,7 @@ const downloadAttachments: ToolDef = {
 
     const saved: string[] = [];
     for (const { filename, data } of files) {
-      const sandboxPath = join(to, `${message_id}-${filename}`).replaceAll("\\", "/");
+      const sandboxPath = path.join(to, `${message_id}-${filename}`).replaceAll("\\", "/");
 
       await ctx.paths.checkConditionalAccess(sandboxPath);
 
@@ -48,7 +48,7 @@ const downloadAttachments: ToolDef = {
         );
       }
 
-      await mkdir(dirname(realPath), { recursive: true });
+      await mkdir(path.dirname(realPath), { recursive: true });
       await writeFile(realPath, data);
       saved.push(sandboxPath);
     }

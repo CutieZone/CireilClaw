@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import path from "node:path";
 
 import { parse } from "smol-toml";
 
@@ -16,7 +16,7 @@ const migration: ConfigMigration = {
   id: "20260309000000_skills_agentskills_format",
 
   async migrateAgent(_agentSlug, agentPath, context) {
-    const skillsPath = join(agentPath, "skills");
+    const skillsPath = path.join(agentPath, "skills");
 
     if (!existsSync(skillsPath)) {
       return;
@@ -30,7 +30,7 @@ const migration: ConfigMigration = {
       }
 
       const slug = entry.name.slice(0, -3);
-      const flatPath = join(skillsPath, entry.name);
+      const flatPath = path.join(skillsPath, entry.name);
       const content = await readFile(flatPath, "utf8");
 
       if (!content.startsWith("+++")) {
@@ -59,9 +59,9 @@ const migration: ConfigMigration = {
         "",
       ].join("\n");
 
-      const dirPath = join(skillsPath, slug);
+      const dirPath = path.join(skillsPath, slug);
       await mkdir(dirPath, { recursive: true });
-      await writeFile(join(dirPath, "SKILL.md"), yaml + body, "utf8");
+      await writeFile(path.join(dirPath, "SKILL.md"), yaml + body, "utf8");
       await rm(flatPath);
     }
   },
