@@ -96,6 +96,10 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
 
       // Wipe this message and everything after from history
       session.history.splice(msgIndex);
+      // Clamp cursor so it doesn't point past the new end of history
+      if (session.historyCursor >= session.history.length) {
+        session.historyCursor = Math.max(0, session.history.length - 1);
+      }
       session.pendingToolMessages = [];
       session.pendingVideos = [];
 

@@ -86,6 +86,9 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
         return;
       }
 
+      // Delete the Discord message first — don't mutate session unless this succeeds
+      await targetMsg.delete("Deleted by owner");
+
       // Adjust cursor if it points past the removed entry
       if (session.historyCursor > msgIndex) {
         session.historyCursor--;
@@ -94,7 +97,6 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
       session.history.splice(msgIndex, 1);
       session.lastMessageId = session.history.findLast((entry) => entry.id !== undefined)?.id;
       saveSession(ctx.agentSlug, session);
-      await targetMsg.delete("Deleted by owner");
     } finally {
       session.busy = false;
       saveSession(ctx.agentSlug, session);
