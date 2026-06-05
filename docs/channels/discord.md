@@ -89,21 +89,22 @@ All slash commands are restricted to the configured `ownerId`.
 
 ## Owner Reactions
 
-The owner (user matching `ownerId`) can react to the bot's messages to trigger actions. These work in any channel the bot can see.
+The owner (user matching `ownerId`) can react to the bot's **error messages** with ✨ to dismiss them. The ✨ reaction only acts on messages starting with "⚠️ Engine error", ":warning: Engine error", "⚠️ Discord error", or ":warning: Discord error".
 
-| Reaction | Behavior                                                                                                                          |
-| -------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| ✨       | **Delete error messages only.** If the bot's message is an engine or Discord error, delete it. No reroll.                         |
-| ❌       | **Delete single message.** Delete the message from Discord and remove it from session history. Does not touch other messages.     |
-| 🔄       | **Delete + reroll.** Delete the message from Discord, remove it and everything after it from history, then regenerate a response to the preceding user message. |
+Reactions from non-owner users or on non-bot messages are silently ignored.
 
-The ✨ reaction only acts on error messages (starting with "⚠️ Engine error", ":warning: Engine error", "⚠️ Discord error", or ":warning: Discord error"). ❌ and 🔄 work on any bot message.
+## Owner Message Commands
 
-❌ removes only the single reacted-to message from history — conversation entries before and after are left intact.
+The owner can right-click (desktop) or long-press (mobile) any bot message and select an action from the **Apps** menu. These commands are only visible to the owner and produce ephemeral responses (visible only to you).
 
-🔄 removes the reacted-to message plus everything after it (rewinding to that point), then generates a new response. If no user message remains after the splice (e.g., reacting to the very first message in a session), the deletion happens but no reroll occurs.
+| Command             | Behavior                                                                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Delete Message**  | Delete the message from Discord and remove it from session history. Does not touch other messages.                                         |
+| **Reroll Response** | Delete the message from Discord, remove it and everything after it from history, then regenerate a response to the preceding user message. |
 
-Reactions from non-owner users are silently ignored. Reactions on non-bot messages are ignored.
+**Delete Message** removes only the single targeted message from history — conversation entries before and after are left intact.
+
+**Reroll Response** removes the targeted message plus everything after it (rewinding to that point), then generates a new response. If no user message remains after the splice (e.g., targeting the very first message in a session), the deletion happens but no reroll occurs.
 
 ## Required Intents
 
