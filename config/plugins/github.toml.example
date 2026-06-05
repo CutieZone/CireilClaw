@@ -1,0 +1,14 @@
+# GitHub plugin configuration
+# Copy this file to ~/.cireilclaw/config/plugins/github.toml
+#
+# appId and installationId come from your GitHub App settings:
+#   https://github.com/settings/apps
+#
+# privateKey is the PEM-encoded private key generated when you create the app.
+# You can inline it directly or use a file path — TOML multi-line strings work.
+
+# appId = "123456"
+# installationId = "789012"
+# privateKey = """-----BEGIN RSA PRIVATE KEY-----
+# ...
+# -----END RSA PRIVATE KEY-----"""
