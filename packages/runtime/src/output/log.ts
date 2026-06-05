@@ -97,6 +97,14 @@ function isEnabled(callLevel: Level): boolean {
 
 function setLogFile(filePth: string): void {
   mkdirSync(path.dirname(filePth), { recursive: true });
+  if (fd !== undefined) {
+    try {
+      closeSync(fd);
+    } catch {
+      // Ignore close errors on rotation/reconfiguration.
+    }
+    fd = undefined;
+  }
   filePath = filePth;
   fd = openSync(filePth, "a");
   // Seed _bytesWritten from any pre-existing file size so rotation triggers correctly.
