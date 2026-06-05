@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { delimiter, join } from "node:path";
+import path from "node:path";
 
 import { input } from "@inquirer/prompts";
 import { buildCommand } from "@stricli/core";
@@ -41,11 +41,11 @@ function commandExists(command: string): boolean {
   }
 
   const pathValue = process.env["PATH"] ?? "";
-  for (const entry of pathValue.split(delimiter)) {
+  for (const entry of pathValue.split(path.delimiter)) {
     if (entry.length === 0) {
       continue;
     }
-    if (existsSync(join(entry, command))) {
+    if (existsSync(path.join(entry, command))) {
       return true;
     }
   }

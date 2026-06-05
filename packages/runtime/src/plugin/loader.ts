@@ -4,7 +4,7 @@
 import { existsSync, realpathSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { join } from "node:path";
+import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { Worker } from "node:worker_threads";
 
@@ -45,7 +45,7 @@ function readSdkVersion(pkgPath: string): string {
 const RUNTIME_SDK_VERSION = readSdkVersion(RUNTIME_SDK_PKG);
 
 async function loadPluginsConfig(): Promise<vb.InferOutput<typeof PluginsConfigSchema>> {
-  const file = join(root(), "config", "plugins.toml");
+  const file = path.join(root(), "config", "plugins.toml");
   if (!existsSync(file)) {
     return { plugins: [] };
   }
@@ -55,7 +55,7 @@ async function loadPluginsConfig(): Promise<vb.InferOutput<typeof PluginsConfigS
 }
 
 async function ensureLocalPackageJson(): Promise<string> {
-  const pkgPath = join(root(), "package.json");
+  const pkgPath = path.join(root(), "package.json");
   if (!existsSync(pkgPath)) {
     const skeleton = {
       dependencies: {},
@@ -99,15 +99,15 @@ async function resolveEntryUrl(
   entry: PluginEntry,
 ): Promise<{ id: string; pluginPkgPath: string; url: URL }> {
   if (entry.name !== undefined) {
-    const dir = join(root(), "plugins", entry.name);
-    const pkgPath = join(dir, "package.json");
+    const dir = path.join(root(), "plugins", entry.name);
+    const pkgPath = path.join(dir, "package.json");
     if (!existsSync(pkgPath)) {
       throw new Error(
         `Plugin ${colors.keyword(entry.name)} not found at ${colors.keyword(dir)}. ` +
           `Clone it there: git clone <url> ${dir}`,
       );
     }
-    if (!existsSync(join(dir, "node_modules"))) {
+    if (!existsSync(path.join(dir, "node_modules"))) {
       throw new Error(
         `Plugin ${colors.keyword(entry.name)} is missing dependencies. ` +
           `Run: cd ${dir} && pnpm install`,

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { basename, join } from "node:path";
+import path from "node:path";
 
 import type {
   AnyInteractionGateway,
@@ -99,7 +99,7 @@ const AUTOCOMPLETE_HANDLERS = new Map<string, AutocompleteHandler>([
 const COMMANDS_HASH = createHash("sha256").update(JSON.stringify(SLASH_COMMANDS)).digest("hex");
 
 function commandsHashFile(agentSlug: string): string {
-  return join(agentRoot(agentSlug), "discord-commands.hash");
+  return path.join(agentRoot(agentSlug), "discord-commands.hash");
 }
 
 function installedCommandsFingerprint(appId: string): string {
@@ -1099,8 +1099,8 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
   });
 
   // Store client and ownerId on the agent for channel resolution
-  agent.setDiscordClient(client);
-  agent.setOwnerId(ownerId);
+  agent.discordClient = client;
+  agent.ownerId = ownerId;
 
   const discordHandler: ChannelHandler = {
     capabilities: {
@@ -1153,8 +1153,8 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
           break;
         }
         default: {
-          const _exhaustive: never = direction;
-          throw new Error(`Unknown direction: ${String(_exhaustive)}`);
+          const exhaustive: never = direction;
+          throw new Error(`Unknown direction: ${String(exhaustive)}`);
         }
       }
 
@@ -1227,7 +1227,7 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
               attachments.map(async (sandboxPath) => {
                 const realPath = sandboxToReal(sandboxPath, agentSlug);
                 const contents = await readFile(realPath);
-                return { contents, name: basename(realPath) };
+                return { contents, name: path.basename(realPath) };
               }),
             )
           : undefined;

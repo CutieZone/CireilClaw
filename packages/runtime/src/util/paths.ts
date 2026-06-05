@@ -1,5 +1,5 @@
 import { existsSync, realpathSync } from "node:fs";
-import { basename, dirname, isAbsolute, join, normalize, relative } from "node:path";
+import path from "node:path";
 import { env } from "node:process";
 
 import type { ConditionsConfig, PathRule } from "#config/schemas/conditions.js";
@@ -14,16 +14,16 @@ function root(): string {
     throw new Error("$HOME variable not available");
   }
 
-  if (!isAbsolute(home)) {
+  if (!path.isAbsolute(home)) {
     throw new Error("$HOME is not an absolute path");
   }
 
   const realHome = realpathSync(home);
-  return join(realHome, ".cireilclaw");
+  return path.join(realHome, ".cireilclaw");
 }
 
 function agentRoot(agentSlug: string): string {
-  return join(root(), "agents", agentSlug);
+  return path.join(root(), "agents", agentSlug);
 }
 
 function resolveMount(
@@ -48,37 +48,37 @@ function resolveMount(
   return undefined;
 }
 
-function sandboxToReal(path: string, agentSlug: string, mounts?: readonly Mount[]): string {
+function sandboxToReal(pth: string, agentSlug: string, mounts?: readonly Mount[]): string {
   const resolved =
-    mounts !== undefined && mounts.length > 0 ? resolveMount(path, mounts) : undefined;
+    mounts !== undefined && mounts.length > 0 ? resolveMount(pth, mounts) : undefined;
 
   if (resolved !== undefined) {
     const { mount, innerPath } = resolved;
-    const realPath = normalize(join(mount.source, innerPath));
-    const relativeToSource = relative(mount.source, realPath);
+    const realPath = path.normalize(path.join(mount.source, innerPath));
+    const relativeToSource = path.relative(mount.source, realPath);
 
-    if (relativeToSource.startsWith("..") || isAbsolute(relativeToSource)) {
-      throw new Error(`Access denied: path '${path}' attempts to escape the mount boundary.`);
+    if (relativeToSource.startsWith("..") || path.isAbsolute(relativeToSource)) {
+      throw new Error(`Access denied: path '${pth}' attempts to escape the mount boundary.`);
     }
 
     const segments: string[] = [];
     let current = realPath;
 
     while (!existsSync(current)) {
-      segments.unshift(basename(current));
-      const parent = dirname(current);
+      segments.unshift(path.basename(current));
+      const parent = path.dirname(current);
       if (parent === current) {
-        throw new Error(`Access denied: no resolvable ancestor for '${path}'`);
+        throw new Error(`Access denied: no resolvable ancestor for '${pth}'`);
       }
       current = parent;
     }
 
     const resolvedBase = realpathSync(current);
-    const fullResolved = join(resolvedBase, ...segments);
-    const realRelative = relative(mount.source, fullResolved);
+    const fullResolved = path.join(resolvedBase, ...segments);
+    const realRelative = path.relative(mount.source, fullResolved);
 
-    if (realRelative.startsWith("..") || isAbsolute(realRelative)) {
-      throw new Error(`Access denied: path '${path}' resolves outside the mount via symlink.`);
+    if (realRelative.startsWith("..") || path.isAbsolute(realRelative)) {
+      throw new Error(`Access denied: path '${pth}' resolves outside the mount via symlink.`);
     }
 
     return fullResolved;
@@ -90,60 +90,60 @@ function sandboxToReal(path: string, agentSlug: string, mounts?: readonly Mount[
   let expectedSubdir: "blocks" | "memories" | "skills" | "tasks" | "workspace" | undefined =
     undefined;
 
-  if (path === "/blocks" || path.startsWith("/blocks/")) {
+  if (pth === "/blocks" || pth.startsWith("/blocks/")) {
     expectedSubdir = "blocks";
-    sandboxPath = join(origin, "blocks", path.slice("/blocks".length));
-  } else if (path === "/memories" || path.startsWith("/memories/")) {
+    sandboxPath = path.join(origin, "blocks", pth.slice("/blocks".length));
+  } else if (pth === "/memories" || pth.startsWith("/memories/")) {
     expectedSubdir = "memories";
-    sandboxPath = join(origin, "memories", path.slice("/memories".length));
-  } else if (path === "/skills" || path.startsWith("/skills/")) {
+    sandboxPath = path.join(origin, "memories", pth.slice("/memories".length));
+  } else if (pth === "/skills" || pth.startsWith("/skills/")) {
     expectedSubdir = "skills";
-    sandboxPath = join(origin, "skills", path.slice("/skills".length));
-  } else if (path === "/tasks" || path.startsWith("/tasks/")) {
+    sandboxPath = path.join(origin, "skills", pth.slice("/skills".length));
+  } else if (pth === "/tasks" || pth.startsWith("/tasks/")) {
     expectedSubdir = "tasks";
-    sandboxPath = join(origin, "tasks", path.slice("/tasks".length));
-  } else if (path === "/workspace" || path.startsWith("/workspace/")) {
+    sandboxPath = path.join(origin, "tasks", pth.slice("/tasks".length));
+  } else if (pth === "/workspace" || pth.startsWith("/workspace/")) {
     expectedSubdir = "workspace";
-    sandboxPath = join(origin, "workspace", path.slice("/workspace".length));
+    sandboxPath = path.join(origin, "workspace", pth.slice("/workspace".length));
   } else {
-    throw new Error(`Access denied: path '${path}' is outside the sandbox.`);
+    throw new Error(`Access denied: path '${pth}' is outside the sandbox.`);
   }
 
-  const normalizedPath = normalize(sandboxPath);
-  const relativePath = relative(origin, normalizedPath);
+  const normalizedPath = path.normalize(sandboxPath);
+  const relativePath = path.relative(origin, normalizedPath);
 
   if (relativePath.startsWith("..")) {
-    throw new Error(`Access denied: path '${path}' attempts to escape the sandbox.`);
+    throw new Error(`Access denied: path '${pth}' attempts to escape the sandbox.`);
   }
 
   if (!relativePath.startsWith(`${expectedSubdir}/`) && relativePath !== expectedSubdir) {
-    throw new Error(`Access denied: path '${path}' escaped the ${expectedSubdir} sandbox area.`);
+    throw new Error(`Access denied: path '${pth}' escaped the ${expectedSubdir} sandbox area.`);
   }
 
   const segments: string[] = [];
   let current = normalizedPath;
 
   while (!existsSync(current)) {
-    segments.unshift(basename(current));
-    const parent = dirname(current);
+    segments.unshift(path.basename(current));
+    const parent = path.dirname(current);
     if (parent === current) {
-      throw new Error(`Access denied: no resolvable ancestor for '${path}'`);
+      throw new Error(`Access denied: no resolvable ancestor for '${pth}'`);
     }
     current = parent;
   }
 
   const resolvedBase = realpathSync(current);
-  const fullResolved = join(resolvedBase, ...segments);
+  const fullResolved = path.join(resolvedBase, ...segments);
   const realOrigin = realpathSync(origin);
-  const realRelative = relative(realOrigin, fullResolved);
+  const realRelative = path.relative(realOrigin, fullResolved);
 
-  if (realRelative.startsWith("..") || isAbsolute(realRelative)) {
-    throw new Error(`Access denied: path '${path}' resolves outside the sandbox via symlink.`);
+  if (realRelative.startsWith("..") || path.isAbsolute(realRelative)) {
+    throw new Error(`Access denied: path '${pth}' resolves outside the sandbox via symlink.`);
   }
 
   if (!realRelative.startsWith(`${expectedSubdir}/`) && realRelative !== expectedSubdir) {
     throw new Error(
-      `Access denied: path '${path}' escaped the ${expectedSubdir} sandbox area via symlink.`,
+      `Access denied: path '${pth}' escaped the ${expectedSubdir} sandbox area via symlink.`,
     );
   }
 
@@ -239,18 +239,18 @@ function checkConditionalAccess(
 // /bin is intentionally excluded — it is a synthetic sandbox dir, not a real host path.
 const EXEC_VISIBLE_PREFIXES = ["/usr", "/lib", "/lib64", "/nix"] as const;
 
-function validateSystemPath(path: string): string {
-  if (path.includes("..")) {
-    throw new Error(`Access denied: path '${path}' contains path traversal.`);
+function validateSystemPath(pth: string): string {
+  if (pth.includes("..")) {
+    throw new Error(`Access denied: path '${pth}' contains path traversal.`);
   }
 
-  const normalized = normalize(path);
+  const normalized = path.normalize(pth);
   const isAllowed = EXEC_VISIBLE_PREFIXES.some(
     (prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`),
   );
 
   if (!isAllowed) {
-    throw new Error(`Access denied: path '${path}' is outside the sandbox.`);
+    throw new Error(`Access denied: path '${pth}' is outside the sandbox.`);
   }
 
   if (!existsSync(normalized)) {
@@ -263,7 +263,7 @@ function validateSystemPath(path: string): string {
   );
 
   if (!isResolvedAllowed) {
-    throw new Error(`Access denied: path '${path}' resolves outside the sandbox via symlink.`);
+    throw new Error(`Access denied: path '${pth}' resolves outside the sandbox via symlink.`);
   }
 
   return resolved;

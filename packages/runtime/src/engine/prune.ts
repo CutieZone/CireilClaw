@@ -74,8 +74,8 @@ function estimateContentTokens(block: Content): number {
     case "video_ref":
       return IMAGE_TOKEN_OVERHEAD;
     default: {
-      const _exhaustive: never = block;
-      return _exhaustive;
+      const exhaustive: never = block;
+      return exhaustive;
     }
   }
 }

@@ -10,9 +10,9 @@ const ConditionStringSchema = vb.message(
       (str) =>
         str === "discord:nsfw" ||
         str === "discord:dm" ||
-        /^discord:dm:\d+$/.test(str) ||
-        /^discord:guild:\d+$/.test(str) ||
-        /^discord:channel:\d+$/.test(str) ||
+        /^discord:dm:\d+$/u.test(str) ||
+        /^discord:guild:\d+$/u.test(str) ||
+        /^discord:channel:\d+$/u.test(str) ||
         str === "tui" ||
         str === "internal",
     ),

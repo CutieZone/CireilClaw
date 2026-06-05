@@ -71,7 +71,7 @@ describe("RpcChannel", () => {
   it("times out a pending call when timeoutMs elapses", async () => {
     const [client, server] = pair();
     server.handle("hang", async () => await hangForever());
-    await expect(client.call("hang", [], 50)).rejects.toThrow(/timed out after 50ms/);
+    await expect(client.call("hang", [], 50)).rejects.toThrow(/timed out after 50ms/u);
   });
 
   it("clears timer when response arrives before timeout", async () => {

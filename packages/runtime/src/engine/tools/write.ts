@@ -1,5 +1,5 @@
 import { mkdir, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import path from "node:path";
 
 import * as vb from "valibot";
 
@@ -49,7 +49,7 @@ export const write: ToolDef = {
     await ctx.paths.checkConditionalAccess(data.path);
     await ctx.paths.checkWriteAccess(data.path);
 
-    await mkdir(dirname(realPath), { recursive: true });
+    await mkdir(path.dirname(realPath), { recursive: true });
     await writeFile(realPath, data.content, "utf8");
 
     // Invalidate section cache — file content changed

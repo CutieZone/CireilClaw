@@ -256,7 +256,7 @@ function translateMsg(message: Message): ChatCompletionMessageParam {
           msg["content"] = textBlocks.map((it) => ({ text: it.content, type: "text" }) as const);
         }
 
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertions
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         return msg as unknown as ChatCompletionMessageParam;
       }
       if (message.content.type === "text") {
@@ -267,7 +267,7 @@ function translateMsg(message: Message): ChatCompletionMessageParam {
       }
       if (message.content.type === "thinking") {
         // Single thinking block, so send as reasoning_content with no text content.
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertions
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         return {
           reasoning_content: message.content.thinking,
           role: "assistant",
@@ -373,10 +373,14 @@ export async function generate(
 
   if (reasoning === true) {
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    (params as unknown as Record<string, unknown>)["reasoning"] = { enabled: true };
+    (params as unknown as Record<string, unknown>)["reasoning"] = {
+      enabled: true,
+    };
   } else if (typeof reasoning === "string") {
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    (params as unknown as Record<string, unknown>)["reasoning"] = { effort: reasoning };
+    (params as unknown as Record<string, unknown>)["reasoning"] = {
+      effort: reasoning,
+    };
   }
 
   if (

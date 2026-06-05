@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import path from "node:path";
 
 import { eq } from "drizzle-orm";
 import * as vb from "valibot";
@@ -16,7 +16,7 @@ const migration: ConfigMigration = {
   targets: [], // No TOML targets
 
   async migrateAgent(agentSlug, agentPath, context) {
-    const dbPath = join(agentPath, "sessions.db");
+    const dbPath = path.join(agentPath, "sessions.db");
     await context.backupFile(dbPath);
 
     const db = initDb(agentSlug);
@@ -33,7 +33,7 @@ const migration: ConfigMigration = {
           const content = Array.isArray(msg.content) ? msg.content : [msg.content];
           for (const block of content) {
             if (block.type === "text") {
-              const match = /<assistant-context msgId="([^"]+)"/.exec(block.content);
+              const match = /<assistant-context msgId="([^"]+)"/u.exec(block.content);
               if (match !== null) {
                 const [, msgId] = match;
                 if (msgId !== undefined) {
@@ -50,7 +50,7 @@ const migration: ConfigMigration = {
           const content = Array.isArray(msg.content) ? msg.content : [msg.content];
           for (const block of content) {
             if (block.type === "text") {
-              const match = /<(?:history-context|msg) msgId="([^"]+)"/.exec(block.content);
+              const match = /<(?:history-context|msg) msgId="([^"]+)"/u.exec(block.content);
               if (match !== null) {
                 const [, msgId] = match;
                 if (msgId !== undefined) {

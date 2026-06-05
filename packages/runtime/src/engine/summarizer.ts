@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import path from "node:path";
 
 import { parse } from "smol-toml";
 import * as vb from "valibot";
@@ -52,7 +52,7 @@ interface SummarizeResult {
 }
 
 async function loadSummarizationConfig(agentSlug: string): Promise<SummarizationConfig> {
-  const file = join(agentRoot(agentSlug), "config", "summarization.toml");
+  const file = path.join(agentRoot(agentSlug), "config", "summarization.toml");
   try {
     const content = await readFile(file, "utf8");
     const parsed = parse(content);
@@ -95,8 +95,8 @@ async function runSummarizer(
     preserve: [],
     slug: request.identifier
       .toLowerCase()
-      .replaceAll(/[^a-z0-9]+/g, "-")
-      .replaceAll(/^-+|-+$/g, ""),
+      .replaceAll(/[^a-z0-9]+/gu, "-")
+      .replaceAll(/^-+|-+$/gu, ""),
     startMessageId: "",
     summary: "",
   };

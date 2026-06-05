@@ -115,7 +115,7 @@ export const listSessions: ToolDef = {
             }
           }
         } else {
-          let text = textContent.content.replaceAll(/<[^>]*>/g, "").trim();
+          let text = textContent.content.replaceAll(/<[^>]*>/gu, "").trim();
           if (text === "") {
             // If stripping tags left nothing, maybe it's just tags or metadata.
             // Use the original content as fallback.

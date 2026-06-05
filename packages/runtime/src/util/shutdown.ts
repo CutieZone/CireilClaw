@@ -2,18 +2,18 @@ import { warning } from "#output/log.js";
 
 type ShutdownHook = () => void;
 
-const _hooks: ShutdownHook[] = [];
-let _registered = false;
+const hooks: ShutdownHook[] = [];
+let registered = false;
 
 function onShutdown(hook: ShutdownHook): void {
-  _hooks.push(hook);
+  hooks.push(hook);
 }
 
 function registerSigint(): void {
-  if (_registered) {
+  if (registered) {
     return;
   }
-  _registered = true;
+  registered = true;
 
   process.on("SIGINT", () => {
     process.on("SIGINT", () => {
@@ -21,7 +21,7 @@ function registerSigint(): void {
       process.exit(1);
     });
 
-    for (const hook of _hooks) {
+    for (const hook of hooks) {
       try {
         hook();
       } catch {

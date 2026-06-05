@@ -3,8 +3,8 @@ import * as vb from "valibot";
 import { nonEmptyString } from "#config/schemas/shared.js";
 
 const ActiveHoursSchema = vb.strictObject({
-  end: vb.pipe(vb.string(), vb.nonEmpty(), vb.regex(/^\d{2}:\d{2}$/, "Must be HH:MM format")),
-  start: vb.pipe(vb.string(), vb.nonEmpty(), vb.regex(/^\d{2}:\d{2}$/, "Must be HH:MM format")),
+  end: vb.pipe(vb.string(), vb.nonEmpty(), vb.regex(/^\d{2}:\d{2}$/u, "Must be HH:MM format")),
+  start: vb.pipe(vb.string(), vb.nonEmpty(), vb.regex(/^\d{2}:\d{2}$/u, "Must be HH:MM format")),
   timezone: vb.pipe(vb.string(), vb.nonEmpty()),
 });
 

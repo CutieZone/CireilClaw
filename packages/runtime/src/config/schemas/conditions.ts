@@ -11,9 +11,9 @@ const ConditionStringSchema = vb.message(
       return (
         base === "discord:nsfw" ||
         base === "discord:dm" ||
-        /^discord:dm:\d+$/.test(base) ||
-        /^discord:guild:\d+$/.test(base) ||
-        /^discord:channel:\d+$/.test(base) ||
+        /^discord:dm:\d+$/u.test(base) ||
+        /^discord:guild:\d+$/u.test(base) ||
+        /^discord:channel:\d+$/u.test(base) ||
         base === "tui" ||
         base === "internal"
       );

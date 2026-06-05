@@ -1,32 +1,28 @@
 import type { Agent } from "#agent/index.js";
 
 export class Harness {
-  private static _instance: Harness | undefined;
+  private static instance: Harness | undefined;
 
-  private readonly _agents: Map<string, Agent>;
+  public readonly agents: Map<string, Agent>;
 
   private constructor(agents: Map<string, Agent>) {
-    this._agents = agents;
+    this.agents = agents;
   }
 
   public static init(agents: Map<string, Agent>): Harness {
-    Harness._instance = new Harness(agents);
-    return Harness._instance;
+    Harness.instance = new Harness(agents);
+    return Harness.instance;
   }
 
   public static get(): Harness {
-    if (Harness._instance === undefined) {
+    if (Harness.instance === undefined) {
       throw new Error("Harness.get() called before Harness.init()");
     }
-    return Harness._instance;
-  }
-
-  public get agents(): Map<string, Agent> {
-    return this._agents;
+    return Harness.instance;
   }
 
   public async startSchedulers(): Promise<void> {
-    for (const agent of this._agents.values()) {
+    for (const agent of this.agents.values()) {
       await agent.scheduler?.start();
     }
   }

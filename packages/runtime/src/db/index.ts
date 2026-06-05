@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import path from "node:path";
 
 import BetterSqlite3 from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
@@ -13,10 +13,10 @@ import * as schema from "./schema.js";
 type Database = Awaited<ReturnType<typeof drizzle<typeof schema>>>;
 
 // Map from agent slug to DB instance — each agent gets its own database.
-const _dbs = new Map<string, Database>();
+const databases = new Map<string, Database>();
 
 function getDb(agentSlug: string): Database {
-  const db = _dbs.get(agentSlug);
+  const db = databases.get(agentSlug);
   if (db === undefined) {
     throw new Error(`DB not initialized for agent '${agentSlug}' — call initDb(slug) first`);
   }
@@ -24,12 +24,12 @@ function getDb(agentSlug: string): Database {
 }
 
 function initDb(agentSlug: string): Database {
-  const existing = _dbs.get(agentSlug);
+  const existing = databases.get(agentSlug);
   if (existing !== undefined) {
     return existing;
   }
 
-  const dbPath = join(agentRoot(agentSlug), "sessions.db");
+  const dbPath = path.join(agentRoot(agentSlug), "sessions.db");
   const sqlite = new BetterSqlite3(dbPath);
 
   // WAL mode: better concurrent read performance and crash safety.
@@ -52,7 +52,7 @@ function initDb(agentSlug: string): Database {
     }
   }
 
-  _dbs.set(agentSlug, db);
+  databases.set(agentSlug, db);
   return db;
 }
 

@@ -1,7 +1,7 @@
 // oxlint-disable promise/no-multiple-resolved
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
-import { parse, isAbsolute, join, resolve as resolvePath, delimiter } from "node:path";
+import path from "node:path";
 
 import type { Mount, SandboxConfig } from "#config/schemas/sandbox.js";
 import { debug, warning } from "#output/log.js";
@@ -9,14 +9,14 @@ import { debug, warning } from "#output/log.js";
 import { root } from "./paths.js";
 
 function locate(command: string, pathEnvOverride?: string[]): string | undefined {
-  if (isAbsolute(command)) {
+  if (path.isAbsolute(command)) {
     return existsSync(command) ? command : undefined;
   }
 
-  const path = parse(command);
+  const pth = path.parse(command);
 
   // lgtm[js/path-traversal] - Linux-only (NixOS), forward slashes only
-  for (const segment of path.dir.split("/")) {
+  for (const segment of pth.dir.split("/")) {
     if (segment.length === 0) {
       continue;
     }
@@ -26,10 +26,10 @@ function locate(command: string, pathEnvOverride?: string[]): string | undefined
     }
   }
 
-  const pathEnv = pathEnvOverride ?? (process.env["PATH"] ?? "").split(delimiter);
+  const pathEnv = pathEnvOverride ?? (process.env["PATH"] ?? "").split(path.delimiter);
 
   for (const pathEntry of pathEnv) {
-    const joined = resolvePath(join(pathEntry, command));
+    const joined = path.resolve(path.join(pathEntry, command));
 
     if (existsSync(joined)) {
       return joined;
@@ -79,16 +79,16 @@ function buildCommonArgs(home: string, agentSlug: string): string[] {
     "--hostname",
     `${agentSlug}-sandbox`,
     "--bind",
-    join(home, ".cireilclaw", "agents", agentSlug, "workspace"),
+    path.join(home, ".cireilclaw", "agents", agentSlug, "workspace"),
     "/workspace",
     "--bind",
-    join(home, ".cireilclaw", "agents", agentSlug, "memories"),
+    path.join(home, ".cireilclaw", "agents", agentSlug, "memories"),
     "/memories",
     "--bind",
-    join(home, ".cireilclaw", "agents", agentSlug, "skills"),
+    path.join(home, ".cireilclaw", "agents", agentSlug, "skills"),
     "/skills",
     "--bind",
-    join(home, ".cireilclaw", "agents", agentSlug, "tasks"),
+    path.join(home, ".cireilclaw", "agents", agentSlug, "tasks"),
     "/tasks",
     "--size",
     String(TMPFS_SIZE_BYTES),
@@ -137,7 +137,7 @@ interface EnvParseError {
   hint?: string;
 }
 
-const ENV_VAR_PATTERN = /\$\{(\w+)(?::-([^}]*))?\}|\$(\w+)/g;
+const ENV_VAR_PATTERN = /\$\{(\w+)(?::-([^}]*))?\}|\$(\w+)/gu;
 
 class EnvResolutionError extends Error {
   public override name = "EnvResolutionError";
@@ -387,13 +387,13 @@ async function buildNixBindings(args: string[], binaries: string[]): Promise<boo
 
   const uniquePaths = new Set<string>();
   for (const [, data] of storePaths) {
-    for (const path of data.requisites) {
-      uniquePaths.add(path);
+    for (const pth of data.requisites) {
+      uniquePaths.add(pth);
     }
   }
 
-  for (const path of uniquePaths) {
-    args.push("--ro-bind", path, path);
+  for (const pth of uniquePaths) {
+    args.push("--ro-bind", pth, pth);
   }
 
   for (const [key, data] of storePaths) {
@@ -412,9 +412,9 @@ async function buildNixBindings(args: string[], binaries: string[]): Promise<boo
   if (envBinPath !== undefined) {
     const envResult = await queryNixStore(envBinPath);
     if (envResult.success) {
-      for (const path of envResult.requisites) {
-        if (!uniquePaths.has(path)) {
-          args.push("--ro-bind", path, path);
+      for (const pth of envResult.requisites) {
+        if (!uniquePaths.has(pth)) {
+          args.push("--ro-bind", pth, pth);
         }
       }
       args.push("--dir", "/usr");
@@ -494,7 +494,7 @@ async function buildBwrap(
     };
   }
 
-  if (!isAbsolute(home)) {
+  if (!path.isAbsolute(home)) {
     warning("$HOME is not an absolute path");
     return { message: "$HOME is not an absolute path", type: "error" };
   }
@@ -527,7 +527,7 @@ async function buildBwrap(
   addEtcBindings(args);
   addSslCertificates(args);
 
-  const envPath = join(root(), "agents", agentSlug, "workspace", ".env");
+  const envPath = path.join(root(), "agents", agentSlug, "workspace", ".env");
   const envResult = parseEnvFile(envPath);
 
   if (!Array.isArray(envResult)) {
@@ -656,7 +656,7 @@ async function runRaw(
   return captureExec(proc, timeout);
 }
 
-const SHELL_METACHAR_PATTERN = /[\s"'|&;$`\\]/;
+const SHELL_METACHAR_PATTERN = /[\s"'|&;$`\\]/u;
 
 async function exec(cfg: ExecConfig): Promise<ExecResult> {
   const { binaries, command, args, hostEnvPassthrough, timeout, agentSlug, devices, mounts } = cfg;
@@ -697,7 +697,7 @@ async function exec(cfg: ExecConfig): Promise<ExecResult> {
       };
     }
 
-    const envPath = join(root(), "agents", agentSlug, "workspace", ".env");
+    const envPath = path.join(root(), "agents", agentSlug, "workspace", ".env");
     const envResult = parseEnvFile(envPath);
 
     if (!Array.isArray(envResult)) {
