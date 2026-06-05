@@ -107,7 +107,7 @@ function setLogFile(filePth: string): void {
   }
   filePath = filePth;
   fd = openSync(filePth, "a");
-  // Seed _bytesWritten from any pre-existing file size so rotation triggers correctly.
+  // Seed bytesWritten from any pre-existing file size so rotation triggers correctly.
   try {
     bytesWritten = statSync(filePth).size;
   } catch {
