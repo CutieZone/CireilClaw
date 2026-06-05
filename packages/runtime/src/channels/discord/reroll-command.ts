@@ -78,59 +78,65 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
       return;
     }
 
-    const msgIndex = session.history.findIndex((entry) => entry.id === targetMsg.id);
-    if (msgIndex === -1) {
-      await interaction.createFollowup({
-        content: "Could not find this message in session history.",
-        flags: MessageFlags.EPHEMERAL,
-      });
-      return;
-    }
-
-    await targetMsg.delete("Reroll triggered by owner");
-
-    // Wipe this message and everything after from history
-    session.history.splice(msgIndex);
-    session.pendingToolMessages = [];
-    session.pendingVideos = [];
-
-    const lastUserMsg = session.history.findLast(
-      (entry) => entry.role === "user" && entry.id !== undefined,
-    );
-    session.lastMessageId = lastUserMsg?.id;
-
-    if (lastUserMsg === undefined) {
-      saveSession(ctx.agentSlug, session);
-      await interaction.createFollowup({
-        content: "No user message to reroll from. Message deleted.",
-        flags: MessageFlags.EPHEMERAL,
-      });
-      return;
-    }
-
-    session.stopRequested = false;
-
-    // Keep the channel alive while the turn runs
-    const channel = await runDiscordRestWithRetries(
-      "GET /channels/{id}",
-      async () => await ctx.client.rest.channels.get(interaction.channelID),
-    );
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const textChannel = channel as AnyTextableChannel;
-    await textChannel.sendTyping();
-
-    const typingInterval = setInterval(() => {
-      // oxlint-disable-next-line promise/prefer-await-to-then
-      textChannel.sendTyping().catch(() => {
-        // Intentionally ignored
-      });
-    }, TYPING_INTERVAL_MS);
-
     session.busy = true;
+    let typingInterval: ReturnType<typeof setInterval> | undefined = undefined;
     try {
+      const msgIndex = session.history.findIndex((entry) => entry.id === targetMsg.id);
+      if (msgIndex === -1) {
+        await interaction.createFollowup({
+          content: "Could not find this message in session history.",
+          flags: MessageFlags.EPHEMERAL,
+        });
+        return;
+      }
+
+      await targetMsg.delete("Reroll triggered by owner");
+
+      // Wipe this message and everything after from history
+      session.history.splice(msgIndex);
+      session.pendingToolMessages = [];
+      session.pendingVideos = [];
+
+      const lastUserMsg = session.history.findLast(
+        (entry) => entry.role === "user" && entry.id !== undefined,
+      );
+      session.lastMessageId = lastUserMsg?.id;
+
+      if (lastUserMsg === undefined) {
+        saveSession(ctx.agentSlug, session);
+        await interaction.createFollowup({
+          content: "No user message to reroll from. Message deleted.",
+          flags: MessageFlags.EPHEMERAL,
+        });
+        return;
+      }
+
+      session.stopRequested = false;
+
+      // Best-effort typing indicator — don't let failures abort the reroll
+      try {
+        const channel = await runDiscordRestWithRetries(
+          "GET /channels/{id}",
+          async () => await ctx.client.rest.channels.get(interaction.channelID),
+        );
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        const textChannel = channel as AnyTextableChannel;
+        await textChannel.sendTyping();
+        typingInterval = setInterval(() => {
+          // oxlint-disable-next-line promise/prefer-await-to-then
+          textChannel.sendTyping().catch(() => {
+            // Intentionally ignored
+          });
+        }, TYPING_INTERVAL_MS);
+      } catch {
+        // Typing setup failed — proceed without it
+      }
+
       await agent.runTurn(session);
     } finally {
-      clearInterval(typingInterval);
+      if (typingInterval !== undefined) {
+        clearInterval(typingInterval);
+      }
       session.busy = false;
       saveSession(ctx.agentSlug, session);
     }
