@@ -66,6 +66,14 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
       return;
     }
 
+    if (session.busy) {
+      await interaction.createFollowup({
+        content: "A generation is in progress. Try again when it finishes.",
+        flags: MessageFlags.EPHEMERAL,
+      });
+      return;
+    }
+
     await targetMsg.delete("Deleted by owner");
 
     const msgIndex = session.history.findIndex((entry) => entry.id === targetMsg.id);
