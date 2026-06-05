@@ -101,6 +101,7 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
         session.historyCursor = Math.max(0, session.history.length - 1);
       }
       session.pendingToolMessages = [];
+      session.pendingImages = [];
       session.pendingVideos = [];
 
       const lastUserMsg = session.history.findLast(
