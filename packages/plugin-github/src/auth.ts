@@ -1,4 +1,5 @@
 import { createPrivateKey, sign } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 import type { PluginToolContext } from "@cireilclaw/sdk";
 import { ToolError } from "@cireilclaw/sdk";
@@ -16,7 +17,22 @@ function b64url(obj: unknown): string {
   return Buffer.from(JSON.stringify(obj)).toString("base64url");
 }
 
-function generateJWT(appId: string, pem: string): string {
+function resolvePrivateKey(keyOrPath: string): string {
+  if (keyOrPath.startsWith("-----BEGIN ")) {
+    return keyOrPath;
+  }
+
+  try {
+    return readFileSync(keyOrPath, "utf8");
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new ToolError(
+      `GitHub plugin privateKey is not PEM and could not be read as file path: ${message}`,
+    );
+  }
+}
+
+function generateJWT(appId: string, keyOrPath: string): string {
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: "RS256" as const, typ: "JWT" };
   const payload = {
@@ -26,8 +42,9 @@ function generateJWT(appId: string, pem: string): string {
   };
 
   const signingInput = `${b64url(header)}.${b64url(payload)}`;
+  const pem = resolvePrivateKey(keyOrPath);
   const key = createPrivateKey(pem);
-  const signature = sign(undefined, Buffer.from(signingInput), key);
+  const signature = sign("sha256", Buffer.from(signingInput), key);
 
   return `${signingInput}.${signature.toString("base64url")}`;
 }
