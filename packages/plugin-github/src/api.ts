@@ -35,8 +35,9 @@ async function ghParse<TData>(
   method: string,
   path: string,
   body?: unknown,
+  extraHeaders?: Record<string, string>,
 ): Promise<TData> {
-  const response = await gh(ctx, method, path, body);
+  const response = await gh(ctx, method, path, body, extraHeaders);
 
   if (!response.ok) {
     const text = await response.text();
