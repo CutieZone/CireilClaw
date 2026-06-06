@@ -372,11 +372,14 @@ class PluginProcess {
     this.rpc.handle("crypto.loadNormalizedKey", async (args) => {
       const [invocationId, opts] = args;
       const ctx = this.requireCtx(invocationId);
-      const raw = opts as { path?: string; data?: string };
+      const raw = opts as { path?: string; data?: string; kind?: string };
 
       let rawKey = "";
       if (typeof raw.path === "string") {
-        const realPath = sandboxToReal(raw.path, ctx.agentSlug, ctx.mounts);
+        const realPath =
+          raw.kind === "host"
+            ? path.normalize(raw.path)
+            : sandboxToReal(raw.path, ctx.agentSlug, ctx.mounts);
         if (ctx.conditions !== undefined) {
           checkConditionalAccess(raw.path, ctx.agentSlug, ctx.conditions, ctx.session);
         }

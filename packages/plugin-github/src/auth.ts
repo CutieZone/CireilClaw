@@ -32,7 +32,7 @@ async function generateJWT(
   // Normalize the key via the runtime (handles PKCS#1 → PKCS#8 auto-detection).
   const trimmed = keyOrPath.trim();
   const normalized = await ctx.crypto.loadNormalizedKey(
-    trimmed.startsWith("-----BEGIN ") ? { data: trimmed } : { path: trimmed },
+    trimmed.startsWith("-----BEGIN ") ? { data: trimmed } : { kind: "host", path: trimmed },
   );
 
   // Decode PEM to DER for Web Crypto import.

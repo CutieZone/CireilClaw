@@ -87,13 +87,18 @@ interface PluginToolContext {
     /**
      * Normalize a PEM/DER key to a Web-Crypto-compatible format.
      *
-     * Accepts a sandbox path (read via ctx.fs) or an inline data string.
+     * Accepts a sandbox path (read via ctx.fs), an inline data string,
+     * or an absolute host path (when `kind: "host"`).
      * Returns the key in PKCS#8 (private) or SPKI (public) PEM format,
      * auto-detecting the input format (PKCS#1, PKCS#8, SEC1, SPKI…).
+     *
+     * - `{ path: "/workspace/config/key.pem" }` — sandbox-relative path (default)
+     * - `{ path: "/home/user/.config/key.pem", kind: "host" }` — absolute host path
+     * - `{ data: "-----BEGIN ..." }` — inline PEM data
      */
     loadNormalizedKey(
       this: void,
-      opts: { path: string } | { data: string },
+      opts: { path: string; kind?: "sandbox" | "host" } | { data: string },
     ): Promise<WebCryptoFormat>;
   };
   // Plugins should use ctx.net.fetch instead of the global fetch. This is the mediation point
