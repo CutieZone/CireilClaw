@@ -185,6 +185,15 @@ interface PluginToolContext {
     agentPlugin(name: string): Promise<Record<string, unknown> | undefined>;
   };
   createKeyPool(keys: string | string[], cooldownMs?: number): KeyPool;
+  crypto: {
+    loadNormalizedKey(opts: { path: string } | { data: string }): Promise<WebCryptoFormat>;
+  };
+  fs: {
+    readTextFile(sandboxPath: string): Promise<string>;
+    writeTextFile(sandboxPath: string, content: string): Promise<void>;
+    stat(sandboxPath: string): Promise<FsStat>;
+    listDir(sandboxPath: string): Promise<FsDirent[]>;
+  };
   net: { fetch: typeof fetch };
   mounts?: readonly Mount[];
   addImage(data: Uint8Array, mediaType: string): void;
@@ -206,6 +215,7 @@ Notes:
 - `paths.resolve` converts a sandbox path (e.g. `/workspace/file.txt`) to the real filesystem path, applying mount mappings. Use this when you need to interact with files outside the RPC boundary.
 - `paths.checkWriteAccess` validates whether a sandbox path is writable under the current mount configuration. Throws if the path is read-only or outside allowed mounts.
 - `paths.checkConditionalAccess` validates whether a sandbox path is accessible in the current session context according to `conditions.toml` rules. Throws if access is denied. No-op when no conditions are configured.
+- `crypto.loadNormalizedKey` normalizes a key (PEM or DER, given as inline data or a sandbox path) to a Web-Crypto-compatible PKCS#8 private key or SPKI public key. It auto-detects PKCS#1, SEC1, and other legacy formats. Useful before calling `crypto.subtle.importKey` in plugins that need JWT signing or cryptographic operations.
 
 ## SDK Exports
 
@@ -218,6 +228,7 @@ From `@cireilclaw/sdk`:
 - `KeyPool`, `KeyPoolManager`: API key rotation with cooldown.
 - `ToolError`: semantic tool-failure exception.
 - `toWebp`, `toJpeg`, `scaleForAnthropic`: image helpers for vision-capable agents.
+- `pemToDer`, `base64urlEncode`, `base64urlDecode`: PEM-to-DER and base64url encoding utilities.
 - `vb`: reexport of `valibot`, so you don't need a separate dependency.
 
 ## Worker Isolation: What It Gives You, What It Doesn't
