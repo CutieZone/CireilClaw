@@ -1,8 +1,5 @@
-import { createPrivateKey, sign } from "node:crypto";
-import { readFileSync } from "node:fs";
-
+import { pemToDer, base64urlEncode, ToolError } from "@cireilclaw/sdk";
 import type { PluginToolContext } from "@cireilclaw/sdk";
-import { ToolError } from "@cireilclaw/sdk";
 
 import { loadConfig } from "./config.js";
 
@@ -13,28 +10,11 @@ interface TokenEntry {
 
 let cachedToken: TokenEntry | undefined = undefined;
 
-function b64url(obj: unknown): string {
-  return Buffer.from(JSON.stringify(obj)).toString("base64url");
-}
-
-function resolvePrivateKey(keyOrPath: string): string {
-  const trimmed = keyOrPath.trim();
-
-  if (trimmed.startsWith("-----BEGIN ")) {
-    return trimmed;
-  }
-
-  try {
-    return readFileSync(trimmed, "utf8");
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new ToolError(
-      `GitHub plugin privateKey is not PEM and could not be read as file path: ${message}`,
-    );
-  }
-}
-
-function generateJWT(appId: string, keyOrPath: string): string {
+async function generateJWT(
+  appId: string,
+  keyOrPath: string,
+  ctx: PluginToolContext,
+): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: "RS256" as const, typ: "JWT" };
   const payload = {
@@ -43,12 +23,40 @@ function generateJWT(appId: string, keyOrPath: string): string {
     iss: appId,
   };
 
-  const signingInput = `${b64url(header)}.${b64url(payload)}`;
-  const pem = resolvePrivateKey(keyOrPath);
-  const key = createPrivateKey(pem);
-  const signature = sign("sha256", Buffer.from(signingInput), key);
+  const encoder = new TextEncoder();
+  const signingInput = [
+    base64urlEncode(encoder.encode(JSON.stringify(header))),
+    base64urlEncode(encoder.encode(JSON.stringify(payload))),
+  ].join(".");
 
-  return `${signingInput}.${signature.toString("base64url")}`;
+  // Normalize the key via the runtime (handles PKCS#1 → PKCS#8 auto-detection).
+  const trimmed = keyOrPath.trim();
+  const normalized = await ctx.crypto.loadNormalizedKey(
+    trimmed.startsWith("-----BEGIN ") ? { data: trimmed } : { path: trimmed },
+  );
+
+  // Decode PEM to DER for Web Crypto import.
+  const keyDer = pemToDer(normalized.data);
+
+  // loadNormalizedKey returns "pkcs8" for private keys; signing requires private key.
+  if (normalized.format !== "pkcs8") {
+    throw new ToolError("GitHub plugin private key must be a private key");
+  }
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    keyDer as Uint8Array<ArrayBuffer>, // oxlint-disable-line typescript/no-unsafe-type-assertion
+    { hash: "SHA-256", name: "RSASSA-PKCS1-v1_5" },
+    false,
+    ["sign"],
+  );
+
+  const signature = await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5",
+    key,
+    encoder.encode(signingInput),
+  );
+
+  return `${signingInput}.${base64urlEncode(new Uint8Array(signature))}`;
 }
 
 export async function getInstallationToken(ctx: PluginToolContext): Promise<string> {
@@ -58,7 +66,7 @@ export async function getInstallationToken(ctx: PluginToolContext): Promise<stri
   }
 
   const config = await loadConfig(ctx);
-  const jwt = generateJWT(config.appId, config.privateKey);
+  const jwt = await generateJWT(config.appId, config.privateKey, ctx);
 
   const response = await ctx.net.fetch(
     `https://api.github.com/app/installations/${config.installationId}/access_tokens`,
