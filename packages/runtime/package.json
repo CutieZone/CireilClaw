@@ -17,9 +17,9 @@
     "@cireilclaw/sdk": "workspace:*",
     "@inquirer/prompts": "^8.5.2",
     "@noble/hashes": "^2.2.0",
-    "@stricli/core": "^1.2.6",
-    "@valibot/to-json-schema": "^1.6.0",
-    "better-sqlite3": "^12.9.0",
+    "@stricli/core": "^1.2.7",
+    "@valibot/to-json-schema": "^1.7.0",
+    "better-sqlite3": "^12.10.0",
     "chalk": "^5.6.2",
     "croner": "^10.0.1",
     "drizzle-orm": "1.0.0-beta.20",
@@ -34,12 +34,12 @@
     "sharp": "^0.34.5",
     "smol-toml": "^1.6.1",
     "valibot": "^1.4.1",
-    "yaml": "^2.8.3"
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/heic-decode": "^2.0.0",
-    "@types/node": "^25.6.0",
+    "@types/node": "^25.9.1",
     "@types/react": "^19.2.16",
     "drizzle-kit": "1.0.0-beta.20",
     "node-addon-api": "^8.8.0",

@@ -29,7 +29,7 @@
   },
   "devDependencies": {
     "@cireilclaw/sdk": "workspace:*",
-    "tsdown": "^0.22.1",
+    "tsdown": "^0.22.2",
     "typescript": "^6.0.3"
   },
   "peerDependencies": {
