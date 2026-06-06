@@ -83,18 +83,19 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
     session.busy = true;
     let typingInterval: ReturnType<typeof setInterval> | undefined = undefined;
     try {
+      // Always try to delete from Discord — ownership & permission already verified
+      await targetMsg.delete("Reroll triggered by owner");
+
       const msgIndex = session.history.findIndex(
         (entry) => entry.id === targetMsg.id || (entry.messageIds?.includes(targetMsg.id) ?? false),
       );
       if (msgIndex === -1) {
         await interaction.createFollowup({
-          content: "Could not find this message in session history.",
+          content: "Session was reset — cannot reroll without history context. Message deleted.",
           flags: MessageFlags.EPHEMERAL,
         });
         return;
       }
-
-      await targetMsg.delete("Reroll triggered by owner");
 
       // Wipe this message and everything after from history
       session.history.splice(msgIndex);
