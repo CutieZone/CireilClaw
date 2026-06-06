@@ -149,6 +149,30 @@ function buildCtx(rpc: RpcChannel, invocationId: string, data: CtxData): PluginT
     // to the runtime. Fine as long as each plugin owns its keys. If two plugins share a
     // key, failure tracking is per-worker and will drift.
     createKeyPool: (keys, cooldownMs): KeyPool => KeyPoolManager.getPool(keys, cooldownMs),
+    crypto: {
+      loadNormalizedKey: async (opts): Promise<{ format: "pkcs8" | "spki"; data: string }> =>
+        await rpc.call("crypto.loadNormalizedKey", [invocationId, opts]),
+    },
+    fs: {
+      listDir: async (
+        sandboxPath,
+      ): Promise<{ name: string; isDirectory: boolean; isFile: boolean }[]> =>
+        await rpc.call("fs.listDir", [invocationId, sandboxPath]),
+      readTextFile: async (sandboxPath): Promise<string> =>
+        await rpc.call("fs.readTextFile", [invocationId, sandboxPath]),
+      stat: async (
+        sandboxPath,
+      ): Promise<{
+        ctimeMs: number;
+        isDirectory: boolean;
+        isFile: boolean;
+        mtimeMs: number;
+        size: number;
+      }> => await rpc.call("fs.stat", [invocationId, sandboxPath]),
+      writeTextFile: async (sandboxPath, content): Promise<void> => {
+        await rpc.call("fs.writeTextFile", [invocationId, sandboxPath, content]);
+      },
+    },
     mounts: data.mounts,
     net: {
       fetch: globalThis.fetch.bind(globalThis),

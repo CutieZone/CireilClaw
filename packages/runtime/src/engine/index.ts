@@ -1,3 +1,7 @@
+import { createPrivateKey, createPublicKey } from "node:crypto";
+import { readFile, writeFile, mkdir, stat, readdir } from "node:fs/promises";
+import path from "node:path";
+
 import { KeyPoolManager } from "@cireilclaw/sdk";
 import * as vb from "valibot";
 
@@ -154,7 +158,93 @@ export async function runTurn(
     },
     conditions,
     createKeyPool: (keys, cooldownMs) => KeyPoolManager.getPool(keys, cooldownMs),
+    crypto: {
+      loadNormalizedKey: async (
+        opts: { path: string } | { data: string },
+      ): Promise<{ format: "pkcs8" | "spki"; data: string }> => {
+        let rawKey = "";
+        if ("path" in opts) {
+          const realPath = sandboxToReal(opts.path, agentSlug, sandboxConfig.mounts);
+          if (conditions !== undefined) {
+            checkConditionalAccess(opts.path, agentSlug, conditions, session);
+          }
+          rawKey = await readFile(realPath, "utf8");
+        } else {
+          rawKey = opts.data;
+        }
+
+        try {
+          const privateKey = createPrivateKey(rawKey);
+          return {
+            data: privateKey.export({ format: "pem", type: "pkcs8" }),
+            format: "pkcs8",
+          };
+        } catch {
+          // Not a private key.
+        }
+
+        const publicKey = createPublicKey(rawKey);
+        return {
+          data: publicKey.export({ format: "pem", type: "spki" }),
+          format: "spki",
+        };
+      },
+    },
     db: getDb(agentSlug),
+    fs: {
+      listDir: async (
+        sandboxPath: string,
+      ): Promise<{ name: string; isDirectory: boolean; isFile: boolean }[]> => {
+        const realPath = sandboxToReal(sandboxPath, agentSlug, sandboxConfig.mounts);
+        if (conditions !== undefined) {
+          checkConditionalAccess(sandboxPath, agentSlug, conditions, session);
+        }
+        const entries = await readdir(realPath, { withFileTypes: true });
+        return entries.map((entry) => ({
+          isDirectory: entry.isDirectory(),
+          isFile: entry.isFile(),
+          name: entry.name,
+        }));
+      },
+      readTextFile: async (sandboxPath: string): Promise<string> => {
+        const realPath = sandboxToReal(sandboxPath, agentSlug, sandboxConfig.mounts);
+        if (conditions !== undefined) {
+          checkConditionalAccess(sandboxPath, agentSlug, conditions, session);
+        }
+        return await readFile(realPath, "utf8");
+      },
+      stat: async (
+        sandboxPath: string,
+      ): Promise<{
+        ctimeMs: number;
+        isDirectory: boolean;
+        isFile: boolean;
+        mtimeMs: number;
+        size: number;
+      }> => {
+        const realPath = sandboxToReal(sandboxPath, agentSlug, sandboxConfig.mounts);
+        if (conditions !== undefined) {
+          checkConditionalAccess(sandboxPath, agentSlug, conditions, session);
+        }
+        const stats = await stat(realPath);
+        return {
+          ctimeMs: stats.ctimeMs,
+          isDirectory: stats.isDirectory(),
+          isFile: stats.isFile(),
+          mtimeMs: stats.mtimeMs,
+          size: stats.size,
+        };
+      },
+      writeTextFile: async (sandboxPath: string, content: string): Promise<void> => {
+        const realPath = sandboxToReal(sandboxPath, agentSlug, sandboxConfig.mounts);
+        checkMountWriteAccess(sandboxPath, sandboxConfig.mounts);
+        if (conditions !== undefined) {
+          checkConditionalAccess(sandboxPath, agentSlug, conditions, session);
+        }
+        await mkdir(path.dirname(realPath), { recursive: true });
+        await writeFile(realPath, content, "utf8");
+      },
+    },
     mounts: sandboxConfig.mounts,
     net: {
       fetch: globalThis.fetch.bind(globalThis),

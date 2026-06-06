@@ -1,8 +1,9 @@
 /* oxlint-disable typescript/no-unsafe-type-assertion, typescript/promise-function-async
    -- RPC boundary: args arrive as unknown[] and are coerced via trust contract with worker.ts */
 
+import { createPrivateKey, createPublicKey } from "node:crypto";
 import { existsSync, realpathSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -316,6 +317,92 @@ class PluginProcess {
         checkConditionalAccess(sandboxPath as string, ctx.agentSlug, ctx.conditions, ctx.session);
       }
       return Promise.resolve(undefined);
+    });
+    this.rpc.handle("fs.readTextFile", async (args) => {
+      const [invocationId, sandboxPath] = args;
+      const ctx = this.requireCtx(invocationId);
+      const realPath = sandboxToReal(sandboxPath as string, ctx.agentSlug, ctx.mounts);
+      if (ctx.conditions !== undefined) {
+        checkConditionalAccess(sandboxPath as string, ctx.agentSlug, ctx.conditions, ctx.session);
+      }
+      return await readFile(realPath, "utf8");
+    });
+    this.rpc.handle("fs.writeTextFile", async (args) => {
+      const [invocationId, sandboxPath, content] = args;
+      const ctx = this.requireCtx(invocationId);
+      const realPath = sandboxToReal(sandboxPath as string, ctx.agentSlug, ctx.mounts);
+      checkMountWriteAccess(sandboxPath as string, ctx.mounts ?? []);
+      if (ctx.conditions !== undefined) {
+        checkConditionalAccess(sandboxPath as string, ctx.agentSlug, ctx.conditions, ctx.session);
+      }
+      await mkdir(path.dirname(realPath), { recursive: true });
+      await writeFile(realPath, content as string, "utf8");
+      return undefined;
+    });
+    this.rpc.handle("fs.stat", async (args) => {
+      const [invocationId, sandboxPath] = args;
+      const ctx = this.requireCtx(invocationId);
+      const realPath = sandboxToReal(sandboxPath as string, ctx.agentSlug, ctx.mounts);
+      if (ctx.conditions !== undefined) {
+        checkConditionalAccess(sandboxPath as string, ctx.agentSlug, ctx.conditions, ctx.session);
+      }
+      const stats = await stat(realPath);
+      return {
+        ctimeMs: stats.ctimeMs,
+        isDirectory: stats.isDirectory(),
+        isFile: stats.isFile(),
+        mtimeMs: stats.mtimeMs,
+        size: stats.size,
+      };
+    });
+    this.rpc.handle("fs.listDir", async (args) => {
+      const [invocationId, sandboxPath] = args;
+      const ctx = this.requireCtx(invocationId);
+      const realPath = sandboxToReal(sandboxPath as string, ctx.agentSlug, ctx.mounts);
+      if (ctx.conditions !== undefined) {
+        checkConditionalAccess(sandboxPath as string, ctx.agentSlug, ctx.conditions, ctx.session);
+      }
+      const entries = await readdir(realPath, { withFileTypes: true });
+      return entries.map((entry) => ({
+        isDirectory: entry.isDirectory(),
+        isFile: entry.isFile(),
+        name: entry.name,
+      }));
+    });
+    this.rpc.handle("crypto.loadNormalizedKey", async (args) => {
+      const [invocationId, opts] = args;
+      const ctx = this.requireCtx(invocationId);
+      const raw = opts as { path?: string; data?: string };
+
+      let rawKey = "";
+      if (typeof raw.path === "string") {
+        const realPath = sandboxToReal(raw.path, ctx.agentSlug, ctx.mounts);
+        if (ctx.conditions !== undefined) {
+          checkConditionalAccess(raw.path, ctx.agentSlug, ctx.conditions, ctx.session);
+        }
+        rawKey = await readFile(realPath, "utf8");
+      } else if (typeof raw.data === "string") {
+        rawKey = raw.data;
+      } else {
+        throw new TypeError("crypto.loadNormalizedKey requires either `path` or `data`");
+      }
+
+      // Try as private key (auto-detects PKCS#1, PKCS#8, SEC1).
+      try {
+        const key = createPrivateKey(rawKey);
+        return {
+          data: key.export({ format: "pem", type: "pkcs8" }),
+          format: "pkcs8",
+        };
+      } catch {
+        // Not a private key.
+      }
+
+      const pubKey = createPublicKey(rawKey);
+      return {
+        data: pubKey.export({ format: "pem", type: "spki" }),
+        format: "spki",
+      };
     });
   }
 }
