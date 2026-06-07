@@ -273,6 +273,24 @@ function translateMsg(message: Message): ChatCompletionMessageParam {
           role: "assistant",
         } as unknown as ChatCompletionMessageParam;
       }
+      if (message.content.type === "toolCall") {
+        // Single toolCall block (normalized by history-validate from an array of 1).
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        return {
+          role: "assistant",
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+          tool_calls: [
+            {
+              function: {
+                arguments: JSON.stringify(message.content.input),
+                name: message.content.name,
+              },
+              id: message.content.id,
+              type: "function",
+            },
+          ] as unknown as ChatCompletionMessageToolCall[],
+        } as unknown as ChatCompletionMessageParam;
+      }
       throw new Error(
         `Invalid translation: cannot convert ${message.content.type} into an OAI-compatible format`,
       );
