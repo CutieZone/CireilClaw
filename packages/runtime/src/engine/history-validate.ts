@@ -1,6 +1,5 @@
+import type { ToolCallContent } from "#engine/content.js";
 import type { Message } from "#engine/message.js";
-
-import type { ToolCallContent } from "./content.js";
 
 /**
  * Extract tool_call IDs from an assistant message.
