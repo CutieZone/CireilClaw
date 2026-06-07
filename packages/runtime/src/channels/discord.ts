@@ -41,6 +41,7 @@ import { sendDiscordWarningMessage } from "#channels/discord/warning-message.js"
 import { loadChannel, loadEngine } from "#config/index.js";
 import { saveSession } from "#db/sessions.js";
 import type { ImageContent, TextContent, VideoContent } from "#engine/content.js";
+import { cascadeRemoveToolResponses, getToolCallIds } from "#engine/history-validate.js";
 import type { Message } from "#engine/message.js";
 import type { ChannelHandler } from "#harness/channel-handler.js";
 import type { Harness } from "#harness/index.js";
@@ -1041,7 +1042,17 @@ async function handleMessageDelete(ctx: HandlerCtx, msg: PossiblyUncachedMessage
       return;
     }
 
+    const deletedMsg = session.history[entryIndex];
+    if (deletedMsg === undefined) {
+      return;
+    }
     session.history.splice(entryIndex, 1);
+    const toolCallIds = getToolCallIds(deletedMsg);
+    const cascaded = cascadeRemoveToolResponses(session.history, toolCallIds, entryIndex);
+    const totalRemoved = 1 + cascaded;
+    if (session.historyCursor > entryIndex) {
+      session.historyCursor = Math.max(entryIndex, session.historyCursor - totalRemoved);
+    }
 
     if (session.lastMessageId === msg.id) {
       const lastUserMsg = session.history.findLast((historyMsg) => historyMsg.id !== undefined);

@@ -7,6 +7,7 @@ import { ApplicationCommandTypes, MessageFlags } from "oceanic.js";
 
 import type { HandlerCtx } from "#channels/discord/handler-ctx.js";
 import { saveSession } from "#db/sessions.js";
+import { cascadeRemoveToolResponses, getToolCallIds } from "#engine/history-validate.js";
 import { DiscordSession } from "#harness/session.js";
 import { sanitizeError } from "#util/paths.js";
 
@@ -85,10 +86,17 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
         (entry) => entry.id === targetMsg.id || (entry.messageIds?.includes(targetMsg.id) ?? false),
       );
       if (msgIndex !== -1) {
-        if (session.historyCursor > msgIndex) {
-          session.historyCursor--;
+        const deletedMsg = session.history[msgIndex];
+        if (deletedMsg === undefined) {
+          return;
         }
+        const toolCallIds = getToolCallIds(deletedMsg);
         session.history.splice(msgIndex, 1);
+        const cascaded = cascadeRemoveToolResponses(session.history, toolCallIds, msgIndex);
+        const totalRemoved = 1 + cascaded;
+        if (session.historyCursor > msgIndex) {
+          session.historyCursor = Math.max(msgIndex, session.historyCursor - totalRemoved);
+        }
         session.lastMessageId = session.history.findLast((entry) => entry.id !== undefined)?.id;
       }
       saveSession(ctx.agentSlug, session);

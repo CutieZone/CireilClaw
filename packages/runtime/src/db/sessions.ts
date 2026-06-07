@@ -10,6 +10,7 @@ import { getDb } from "#db/index.js";
 import { images, sessions, summaries as summariesTable } from "#db/schema.js";
 import type { Content, ImageContent, ImageRef, VideoContent, VideoRef } from "#engine/content.js";
 import { isImageRef, isVideoContent, isVideoRef } from "#engine/content.js";
+import { validateHistory } from "#engine/history-validate.js";
 import { isMessage } from "#engine/message.js";
 import type { AssistantContent, Message, UserContent } from "#engine/message.js";
 import type { Session, Summary } from "#harness/session.js";
@@ -82,8 +83,9 @@ function serializeHistory(
   }
 
   const persistable = history.filter((msg) => !("persist" in msg && msg.persist === false));
+  const validated = validateHistory(persistable);
 
-  const serialized = persistable.map((msg) => ({
+  const serialized = validated.map((msg) => ({
     ...msg,
     content: Array.isArray(msg.content)
       ? msg.content.map(serializeContent)
@@ -205,7 +207,7 @@ async function deserializeHistory(json: string, agentSlug: string): Promise<Mess
     }
   }
 
-  return messages;
+  return validateHistory(messages);
 }
 
 const LastContextWarningCursorSchema = vb.pipe(vb.number(), vb.integer(), vb.minValue(0));
