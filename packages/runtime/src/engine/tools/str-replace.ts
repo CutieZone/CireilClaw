@@ -5,6 +5,7 @@ import * as vb from "valibot";
 
 import { ToolError } from "#engine/errors.js";
 import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
+import { requiresFrontmatter, splitFrontmatter } from "#util/frontmatter.js";
 
 const Schema = vb.strictObject({
   new_text: vb.pipe(
@@ -32,8 +33,9 @@ export const strReplace: ToolDef = {
   description:
     "Find and replace exactly one occurrence of a literal string in an existing file.\n\n" +
     "`old_text` must be non-empty; `new_text` may be empty to delete. The match is exact — whitespace, indentation, and newlines all matter. On success, returns a few lines of context around the replacement.\n\n" +
+    "For files under /blocks/ and /skills/, search happens within the body only — the required frontmatter is transparently preserved and never matched or modified.\n\n" +
     "Error conditions:\n" +
-    "- `old_text` not found in the file → include more surrounding context to verify your match.\n" +
+    "- `old_text` not found in the body → include more surrounding context to verify your match.\n" +
     "- `old_text` found more than once → include additional surrounding lines to disambiguate.\n\n" +
     "Tip: Use `read` or `open-file` first to see the current file contents and craft an accurate match.\n\n" +
     "When NOT to use:\n" +
@@ -57,14 +59,29 @@ export const strReplace: ToolDef = {
 
     const content = await readFile(path, "utf8");
 
-    if (!content.includes(data.old_text)) {
+    // For files with required frontmatter (blocks, skills), extract the frontmatter
+    // and search/replace within the body only. The frontmatter is transparently
+    // preserved so the agent never accidentally corrupts it.
+    let searchContent = content;
+    let frontmatter: string | undefined = undefined;
+
+    if (requiresFrontmatter(data.path)) {
+      const split = splitFrontmatter(content, data.path.startsWith("/blocks/"));
+      if (split !== undefined) {
+        // oxlint-disable-next-line prefer-destructuring
+        frontmatter = split.frontmatter;
+        searchContent = split.body;
+      }
+    }
+
+    if (!searchContent.includes(data.old_text)) {
       throw new ToolError(`File does not contain old_text`);
     }
 
     let instances = 0;
     let idx: number | undefined = undefined;
 
-    while ((idx = content.indexOf(data.old_text, idx)) !== -1) {
+    while ((idx = searchContent.indexOf(data.old_text, idx)) !== -1) {
       instances++;
       idx += data.old_text.length;
     }
@@ -76,13 +93,19 @@ export const strReplace: ToolDef = {
       );
     }
 
-    const newContent = content.replace(data.old_text, () => data.new_text);
+    const newContent =
+      frontmatter === undefined
+        ? content.replace(data.old_text, () => data.new_text)
+        : frontmatter + searchContent.replace(data.old_text, () => data.new_text);
     await writeFile(path, newContent, "utf8");
 
     // Invalidate section cache — file content changed
     ctx.session.activeFileSections.delete(data.path);
 
-    const oldTextPos = content.indexOf(data.old_text);
+    const oldTextPos =
+      frontmatter === undefined
+        ? content.indexOf(data.old_text)
+        : frontmatter.length + searchContent.indexOf(data.old_text);
     const lineIndex = newContent.slice(0, oldTextPos).split("\n").length;
     const contextLines = 2;
     const newLines = newContent.split("\n");

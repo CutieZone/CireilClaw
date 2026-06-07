@@ -1,9 +1,11 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import * as vb from "valibot";
 
 import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
+import { requiresFrontmatter, splitFrontmatter } from "#util/frontmatter.js";
 
 const Schema = vb.strictObject({
   content: vb.pipe(
@@ -36,6 +38,7 @@ export const write: ToolDef = {
     "Constraints:\n" +
     "- Files under /blocks/ must have a .md extension.\n" +
     "- Allowed path roots: /workspace/, /memories/, /blocks/, /skills/.\n" +
+    "- For existing files under /blocks/ and /skills/, the existing frontmatter is auto-preserved when the provided content does not include frontmatter.\n" +
     "Note that paths used here *must* be absolute.\n\n" +
     "When to use:\n" +
     "- Creating new files from scratch.\n" +
@@ -49,8 +52,25 @@ export const write: ToolDef = {
     await ctx.paths.checkConditionalAccess(data.path);
     await ctx.paths.checkWriteAccess(data.path);
 
+    let { content } = data;
+
+    // When overwriting an existing block/skill file that requires frontmatter,
+    // preserve the existing frontmatter if the new content doesn't include it.
+    if (requiresFrontmatter(data.path) && existsSync(realPath)) {
+      const existing = await readFile(realPath, "utf8");
+      const isBlock = data.path.startsWith("/blocks/");
+      const split = splitFrontmatter(existing, isBlock);
+      if (split !== undefined) {
+        const { frontmatter } = split;
+        const delim = isBlock ? "+++" : "---";
+        if (!data.content.startsWith(delim)) {
+          content = frontmatter + data.content;
+        }
+      }
+    }
+
     await mkdir(path.dirname(realPath), { recursive: true });
-    await writeFile(realPath, data.content, "utf8");
+    await writeFile(realPath, content, "utf8");
 
     // Invalidate section cache — file content changed
     ctx.session.activeFileSections.delete(data.path);
