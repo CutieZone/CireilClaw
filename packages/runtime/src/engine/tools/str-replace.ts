@@ -5,7 +5,7 @@ import * as vb from "valibot";
 
 import { ToolError } from "#engine/errors.js";
 import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
-import { requiresFrontmatter, splitFrontmatter } from "#util/frontmatter.js";
+import { requiresFrontmatter, splitFrontmatter, validateFrontmatter } from "#util/frontmatter.js";
 
 const Schema = vb.strictObject({
   new_text: vb.pipe(
@@ -68,9 +68,7 @@ export const strReplace: ToolDef = {
     if (requiresFrontmatter(data.path)) {
       const split = splitFrontmatter(content, data.path.startsWith("/blocks/"));
       if (split !== undefined) {
-        // oxlint-disable-next-line prefer-destructuring
-        frontmatter = split.frontmatter;
-        searchContent = split.body;
+        ({ frontmatter, body: searchContent } = split);
       }
     }
 
@@ -97,6 +95,13 @@ export const strReplace: ToolDef = {
       frontmatter === undefined
         ? content.replace(data.old_text, () => data.new_text)
         : frontmatter + searchContent.replace(data.old_text, () => data.new_text);
+
+    // Validate preserved frontmatter before writing — catches pre-existing
+    // corruption so the agent gets immediate feedback instead of a load failure later.
+    if (frontmatter !== undefined) {
+      validateFrontmatter(frontmatter, data.path.startsWith("/blocks/"));
+    }
+
     await writeFile(path, newContent, "utf8");
 
     // Invalidate section cache — file content changed

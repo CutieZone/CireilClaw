@@ -11,11 +11,8 @@ import type { MemoryBlock } from "#engine/block.js";
 import type { Session } from "#harness/session.js";
 import colors from "#output/colors.js";
 import { getMatchingBlockNames } from "#util/conditions.js";
+import { BlockFrontmatterSchema, SkillFrontmatterSchema } from "#util/frontmatter.js";
 import { root } from "#util/paths.js";
-
-const BlockFrontmatterSchema = vb.object({
-  description: vb.string(),
-});
 
 type Frontmatter = Omit<MemoryBlock, "content" | "label" | "metadata" | "filePath">;
 
@@ -119,11 +116,6 @@ interface Skill {
   description: string;
 }
 
-const FrontmatterSchema = vb.object({
-  description: vb.pipe(vb.string(), vb.nonEmpty()),
-  name: vb.pipe(vb.string(), vb.nonEmpty()),
-});
-
 async function loadSkills(agentSlug: string): Promise<Skill[]> {
   const skillsPath = path.join(root(), "agents", agentSlug, "skills");
 
@@ -162,7 +154,7 @@ async function loadSkills(agentSlug: string): Promise<Skill[]> {
     }
 
     const yamlData = content.slice(3, ending);
-    const frontmatter = vb.parse(FrontmatterSchema, parseYaml(yamlData));
+    const frontmatter = vb.parse(SkillFrontmatterSchema, parseYaml(yamlData));
 
     skills.push({
       description: frontmatter.description,
@@ -219,7 +211,7 @@ async function loadConditionalBlocks(
   return blocks;
 }
 
-export type { Frontmatter, BlockLabel, Skill };
+export type { BlockLabel, Skill };
 export {
   labels as blockLabels,
   loadBlocks,

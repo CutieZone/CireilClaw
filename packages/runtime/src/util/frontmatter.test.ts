@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { requiresFrontmatter, splitFrontmatter } from "#util/frontmatter.js";
+import { requiresFrontmatter, splitFrontmatter, validateFrontmatter } from "#util/frontmatter.js";
 
 describe("requiresFrontmatter", () => {
   it("returns true for /blocks/ paths", () => {
@@ -90,6 +90,96 @@ describe("splitFrontmatter", () => {
 
     it("returns undefined when frontmatter has no closing ---", () => {
       expect(splitFrontmatter("---\nname: no-close", false)).toBeUndefined();
+    });
+  });
+
+  describe("validateFrontmatter", () => {
+    describe("blocks (TOML)", () => {
+      it("passes for valid TOML frontmatter", () => {
+        expect(() => {
+          validateFrontmatter('+++\ndescription="My block"\n+++\n', true);
+        }).not.toThrow();
+      });
+
+      it("passes for minimal valid TOML (empty description)", () => {
+        expect(() => {
+          validateFrontmatter('+++\ndescription=""\n+++\n', true);
+        }).not.toThrow();
+      });
+
+      it("throws for missing opening +++.+.", () => {
+        expect(() => {
+          validateFrontmatter('description="no delims"\n', true);
+        }).toThrow("Invalid frontmatter: expected file to start with '+++'");
+      });
+
+      it("throws for missing closing +++.+.", () => {
+        expect(() => {
+          validateFrontmatter('+++\ndescription="no close"', true);
+        }).toThrow("Invalid frontmatter: missing closing '+++'");
+      });
+
+      it("throws for invalid TOML syntax", () => {
+        expect(() => {
+          validateFrontmatter("+++\nnot-valid-toml-[[[\n+++\n", true);
+        }).toThrow(/Invalid frontmatter/u);
+      });
+
+      it("throws when description field is missing", () => {
+        expect(() => {
+          validateFrontmatter("+++\nother=42\n+++\n", true);
+        }).toThrow(/Invalid frontmatter/u);
+      });
+
+      it("throws when description has wrong type", () => {
+        expect(() => {
+          validateFrontmatter("+++\ndescription=42\n+++\n", true);
+        }).toThrow(/Invalid frontmatter/u);
+      });
+    });
+
+    describe("skills (YAML)", () => {
+      it("passes for valid YAML frontmatter", () => {
+        expect(() => {
+          validateFrontmatter("---\nname: my-skill\ndescription: A test skill\n---\n", false);
+        }).not.toThrow();
+      });
+
+      it("throws for missing opening ---", () => {
+        expect(() => {
+          validateFrontmatter("name: my-skill\ndescription: A test\n", false);
+        }).toThrow("Invalid frontmatter: expected file to start with '---'");
+      });
+
+      it("throws for missing closing ---", () => {
+        expect(() => {
+          validateFrontmatter("---\nname: my-skill\ndescription: A test", false);
+        }).toThrow("Invalid frontmatter: missing closing '---'");
+      });
+
+      it("throws when name field is missing", () => {
+        expect(() => {
+          validateFrontmatter("---\ndescription: A test skill\n---\n", false);
+        }).toThrow(/Invalid frontmatter/u);
+      });
+
+      it("throws when description field is missing", () => {
+        expect(() => {
+          validateFrontmatter("---\nname: my-skill\n---\n", false);
+        }).toThrow(/Invalid frontmatter/u);
+      });
+
+      it("throws when name is empty", () => {
+        expect(() => {
+          validateFrontmatter('---\nname: ""\ndescription: A test skill\n---\n', false);
+        }).toThrow(/Invalid frontmatter/u);
+      });
+
+      it("throws when description is empty", () => {
+        expect(() => {
+          validateFrontmatter('---\nname: my-skill\ndescription: ""\n---\n', false);
+        }).toThrow(/Invalid frontmatter/u);
+      });
     });
   });
 });

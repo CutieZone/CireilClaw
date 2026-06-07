@@ -153,4 +153,34 @@ describe("str-replace frontmatter preservation", () => {
       ),
     ).rejects.toThrow("does not exist");
   });
+
+  it("throws when existing block frontmatter has invalid schema", async () => {
+    mockFs.existsSync.mockReturnValue(true);
+    // TOML syntax is valid but `description` field is missing
+    mockFsPromises.readFile.mockResolvedValue("+++\nother_field=42\n+++\nBody content here.");
+
+    const ctx = makeToolContext();
+    await expect(
+      strReplace.execute(
+        { new_text: "Updated body", old_text: "Body content", path: "/blocks/person.md" },
+        ctx,
+      ),
+    ).rejects.toThrow("Invalid frontmatter");
+  });
+
+  it("throws when existing skill frontmatter has invalid schema (missing name)", async () => {
+    mockFs.existsSync.mockReturnValue(true);
+    mockFsPromises.readFile.mockResolvedValue("---\ndescription: A skill\n---\nOld body text here");
+
+    const ctx = makeToolContext();
+    ctx.paths.resolve = vi
+      .fn()
+      .mockResolvedValue("/home/test/.cireilclaw/agents/testagent/skills/my-skill/SKILL.md");
+    await expect(
+      strReplace.execute(
+        { new_text: "New body", old_text: "Old body", path: "/skills/my-skill/SKILL.md" },
+        ctx,
+      ),
+    ).rejects.toThrow("Invalid frontmatter");
+  });
 });
