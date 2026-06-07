@@ -51,7 +51,7 @@ import {
 } from "#util/paths.js";
 import { stripMediaForModel } from "#util/strip.js";
 
-import type { AssistantMessage, ToolMessage } from "./message.js";
+import type { AssistantMessage, Message, ToolMessage } from "./message.js";
 import {
   applyTopicSubstitution,
   estimateSystemPrompt,
@@ -413,6 +413,15 @@ export async function runTurn(
       modelCfg.supportsVideo,
     );
 
+    // Extract the latest user message so context metadata can sit right
+    // before it (after opened files), preventing the agent from confusing
+    // a system status ping with the user's actual input.
+    const lastUserIdx = filteredMessages.findLastIndex((msg) => msg.role === "user");
+    let latestUserMessage: Message | undefined = undefined;
+    if (lastUserIdx !== -1) {
+      latestUserMessage = filteredMessages.splice(lastUserIdx, 1)[0] as Message | undefined;
+    }
+
     // Inject opened files before the context usage snapshot so token
     // estimates and pruning warnings account for opened-file content.
     if (openedFilesBlock.length > 0) {
@@ -442,12 +451,16 @@ export async function runTurn(
       session.lastContextWarningCursor = session.historyCursor;
     }
 
-    // Append ephemeral prompt metadata so the LLM always sees current context
-    // at the very end, preventing stale-history date and budget mistakes.
+    // Inject context metadata after opened files but before the user's
+    // latest message, so the agent sees usage info before the latest
+    // instruction rather than after it.
     filteredMessages.push({
       content: { content: promptMetadata, type: "text" },
       role: "user",
     });
+    if (latestUserMessage !== undefined) {
+      filteredMessages.push(latestUserMessage);
+    }
 
     const activeTools = tools.filter((tool) => !disabledTools.has(tool.name));
 
