@@ -1044,18 +1044,24 @@ async function handleMessageDelete(ctx: HandlerCtx, msg: PossiblyUncachedMessage
 
     const deletedMsg = session.history[entryIndex];
     if (deletedMsg === undefined) {
-      return;
-    }
-    session.history.splice(entryIndex, 1);
-    const toolCallIds = getToolCallIds(deletedMsg);
-    const cascaded = cascadeRemoveToolResponses(session.history, toolCallIds, entryIndex);
-    const totalRemoved = 1 + cascaded;
-    if (session.historyCursor > entryIndex) {
-      session.historyCursor = Math.max(entryIndex, session.historyCursor - totalRemoved);
+      warning(
+        "History corruption: message found by findIndex but entry is undefined at index",
+        entryIndex,
+        colors.keyword(agentSlug),
+        colors.keyword(session.id()),
+      );
+    } else {
+      const toolCallIds = getToolCallIds(deletedMsg);
+      session.history.splice(entryIndex, 1);
+      const cascaded = cascadeRemoveToolResponses(session.history, toolCallIds, entryIndex);
+      const totalRemoved = 1 + cascaded;
+      if (session.historyCursor > entryIndex) {
+        session.historyCursor = Math.max(entryIndex, session.historyCursor - totalRemoved);
+      }
     }
 
     if (session.lastMessageId === msg.id) {
-      const lastUserMsg = session.history.findLast((historyMsg) => historyMsg.id !== undefined);
+      const lastUserMsg = session.history.findLast((historyEntry) => historyEntry.id !== undefined);
       session.lastMessageId = lastUserMsg?.id;
     }
 

@@ -9,6 +9,8 @@ import type { HandlerCtx } from "#channels/discord/handler-ctx.js";
 import { saveSession } from "#db/sessions.js";
 import { cascadeRemoveToolResponses, getToolCallIds } from "#engine/history-validate.js";
 import { DiscordSession } from "#harness/session.js";
+import colors from "#output/colors.js";
+import { warning } from "#output/log.js";
 import { sanitizeError } from "#util/paths.js";
 
 const definition: CreateApplicationCommandOptions = {
@@ -88,14 +90,20 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
       if (msgIndex !== -1) {
         const deletedMsg = session.history[msgIndex];
         if (deletedMsg === undefined) {
-          return;
-        }
-        const toolCallIds = getToolCallIds(deletedMsg);
-        session.history.splice(msgIndex, 1);
-        const cascaded = cascadeRemoveToolResponses(session.history, toolCallIds, msgIndex);
-        const totalRemoved = 1 + cascaded;
-        if (session.historyCursor > msgIndex) {
-          session.historyCursor = Math.max(msgIndex, session.historyCursor - totalRemoved);
+          warning(
+            "History corruption: message found by findIndex but entry is undefined at index",
+            msgIndex,
+            colors.keyword(ctx.agentSlug),
+            colors.keyword(session.id()),
+          );
+        } else {
+          const toolCallIds = getToolCallIds(deletedMsg);
+          session.history.splice(msgIndex, 1);
+          const cascaded = cascadeRemoveToolResponses(session.history, toolCallIds, msgIndex);
+          const totalRemoved = 1 + cascaded;
+          if (session.historyCursor > msgIndex) {
+            session.historyCursor = Math.max(msgIndex, session.historyCursor - totalRemoved);
+          }
         }
         session.lastMessageId = session.history.findLast((entry) => entry.id !== undefined)?.id;
       }
