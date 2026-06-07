@@ -5,7 +5,7 @@ import path from "node:path";
 import * as vb from "valibot";
 
 import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
-import { requiresFrontmatter, splitFrontmatter } from "#util/frontmatter.js";
+import { requiresFrontmatter, splitFrontmatter, validateFrontmatter } from "#util/frontmatter.js";
 
 const Schema = vb.strictObject({
   content: vb.pipe(
@@ -61,11 +61,22 @@ export const write: ToolDef = {
       const isBlock = data.path.startsWith("/blocks/");
       const split = splitFrontmatter(existing, isBlock);
       if (split !== undefined) {
+        // Validate preserved frontmatter before writing — catches pre-existing
+        // corruption so the agent gets immediate feedback instead of a load failure later.
+        validateFrontmatter(split.frontmatter, isBlock);
+
         const { frontmatter } = split;
         const delim = isBlock ? "+++" : "---";
         if (!data.content.startsWith(delim)) {
           content = frontmatter + data.content;
         }
+      }
+    } else if (requiresFrontmatter(data.path) && !existsSync(realPath)) {
+      // New block/skill file — validate the agent-provided frontmatter immediately.
+      const isBlock = data.path.startsWith("/blocks/");
+      const delim = isBlock ? "+++" : "---";
+      if (data.content.startsWith(delim)) {
+        validateFrontmatter(data.content, isBlock);
       }
     }
 

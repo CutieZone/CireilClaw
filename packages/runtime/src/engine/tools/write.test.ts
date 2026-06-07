@@ -166,4 +166,72 @@ describe("write tool frontmatter preservation", () => {
     // File exists but has no valid frontmatter — write new content as-is
     expect(mockFsPromises.writeFile).toHaveBeenCalledWith(expect.any(String), "New body", "utf8");
   });
+
+  it("throws when existing block frontmatter has invalid schema", async () => {
+    const existingContent = "+++\nother_field=42\n+++\nOriginal body";
+    mockFs.existsSync.mockReturnValue(true);
+    mockFsPromises.readFile.mockResolvedValue(existingContent);
+
+    const ctx = makeToolContext();
+    await expect(
+      write.execute({ content: "New body", path: "/blocks/person.md" }, ctx),
+    ).rejects.toThrow("Invalid frontmatter");
+    // writeFile should not be called — validation fails before writing
+    expect(mockFsPromises.writeFile).not.toHaveBeenCalled();
+  });
+
+  it("throws when existing skill frontmatter has invalid schema (missing name)", async () => {
+    const existingContent = "---\ndescription: A skill\n---\nOriginal body";
+    mockFs.existsSync.mockReturnValue(true);
+    mockFsPromises.readFile.mockResolvedValue(existingContent);
+
+    const ctx = makeToolContext();
+    ctx.paths.resolve = vi
+      .fn()
+      .mockResolvedValue("/home/test/.cireilclaw/agents/testagent/skills/my-skill/SKILL.md");
+    await expect(
+      write.execute({ content: "New body", path: "/skills/my-skill/SKILL.md" }, ctx),
+    ).rejects.toThrow("Invalid frontmatter");
+    expect(mockFsPromises.writeFile).not.toHaveBeenCalled();
+  });
+
+  it("throws when agent provides invalid frontmatter for a new block file", async () => {
+    mockFs.existsSync.mockReturnValue(false);
+
+    const ctx = makeToolContext();
+    ctx.paths.resolve = vi
+      .fn()
+      .mockResolvedValue("/home/test/.cireilclaw/agents/testagent/blocks/newblock.md");
+    await expect(
+      write.execute(
+        {
+          content: "+++\nnot-valid-toml-[[[\n+++\nNew body",
+          path: "/blocks/newblock.md",
+        },
+        ctx,
+      ),
+    ).rejects.toThrow("Invalid frontmatter");
+    expect(mockFsPromises.writeFile).not.toHaveBeenCalled();
+  });
+
+  it("allows new block file without frontmatter (no validation for agent content without delimiters)", async () => {
+    mockFs.existsSync.mockReturnValue(false);
+
+    const ctx = makeToolContext();
+    ctx.paths.resolve = vi
+      .fn()
+      .mockResolvedValue("/home/test/.cireilclaw/agents/testagent/blocks/newblock.md");
+    const result = await write.execute(
+      { content: "Just body text, no frontmatter", path: "/blocks/newblock.md" },
+      ctx,
+    );
+
+    expect(result["success"]).toBe(true);
+    // The write is allowed through even though loading will fail — preserves existing behavior
+    expect(mockFsPromises.writeFile).toHaveBeenCalledWith(
+      expect.any(String),
+      "Just body text, no frontmatter",
+      "utf8",
+    );
+  });
 });
