@@ -19,6 +19,7 @@ session-info = true
 
 # --- Optional built-in tools ---
 write = true
+edit = true
 str-replace = true
 read-sections = true
 schedule = true

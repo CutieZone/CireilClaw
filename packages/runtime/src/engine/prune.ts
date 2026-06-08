@@ -156,6 +156,7 @@ function evictToolResponses(messages: Message[], budget: number): Message[] {
     "read-skill",
     "read-sections",
     "download-attachments",
+    "edit",
     "schedule",
     "react",
     "open-file",
