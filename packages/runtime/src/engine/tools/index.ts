@@ -1,5 +1,6 @@
 import { closeFile } from "#engine/tools/close-file.js";
 import { downloadAttachments } from "#engine/tools/download-attachments.js";
+import { edit } from "#engine/tools/edit.js";
 import { exec } from "#engine/tools/exec.js";
 import { listDir } from "#engine/tools/list-dir.js";
 import { listSessions } from "#engine/tools/list-sessions.js";
@@ -23,6 +24,7 @@ import { write } from "#engine/tools/write.js";
 const builtinToolRegistry: Record<string, ToolDef> = {
   "close-file": closeFile,
   "download-attachments": downloadAttachments,
+  edit,
   exec,
   "list-dir": listDir,
   "list-sessions": listSessions,

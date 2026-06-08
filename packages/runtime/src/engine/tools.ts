@@ -12,6 +12,22 @@ export async function buildTools(
 ): Promise<Tool[]> {
   const cfg = Object.entries(toolsConfig ?? (await loadTools(agentSlug)));
 
+  // Determine which tools are enabled in this agent's config.
+  const enabledTools = new Set(
+    cfg
+      .filter(([, setting]) => {
+        const enabledByValue = typeof setting === "boolean" && setting;
+        const enabledByKey =
+          typeof setting === "object" &&
+          "enabled" in setting &&
+          typeof setting.enabled === "boolean" &&
+          setting.enabled;
+        return enabledByValue || enabledByKey;
+      })
+      .map(([toolName]) => toolName),
+  );
+
+  const editEnabled = enabledTools.has("edit");
   const tools: Tool[] = [];
 
   for (const [tool, setting] of cfg) {
@@ -30,6 +46,25 @@ export async function buildTools(
 
     if (!(enabledByValue || enabledByKey)) {
       continue;
+    }
+
+    // When `edit` is also enabled, decorate `str-replace` as deprecated and
+    // update `write` to point at `edit` instead.
+    if (editEnabled) {
+      if (tool === "str-replace") {
+        tools.push({
+          ...def,
+          description: `**[DEPRECATED]** Prefer \`edit\` which offers fuzzy whitespace matching (indentation, trailing spaces, tab-vs-space differences are forgiven), a \`near\` anchor for scoping, and an \`all\` flag for bulk replacements.\n\n${def.description}`,
+        });
+        continue;
+      }
+      if (tool === "write") {
+        tools.push({
+          ...def,
+          description: def.description.replace("str-replace", "edit"),
+        });
+        continue;
+      }
     }
 
     tools.push(def);
