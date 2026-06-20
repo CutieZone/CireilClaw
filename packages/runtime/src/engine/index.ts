@@ -551,7 +551,8 @@ export async function runTurn(
         }
         session.pendingToolMessages.push({
           content: {
-            content: "Now call the respond tool with the message content you tried to send.",
+            content:
+              "You **must** now call the respond tool with the message content you tried to send. Plain text responses WILL fail. You can ONLY use `respond` to send text to the user.",
             type: "text",
           },
           role: "user",
