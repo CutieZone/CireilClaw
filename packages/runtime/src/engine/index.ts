@@ -51,6 +51,7 @@ import {
 } from "#util/paths.js";
 import { stripMediaForModel } from "#util/strip.js";
 
+import { validateHistory } from "./history-validate.js";
 import type { AssistantMessage, Message, ToolMessage } from "./message.js";
 import {
   applyTopicSubstitution,
@@ -466,7 +467,7 @@ export async function runTurn(
 
     const context: Context = {
       cacheBreakpoints: filteredMessages.length > 1 ? [0, filteredMessages.length - 2] : [0],
-      messages: filteredMessages,
+      messages: validateHistory(filteredMessages),
       sessionId: session.id(),
       systemPrompt: prompt,
       tools: activeTools,
