@@ -19,7 +19,12 @@
           {
             "case": "pascalCase"
           }
-        ]
+        ],
+        "react/react-in-jsx-scope": "off",
+        "react/jsx-filename-extension": "off",
+        "react/jsx-max-depth": "off",
+        "react/no-array-index-key": "off",
+        "react/only-export-components": "off"
       },
       "plugins": ["react", "eslint", "import", "promise", "typescript", "unicorn"]
     }
@@ -55,7 +60,9 @@
     "typescript/prefer-readonly-parameter-types": "off",
     "typescript/strict-void-return": "off",
     "unicorn/switch-case-braces": "off",
+    "eslint/prefer-object-spread": "off",
     "unicorn/prefer-ternary": "off",
+    "unicorn/max-nested-calls": "off",
     "unicorn/prefer-event-target": "off",
     "unicorn/no-useless-undefined": "off",
     "typescript/method-signature-style": ["warn", "method"],
@@ -75,7 +82,11 @@
     "promise/always-return": "off",
     "promise/avoid-new": "off",
     "promise/prefer-await-to-callbacks": "off",
-    "return-await": "off"
+    "return-await": "off",
+    "oxc/no-async-await": "off",
+    "oxc/no-optional-chaining": "off",
+    "oxc/no-rest-spread-properties": "off",
+    "unicorn/prefer-export-from": "off"
   },
   "env": {
     "builtin": true,
