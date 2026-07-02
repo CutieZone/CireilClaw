@@ -5,8 +5,8 @@ import * as vb from "valibot";
 
 import { getDb } from "#db/index.js";
 import { sessions } from "#db/schema.js";
-import { updateSessionImages, updateSessionVideoRefs } from "#db/sessions.js";
-import { DiscordMetaSchema, SerializedHistorySchema } from "#db/validation.js";
+import { DiscordMetaSchema, updateSessionImages, updateSessionVideoRefs } from "#db/sessions.js";
+import { SerializedHistorySchema } from "#db/validation.js";
 import { isImageRef, isVideoRef } from "#engine/content.js";
 import { warning } from "#output/log.js";
 import { SUPPORTED_IMAGE_TYPES, SUPPORTED_VIDEO_TYPES } from "#supports.js";

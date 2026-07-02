@@ -376,6 +376,31 @@ export async function generate(
     }
   }
 
+  // Diagnostic: scan for image_ref blocks that should have been hydrated.
+  for (let msgIdx = 0; msgIdx < context.messages.length; msgIdx++) {
+    const msg = context.messages[msgIdx];
+    if (msg === undefined) {
+      continue;
+    }
+    const blocks = Array.isArray(msg.content) ? msg.content : [msg.content];
+    for (let blockIdx = 0; blockIdx < blocks.length; blockIdx++) {
+      const block = blocks[blockIdx];
+      if (block !== undefined) {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        const blockObj = block as unknown as { type?: unknown };
+        if (blockObj.type === "image_ref") {
+          warning(
+            "FOUND image_ref in pre-provider messages!",
+            `msgIdx=${msgIdx}`,
+            `role=${msg.role}`,
+            `blockIdx=${blockIdx}`,
+            `block=${JSON.stringify(block)}`,
+          );
+        }
+      }
+    }
+  }
+
   const params: ChatCompletionCreateParamsNonStreaming = {
     messages: [
       { content: context.systemPrompt, role: "system" },

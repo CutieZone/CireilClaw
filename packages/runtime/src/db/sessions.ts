@@ -226,13 +226,14 @@ const DiscordMetaSchema = vb.object({
 type DiscordMeta = vb.InferOutput<typeof DiscordMetaSchema>;
 
 const MatrixMetaSchema = vb.object({
+  historyBarrier: vb.exactOptional(vb.number()),
   lastContextWarningCursor: vb.exactOptional(LastContextWarningCursorSchema),
   roomId: nonEmptyString,
   selectedModel: vb.exactOptional(nonEmptyString),
   selectedProvider: vb.exactOptional(nonEmptyString),
 });
 
-// type MatrixMeta = vb.InferOutput<typeof MatrixMetaSchema>;
+type MatrixMeta = vb.InferOutput<typeof MatrixMetaSchema>;
 
 const DEBOUNCE_MS = 2000;
 
@@ -761,6 +762,8 @@ function deleteSummary(agentSlug: string, sessionId: string, slug: string): void
 }
 
 export {
+  DiscordMetaSchema,
+  MatrixMetaSchema,
   flushAllSessions,
   hashImage,
   loadSessions,
@@ -772,3 +775,4 @@ export {
   updateSessionImages,
   updateSessionVideoRefs,
 };
+export type { DiscordMeta, MatrixMeta };
