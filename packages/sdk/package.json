@@ -35,14 +35,14 @@
   "dependencies": {
     "@noble/hashes": "^2.2.0",
     "heic-decode": "^2.1.0",
-    "sharp": "^0.34.5",
-    "valibot": "^1.4.1"
+    "sharp": "^0.35.3",
+    "valibot": "^1.4.2"
   },
   "devDependencies": {
     "@types/heic-decode": "^2.0.0",
-    "node-addon-api": "^8.8.0",
-    "node-gyp": "^12.3.0",
-    "tsdown": "^0.22.2",
+    "node-addon-api": "^8.9.0",
+    "node-gyp": "^13.0.0",
+    "tsdown": "^0.22.3",
     "typescript": "^6.0.3"
   }
 }
