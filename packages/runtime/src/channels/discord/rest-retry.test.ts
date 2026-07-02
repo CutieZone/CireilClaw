@@ -63,18 +63,16 @@ describe("isDiscordRestConnectionError", () => {
 
   it("does not classify timeouts as connection errors", () => {
     expect(
-      isDiscordRestConnectionError(
-        new Error("Request Timed Out (>30000ms) on GET /channels/{id}"),
-      ),
+      isDiscordRestConnectionError(new Error("Request Timed Out (>30000ms) on GET /channels/{id}")),
     ).toBe(false);
   });
 });
 
 describe("isRetryableError", () => {
   it("returns true for timeout errors", () => {
-    expect(
-      isRetryableError(new Error("Request Timed Out (>30000ms) on GET /channels/{id}")),
-    ).toBe(true);
+    expect(isRetryableError(new Error("Request Timed Out (>30000ms) on GET /channels/{id}"))).toBe(
+      true,
+    );
   });
 
   it("returns true for connection errors", () => {
@@ -93,9 +91,9 @@ describe("withTimeout", () => {
   });
 
   it("rejects when the inner promise throws", async () => {
-    await expect(
-      withTimeout(Promise.reject(new Error("oops")), 2000, "test"),
-    ).rejects.toThrow("oops");
+    await expect(withTimeout(Promise.reject(new Error("oops")), 2000, "test")).rejects.toThrow(
+      "oops",
+    );
   });
 
   it("rejects when the timeout is exceeded", async () => {
