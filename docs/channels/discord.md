@@ -30,9 +30,10 @@ directMessages = { mode = "owner", users = [] }
 
 # Grant specific non-owner users permission to run specific slash commands.
 # Command names are free strings but must match the internal handler names.
+# Subcommands are written as "<command> <subcommand>", e.g. "model query".
 [[trustedUsers]]
 ids = ["987654321098765432"]
-allowedCommands = ["stop", "summarize"]
+allowedCommands = ["stop", "summarize", "model query"]
 ```
 
 ### Fields
@@ -73,7 +74,7 @@ allowedCommands = ["stop", "summarize"]
 | `ids`             | Yes      | Array of Discord user IDs (numeric snowflakes) that share this permission set |
 | `allowedCommands` | Yes      | Array of slash command names as used internally (e.g. `stop`, `summarize`)    |
 
-A user must be listed in a `trustedUsers` entry that explicitly includes the command name they are trying to run. The `ownerId` user is always allowed to run every command. If a non-owner tries to run a slash command they are not authorized for, the bot responds with an ephemeral "You are not authorized to use this command." message.
+A user must be listed in a `trustedUsers` entry that explicitly includes the command name they are trying to run. For commands with subcommands, use the form `"<command> <subcommand>"` (e.g. `"model query"`). The `ownerId` user is always allowed to run every command and subcommand. If a non-owner tries to run a slash command or subcommand they are not authorized for, the bot responds with an ephemeral "You are not authorized to use this command." message.
 
 ### Direct Message Modes
 
@@ -98,18 +99,18 @@ Messages maintain session history across turns. If a message is deleted from Dis
 
 ## Slash Commands
 
-Slash commands are restricted to the configured `ownerId` and to any user listed in `trustedUsers` with the corresponding command in their `allowedCommands`. If an unauthorized user invokes a slash command, the bot replies with an ephemeral "You are not authorized to use this command." message. Message commands (right-click → Apps) and the ✨ error reaction remain restricted to the owner.
+Slash commands and their subcommands are restricted to the configured `ownerId` and to any user listed in `trustedUsers` with the corresponding command path in their `allowedCommands`. A command path is the command name, or `"<command> <subcommand>"` for commands with subcommands (e.g. `"model query"`). If an unauthorized user invokes a slash command or subcommand, the bot replies with an ephemeral "You are not authorized to use this command." message. Message commands (right-click → Apps) and the ✨ error reaction remain restricted to the owner.
 
-| Command        | Description                                |
-| -------------- | ------------------------------------------ |
-| `/clear`       | Reset conversation history for the channel |
-| `/close`       | Close an open file in the current session  |
-| `/invite`      | Get an invite link for the bot             |
-| `/model`       | Switch the provider/model for this session |
-| `/repair`      | Repair corrupted Discord media attachments |
-| `/stop`        | Gracefully stop the current generation     |
-| `/summarize`   | Summarize the conversation history         |
-| `/unsummarize` | Remove the most recent summary             |
+| Command        | Subcommands                               | Description                                |
+| -------------- | ----------------------------------------- | ------------------------------------------ |
+| `/clear`       | —                                         | Reset conversation history for the channel |
+| `/close`       | —                                         | Close an open file in the current session  |
+| `/invite`      | —                                         | Get an invite link for the bot             |
+| `/model`       | `override`, `clear`, `clear-all`, `query` | Switch the provider/model for this session |
+| `/repair`      | —                                         | Repair corrupted Discord media attachments |
+| `/stop`        | —                                         | Gracefully stop the current generation     |
+| `/summarize`   | —                                         | Summarize the conversation history         |
+| `/unsummarize` | —                                         | Remove the most recent summary             |
 
 ## Owner Reactions
 

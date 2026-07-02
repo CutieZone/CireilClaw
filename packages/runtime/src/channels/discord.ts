@@ -1083,11 +1083,19 @@ async function handleMessageDelete(ctx: HandlerCtx, msg: PossiblyUncachedMessage
   }
 }
 
-function isTrustedForCommand(ctx: HandlerCtx, userId: string, commandName: string): boolean {
+function getCommandPath(interaction: CommandInteraction | AutocompleteInteraction): string {
+  const sub = interaction.data.options.getSubCommand(false);
+  if (sub !== undefined && sub.length > 0) {
+    return `${interaction.data.name} ${sub[0]}`;
+  }
+  return interaction.data.name;
+}
+
+function isTrustedForCommand(ctx: HandlerCtx, userId: string, commandPath: string): boolean {
   return ctx.trustedUsers.some(
     (entry) =>
       entry.ids.includes(userId) &&
-      entry.allowedCommands.some((command) => command === commandName),
+      entry.allowedCommands.some((command) => command === commandPath),
   );
 }
 
@@ -1098,7 +1106,7 @@ async function handleInteractionCreate(
   const isOwner = interaction.user.id === ctx.ownerId;
 
   if (interaction.type === InteractionTypes.APPLICATION_COMMAND) {
-    const commandName = interaction.data.name;
+    const commandPath = getCommandPath(interaction);
 
     // Message commands (right-click -> Apps) remain owner-only; trusted users
     // are only allowed to invoke slash commands.
@@ -1106,7 +1114,7 @@ async function handleInteractionCreate(
       return;
     }
 
-    if (!isOwner && !isTrustedForCommand(ctx, interaction.user.id, commandName)) {
+    if (!isOwner && !isTrustedForCommand(ctx, interaction.user.id, commandPath)) {
       await interaction.createMessage({
         content: "You are not authorized to use this command.",
         flags: MessageFlags.EPHEMERAL,
@@ -1128,14 +1136,14 @@ async function handleInteractionCreate(
       await handler(interaction, ctx);
     }
   } else if (interaction.type === InteractionTypes.APPLICATION_COMMAND_AUTOCOMPLETE) {
-    const commandName = interaction.data.name;
+    const commandPath = getCommandPath(interaction);
 
-    if (!isOwner && !isTrustedForCommand(ctx, interaction.user.id, commandName)) {
+    if (!isOwner && !isTrustedForCommand(ctx, interaction.user.id, commandPath)) {
       await interaction.result([]);
       return;
     }
 
-    const handler = AUTOCOMPLETE_HANDLERS.get(commandName);
+    const handler = AUTOCOMPLETE_HANDLERS.get(interaction.data.name);
     if (handler !== undefined) {
       await handler(interaction, ctx);
     }

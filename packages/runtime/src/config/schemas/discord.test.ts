@@ -45,6 +45,19 @@ describe("DiscordConfigSchema", () => {
     ]);
   });
 
+  it("accepts subcommand paths in allowedCommands", () => {
+    const parsed = vb.parse(DiscordConfigSchema, {
+      ...REQUIRED_CONFIG,
+      trustedUsers: [
+        {
+          allowedCommands: ["model query"],
+          ids: ["987654321098765432"],
+        },
+      ],
+    });
+    expect(parsed.trustedUsers[0]?.allowedCommands).toEqual(["model query"]);
+  });
+
   it("rejects a trustedUsers entry with an invalid user ID", () => {
     expect(() =>
       vb.parse(DiscordConfigSchema, {

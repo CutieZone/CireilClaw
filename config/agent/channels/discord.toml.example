@@ -15,10 +15,12 @@ ownerId = "" # Your Discord user ID (numeric string)
 
 # Grant specific non-owner users permission to run specific slash commands.
 # Each [[trustedUsers]] entry lists user IDs and the command names they may use.
-# Command names are free strings but must match the internal handler names:
-# "clear", "close", "invite", "model", "repair", "stop", "summarize", "unsummarize".
+# Command names are free strings but must match the internal handler names.
+# Top-level commands: "clear", "close", "invite", "model", "repair", "stop",
+# "summarize", "unsummarize".
+# Subcommands are written as "<command> <subcommand>", e.g. "model query".
 # Message commands (right-click -> Apps) and the sparkle reaction remain owner-only.
 # Unauthorized slash command attempts receive an ephemeral "not authorized" reply.
 # [[trustedUsers]]
 # ids = ["987654321098765432"]
-# allowedCommands = ["stop", "summarize"]
+# allowedCommands = ["stop", "summarize", "model query"]
