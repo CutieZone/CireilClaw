@@ -11,4 +11,5 @@ export interface HandlerCtx {
   directMessages: InferOutput<typeof DirectMessagesSchema>;
   owner: Harness;
   ownerId: string;
+  restTimeoutMs: number;
 }

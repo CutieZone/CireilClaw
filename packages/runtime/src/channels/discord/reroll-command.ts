@@ -128,6 +128,8 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
         const channel = await runDiscordRestWithRetries(
           "GET /channels/{id}",
           async () => await ctx.client.rest.channels.get(interaction.channelID),
+          undefined,
+          ctx.restTimeoutMs,
         );
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         const textChannel = channel as AnyTextableChannel;

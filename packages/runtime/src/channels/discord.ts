@@ -33,7 +33,10 @@ import * as inviteCommand from "#channels/discord/invite-command.js";
 import * as modelCommand from "#channels/discord/model-command.js";
 import * as repairCommand from "#channels/discord/repair-command.js";
 import * as rerollCommand from "#channels/discord/reroll-command.js";
-import { runDiscordRestWithRetries } from "#channels/discord/rest-retry.js";
+import {
+  isDiscordRestConnectionError,
+  runDiscordRestWithRetries,
+} from "#channels/discord/rest-retry.js";
 import * as stopCommand from "#channels/discord/stop-command.js";
 import * as summarizeCommand from "#channels/discord/summarize-command.js";
 import * as unsummarizeCommand from "#channels/discord/unsummarize-command.js";
@@ -142,6 +145,8 @@ async function resolveDisplayName(msg: DiscordMessage): Promise<string> {
       member = await runDiscordRestWithRetries(
         `GET /guilds/${guildID}/members/${author.id}`,
         async () => await client.rest.guilds.getMember(guildID, author.id),
+        undefined,
+        client.rest.options.requestTimeout,
       );
     } catch {
       // Member may have left or we lack permissions; fall through to author info.
@@ -658,6 +663,8 @@ async function handleMessageCreate(
   const msgChannel = await runDiscordRestWithRetries(
     "GET /channels/{id}",
     async () => await client.rest.channels.get(msg.channelID),
+    undefined,
+    client.rest.options.requestTimeout,
   ).catch(async (error: unknown) => {
     warning(
       "Failed to fetch Discord channel",
@@ -669,7 +676,7 @@ async function handleMessageCreate(
       client,
       msg,
       "Discord error",
-      "Could not fetch channel metadata after retrying Discord REST timeouts; this message was not processed. Details were written to the console logs.",
+      "Could not fetch channel metadata after retrying Discord REST calls; this message was not processed. Details were written to the console logs.",
     );
     return undefined;
   });
@@ -1308,9 +1315,20 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
   });
 
   client.on("error", (err) => {
-    warning("An error occurred on Discord:", err instanceof Error ? err.message : err);
     if (err instanceof Error) {
-      warning(err);
+      const isConnectionError = isDiscordRestConnectionError(err);
+      warning(
+        `An error occurred on Discord:${isConnectionError ? " (connection error)" : ""}`,
+        err,
+      );
+      if (isConnectionError) {
+        warning(
+          `Discord REST connection error detected for ${colors.keyword(agentSlug)}.`,
+          "Gateway will attempt auto-reconnect if needed.",
+        );
+      }
+    } else {
+      warning("An error occurred on Discord:", err);
     }
   });
 
@@ -1321,6 +1339,7 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
     directMessages,
     owner,
     ownerId,
+    restTimeoutMs: timeout,
   };
 
   // oxlint-disable-next-line typescript/no-misused-promises
