@@ -276,6 +276,30 @@ export async function runTurn(
 
   debug("Turn start", colors.keyword(agentSlug), colors.keyword(session.id()));
 
+  // Diagnostic: check if image_ref leaked into session.history
+  for (let hi = 0; hi < session.history.length; hi++) {
+    const hmsg = session.history[hi];
+    if (hmsg === undefined || hmsg.role !== "user") continue;
+    const hblocks = Array.isArray(hmsg.content) ? hmsg.content : [hmsg.content];
+    for (let bi = 0; bi < hblocks.length; bi++) {
+      const hblock = hblocks[bi];
+      if (
+        typeof hblock === "object" &&
+        hblock !== null &&
+        "type" in hblock &&
+        (hblock as unknown as { type: unknown }).type === "image_ref"
+      ) {
+        warning(
+          "PRE-TURN LEAK: image_ref in session.history before turn processing!",
+          `agent=${agentSlug}`,
+          `msgIdx=${hi}`,
+          `msgId=${hmsg.id ?? "none"}`,
+          `blockIdx=${bi}`,
+        );
+      }
+    }
+  }
+
   const providerName = override.provider ?? session.selectedProvider;
   let selectedProvider =
     providerName === undefined ? engineDefaults.provider.config : engineCfg[providerName];

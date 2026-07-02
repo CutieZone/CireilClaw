@@ -208,6 +208,27 @@ async function deserializeHistory(json: string, agentSlug: string): Promise<Mess
     }
   }
 
+  // Diagnostic: verify no image_ref survived deserialization
+  for (const msg of messages) {
+    if (msg.role !== "user") continue;
+    const blocks = Array.isArray(msg.content) ? msg.content : [msg.content];
+    for (const block of blocks) {
+      if (
+        typeof block === "object" &&
+        block !== null &&
+        "type" in block &&
+        (block as unknown as { type: unknown }).type === "image_ref"
+      ) {
+        warning(
+          "LEAK: image_ref survived deserializeHistory!",
+          `role=${msg.role}`,
+          `msgId=${msg.id ?? "none"}`,
+          `block=${JSON.stringify(block)}`,
+        );
+      }
+    }
+  }
+
   return validateHistory(messages);
 }
 
