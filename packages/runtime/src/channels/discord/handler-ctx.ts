@@ -1,7 +1,11 @@
 import type { Client } from "oceanic.js";
 import type { InferOutput } from "valibot";
 
-import type { AccessSchema, DirectMessagesSchema } from "#config/schemas/discord.js";
+import type {
+  AccessSchema,
+  DirectMessagesSchema,
+  TrustedUsersSchema,
+} from "#config/schemas/discord.js";
 import type { Harness } from "#harness/index.js";
 
 export interface HandlerCtx {
@@ -12,4 +16,5 @@ export interface HandlerCtx {
   owner: Harness;
   ownerId: string;
   restTimeoutMs: number;
+  trustedUsers: InferOutput<typeof TrustedUsersSchema>;
 }

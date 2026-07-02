@@ -1083,16 +1083,37 @@ async function handleMessageDelete(ctx: HandlerCtx, msg: PossiblyUncachedMessage
   }
 }
 
+function isTrustedForCommand(ctx: HandlerCtx, userId: string, commandName: string): boolean {
+  return ctx.trustedUsers.some(
+    (entry) =>
+      entry.ids.includes(userId) &&
+      entry.allowedCommands.some((command) => command === commandName),
+  );
+}
+
 async function handleInteractionCreate(
   ctx: HandlerCtx,
   interaction: AnyInteractionGateway,
 ): Promise<void> {
-  // Only respond to the configured owner.
-  if (interaction.user.id !== ctx.ownerId) {
-    return;
-  }
+  const isOwner = interaction.user.id === ctx.ownerId;
 
   if (interaction.type === InteractionTypes.APPLICATION_COMMAND) {
+    const commandName = interaction.data.name;
+
+    // Message commands (right-click -> Apps) remain owner-only; trusted users
+    // are only allowed to invoke slash commands.
+    if (!isOwner && interaction.data.type === ApplicationCommandTypes.MESSAGE) {
+      return;
+    }
+
+    if (!isOwner && !isTrustedForCommand(ctx, interaction.user.id, commandName)) {
+      await interaction.createMessage({
+        content: "You are not authorized to use this command.",
+        flags: MessageFlags.EPHEMERAL,
+      });
+      return;
+    }
+
     // Message commands (right-click → Apps) always respond ephemerally.
     // Slash commands use the SILENT_COMMANDS set.
     const isEphemeral =
@@ -1107,7 +1128,14 @@ async function handleInteractionCreate(
       await handler(interaction, ctx);
     }
   } else if (interaction.type === InteractionTypes.APPLICATION_COMMAND_AUTOCOMPLETE) {
-    const handler = AUTOCOMPLETE_HANDLERS.get(interaction.data.name);
+    const commandName = interaction.data.name;
+
+    if (!isOwner && !isTrustedForCommand(ctx, interaction.user.id, commandName)) {
+      await interaction.result([]);
+      return;
+    }
+
+    const handler = AUTOCOMPLETE_HANDLERS.get(commandName);
     if (handler !== undefined) {
       await handler(interaction, ctx);
     }
@@ -1115,7 +1143,7 @@ async function handleInteractionCreate(
 }
 
 async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicClient> {
-  const { access, directMessages, token, ownerId, timeout } = await loadChannel(
+  const { access, directMessages, token, ownerId, timeout, trustedUsers } = await loadChannel(
     "discord",
     agentSlug,
   );
@@ -1340,6 +1368,7 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
     owner,
     ownerId,
     restTimeoutMs: timeout,
+    trustedUsers,
   };
 
   // oxlint-disable-next-line typescript/no-misused-promises

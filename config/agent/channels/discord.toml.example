@@ -12,3 +12,13 @@ ownerId = "" # Your Discord user ID (numeric string)
 # [directMessages]
 # mode = "owner"                # "owner", "public", "allowlist", or "denylist". Default: "owner"
 # users = []                    # Array of Discord user IDs (for allowlist/denylist)
+
+# Grant specific non-owner users permission to run specific slash commands.
+# Each [[trustedUsers]] entry lists user IDs and the command names they may use.
+# Command names are free strings but must match the internal handler names:
+# "clear", "close", "invite", "model", "repair", "stop", "summarize", "unsummarize".
+# Message commands (right-click -> Apps) and the sparkle reaction remain owner-only.
+# Unauthorized slash command attempts receive an ephemeral "not authorized" reply.
+# [[trustedUsers]]
+# ids = ["987654321098765432"]
+# allowedCommands = ["stop", "summarize"]

@@ -27,6 +27,12 @@ access = { mode = "allowlist", users = ["123456789012345678"] }
 
 # Restrict DM access
 directMessages = { mode = "owner", users = [] }
+
+# Grant specific non-owner users permission to run specific slash commands.
+# Command names are free strings but must match the internal handler names.
+[[trustedUsers]]
+ids = ["987654321098765432"]
+allowedCommands = ["stop", "summarize"]
 ```
 
 ### Fields
@@ -38,6 +44,7 @@ directMessages = { mode = "owner", users = [] }
 | `timeout`        | No       | `60000`    | REST request timeout in milliseconds                    |
 | `access`         | No       | `disabled` | Access restriction for guild channels (see below)       |
 | `directMessages` | No       | `"owner"`  | DM access mode (see below)                              |
+| `trustedUsers`   | No       | `[]`       | Users allowed to run specific commands (see below)      |
 
 ### Access Modes
 
@@ -50,6 +57,23 @@ Controls who can interact with the agent in guild channels.
 | `denylist`  | Everyone can interact except users in `users`      |
 
 The `ownerId` user always bypasses access control regardless of mode.
+
+### Trusted Users
+
+`trustedUsers` is an array of tables. Each entry grants a set of users permission to run specific **slash commands** without being the owner. Message commands (right-click → Apps) and the ✨ error reaction remain owner-only and are not affected by this table.
+
+```toml
+[[trustedUsers]]
+ids = ["987654321098765432"]
+allowedCommands = ["stop", "summarize"]
+```
+
+| Field             | Required | Description                                                                   |
+| ----------------- | -------- | ----------------------------------------------------------------------------- |
+| `ids`             | Yes      | Array of Discord user IDs (numeric snowflakes) that share this permission set |
+| `allowedCommands` | Yes      | Array of slash command names as used internally (e.g. `stop`, `summarize`)    |
+
+A user must be listed in a `trustedUsers` entry that explicitly includes the command name they are trying to run. The `ownerId` user is always allowed to run every command. If a non-owner tries to run a slash command they are not authorized for, the bot responds with an ephemeral "You are not authorized to use this command." message.
 
 ### Direct Message Modes
 
@@ -74,7 +98,7 @@ Messages maintain session history across turns. If a message is deleted from Dis
 
 ## Slash Commands
 
-All slash commands are restricted to the configured `ownerId`.
+Slash commands are restricted to the configured `ownerId` and to any user listed in `trustedUsers` with the corresponding command in their `allowedCommands`. If an unauthorized user invokes a slash command, the bot replies with an ephemeral "You are not authorized to use this command." message. Message commands (right-click → Apps) and the ✨ error reaction remain restricted to the owner.
 
 | Command        | Description                                |
 | -------------- | ------------------------------------------ |

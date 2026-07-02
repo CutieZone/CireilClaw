@@ -37,6 +37,21 @@ const AccessSchema = vb.exactOptional(
   },
 );
 
+const TrustedUserSchema = vb.strictObject({
+  allowedCommands: vb.pipe(
+    vb.array(nonEmptyString),
+    vb.description(
+      "Discord command names this user is allowed to use, matching internal handler names",
+    ),
+  ),
+  ids: vb.pipe(
+    vb.array(vb.pipe(vb.string(), vb.regex(/[0-9]+/u))),
+    vb.description("An array of Discord user IDs"),
+  ),
+});
+
+const TrustedUsersSchema = vb.exactOptional(vb.array(TrustedUserSchema), []);
+
 const DiscordConfigSchema = vb.strictObject({
   access: vb.pipe(AccessSchema, vb.description("Optional restrictions on access to the agent")),
   directMessages: vb.pipe(
@@ -62,11 +77,22 @@ const DiscordConfigSchema = vb.strictObject({
     nonEmptyString,
     vb.description("The bot token from https://discord.com/developers/applications"),
   ),
+  trustedUsers: vb.pipe(
+    TrustedUsersSchema,
+    vb.description("Users who are trusted to run specific commands, beyond the owner"),
+  ),
 });
 
 type DiscordConfig = vb.InferOutput<typeof DiscordConfigSchema>;
 type DirectMessages = vb.InferOutput<typeof DirectMessagesSchema>;
 type AccessConfig = vb.InferOutput<typeof AccessSchema>;
+type TrustedUser = vb.InferOutput<typeof TrustedUserSchema>;
 
-export { DiscordConfigSchema, DirectMessagesSchema, AccessSchema };
-export type { DiscordConfig, DirectMessages, AccessConfig };
+export {
+  DiscordConfigSchema,
+  DirectMessagesSchema,
+  AccessSchema,
+  TrustedUserSchema,
+  TrustedUsersSchema,
+};
+export type { DiscordConfig, DirectMessages, AccessConfig, TrustedUser };
