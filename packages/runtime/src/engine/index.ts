@@ -343,26 +343,28 @@ export async function runTurn(
         debug(
           `useFilesApi=kimi: faking receive_video tool call (${fakeId}) for ${videos.length} video(s), ${images.length} image(s)`,
         );
-        session.pendingToolMessages.push({
-          content: [
-            {
-              id: fakeId,
-              input: {},
-              name: "receive_video",
-              type: "toolCall",
-            },
-          ],
-          role: "assistant",
-        });
-        session.pendingToolMessages.push({
-          content: {
-            id: fakeId,
-            name: "receive_video",
-            output: { _media: [...images, ...videos] },
-            type: "toolResponse",
+        session.pendingToolMessages.push(
+          {
+            content: [
+              {
+                id: fakeId,
+                input: {},
+                name: "receive_video",
+                type: "toolCall",
+              },
+            ],
+            role: "assistant",
           },
-          role: "toolResponse",
-        });
+          {
+            content: {
+              id: fakeId,
+              name: "receive_video",
+              output: { _media: [...images, ...videos] },
+              type: "toolResponse",
+            },
+            role: "toolResponse",
+          },
+        );
       } else {
         const media = [...images, ...videos];
         session.pendingToolMessages.push({ content: media, role: "user" });
@@ -420,7 +422,7 @@ export async function runTurn(
     const lastUserIdx = filteredMessages.findLastIndex((msg) => msg.role === "user");
     let latestUserMessage: Message | undefined = undefined;
     if (lastUserIdx !== -1) {
-      latestUserMessage = filteredMessages.splice(lastUserIdx, 1)[0] as Message | undefined;
+      [latestUserMessage] = filteredMessages.splice(lastUserIdx, 1);
     }
 
     // Inject opened files before the context usage snapshot so token

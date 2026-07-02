@@ -10,7 +10,6 @@ import { MessageLine } from "#channels/tui/MessageLine.js";
 import { StatusBar } from "#channels/tui/StatusBar.js";
 import { createTuiMessage } from "#channels/tui/tui-message.js";
 import type { TuiMessage } from "#channels/tui/tui-message.js";
-import type { UserMessage } from "#engine/message.js";
 import { NamedInternalSession, TuiSession } from "#harness/session.js";
 import { sanitizeError } from "#util/paths.js";
 
@@ -95,7 +94,7 @@ function TuiApp({ bridge, agent, initialSessionId }: AppProps): ReactElement {
         content: { content: trimmed, type: "text" },
         role: "user",
         timestamp: Date.now(),
-      } as UserMessage);
+      });
 
       const historyLengthBeforeTurn = session.history.length - 1;
       try {

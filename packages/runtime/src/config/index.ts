@@ -2,7 +2,6 @@ import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
-import type { TomlTable } from "smol-toml";
 import { parse } from "smol-toml";
 import * as vb from "valibot";
 
@@ -39,28 +38,15 @@ async function loadTools(agentSlug: string): Promise<ToolsConfig> {
 }
 
 async function loadEngine(agentSlug?: string): Promise<ProvidersConfig> {
-  let obj: TomlTable | undefined = undefined;
-  if (agentSlug === undefined) {
-    const file = path.join(root(), "config", "engine.toml");
+  const basePath = agentSlug === undefined ? root() : path.join(root(), "agents", agentSlug);
+  const file = path.join(basePath, "config", "engine.toml");
 
-    if (existsSync(file)) {
-      const data = await readFile(file, { encoding: "utf8" });
-
-      obj = parse(data);
-    } else {
-      throw new Error(`Could not find config file at path: ${colors.path(file)}`);
-    }
-  } else {
-    const file = path.join(root(), "agents", agentSlug, "config", "engine.toml");
-
-    if (existsSync(file)) {
-      const data = await readFile(file, { encoding: "utf8" });
-
-      obj = parse(data);
-    } else {
-      throw new Error(`Could not find config file at path: ${colors.path(file)}`);
-    }
+  if (!existsSync(file)) {
+    throw new Error(`Could not find config file at path: ${colors.path(file)}`);
   }
+
+  const data = await readFile(file, { encoding: "utf8" });
+  const obj = parse(data);
 
   const cfg = vb.parse(ProvidersConfigSchema, obj);
 
@@ -243,7 +229,7 @@ async function loadGlobalPluginConfig(name: string): Promise<Record<string, unkn
   const data = await readFile(file, { encoding: "utf8" });
   const obj = parse(data);
 
-  return obj as Record<string, unknown>;
+  return obj;
 }
 
 async function loadAgentPluginConfig(
@@ -259,7 +245,7 @@ async function loadAgentPluginConfig(
   const data = await readFile(file, { encoding: "utf8" });
   const obj = parse(data);
 
-  return obj as Record<string, unknown>;
+  return obj;
 }
 
 export {

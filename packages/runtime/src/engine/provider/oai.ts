@@ -239,17 +239,14 @@ function translateMsg(message: Message): ChatCompletionMessageParam {
         }
 
         if (toolCalls.length > 0) {
-          msg["tool_calls"] = toolCalls.map(
-            (it) =>
-              ({
-                function: {
-                  arguments: JSON.stringify(it.input),
-                  name: it.name,
-                },
-                id: it.id,
-                type: "function",
-              }) as ChatCompletionMessageToolCall,
-          );
+          msg["tool_calls"] = toolCalls.map((it) => ({
+            function: {
+              arguments: JSON.stringify(it.input),
+              name: it.name,
+            },
+            id: it.id,
+            type: "function",
+          }));
         }
 
         if (textBlocks.length > 0) {
@@ -570,7 +567,7 @@ export async function generate(
                 it.function.arguments.trim() === "" ? {} : parseRepairedJSON(it.function.arguments),
               name: it.function.name,
               type: "toolCall",
-            } as ToolCallContent;
+            };
           } catch (error: unknown) {
             const hash = createHash("sha256")
               .update(it.function.arguments)

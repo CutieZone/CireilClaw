@@ -85,12 +85,13 @@ function serializeHistory(
   const persistable = history.filter((msg) => !("persist" in msg && msg.persist === false));
   const validated = validateHistory(persistable);
 
-  const serialized = validated.map((msg) => ({
-    ...msg,
-    content: Array.isArray(msg.content)
+  const serialized = validated.map((msg) => {
+    const content = Array.isArray(msg.content)
       ? msg.content.map(serializeContent)
-      : serializeContent(msg.content),
-  }));
+      : serializeContent(msg.content);
+    Object.assign(msg, { content });
+    return msg;
+  });
 
   return { json: JSON.stringify(serialized), pendingImages };
 }

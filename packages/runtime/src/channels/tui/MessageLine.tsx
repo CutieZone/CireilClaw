@@ -112,8 +112,7 @@ export function MessageLine({ msg }: { msg: TuiMessage }): ReactElement {
               <Text dimColor>{time}</Text>
               <Text> </Text>
               <Text color={color} bold>
-                {label}
-                {":"}
+                {label}:
               </Text>
               <Text> </Text>
             </>
@@ -121,7 +120,7 @@ export function MessageLine({ msg }: { msg: TuiMessage }): ReactElement {
             <>
               <Text dimColor>{colonAlignPadding}</Text>
               <Text color={color} bold>
-                {"|"}
+                |
               </Text>
               <Text> </Text>
             </>

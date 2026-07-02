@@ -28,147 +28,132 @@ function makeDiscord(opts: {
 
 describe("evaluate", () => {
   it("tui matches TuiSession", () => {
-    expect(evaluate("tui" as Condition, new TuiSession())).toBe(true);
+    expect(evaluate("tui", new TuiSession())).toBe(true);
   });
 
   it("tui does not match DiscordSession", () => {
-    expect(evaluate("tui" as Condition, makeDiscord({}))).toBe(false);
+    expect(evaluate("tui", makeDiscord({}))).toBe(false);
   });
 
   it("internal matches InternalSession", () => {
-    expect(evaluate("internal" as Condition, new InternalSession("job1"))).toBe(true);
+    expect(evaluate("internal", new InternalSession("job1"))).toBe(true);
   });
 
   it("internal matches NamedInternalSession", () => {
-    expect(evaluate("internal" as Condition, new NamedInternalSession("heartbeat"))).toBe(true);
+    expect(evaluate("internal", new NamedInternalSession("heartbeat"))).toBe(true);
   });
 
   it("internal does not match DiscordSession", () => {
-    expect(evaluate("internal" as Condition, makeDiscord({}))).toBe(false);
+    expect(evaluate("internal", makeDiscord({}))).toBe(false);
   });
 
   describe("discord:nsfw", () => {
     it("matches when nsfw is true", () => {
-      expect(evaluate("discord:nsfw" as Condition, makeDiscord({ isNsfw: true }))).toBe(true);
+      expect(evaluate("discord:nsfw", makeDiscord({ isNsfw: true }))).toBe(true);
     });
 
     it("does not match when nsfw is false", () => {
-      expect(evaluate("discord:nsfw" as Condition, makeDiscord({ isNsfw: false }))).toBe(false);
+      expect(evaluate("discord:nsfw", makeDiscord({ isNsfw: false }))).toBe(false);
     });
 
     it("does not match non-discord sessions", () => {
-      expect(evaluate("discord:nsfw" as Condition, new TuiSession())).toBe(false);
+      expect(evaluate("discord:nsfw", new TuiSession())).toBe(false);
     });
   });
 
   describe("discord:dm", () => {
     it("matches when no guildId", () => {
-      expect(evaluate("discord:dm" as Condition, makeDiscord({ guildId: undefined }))).toBe(true);
+      expect(evaluate("discord:dm", makeDiscord({ guildId: undefined }))).toBe(true);
     });
 
     it("does not match when in a guild", () => {
-      expect(evaluate("discord:dm" as Condition, makeDiscord({ guildId: "guild1" }))).toBe(false);
+      expect(evaluate("discord:dm", makeDiscord({ guildId: "guild1" }))).toBe(false);
     });
 
     it("does not match non-discord sessions", () => {
-      expect(evaluate("discord:dm" as Condition, new TuiSession())).toBe(false);
+      expect(evaluate("discord:dm", new TuiSession())).toBe(false);
     });
   });
 
   describe("discord:dm:<channelId>", () => {
     it("matches specific DM channel", () => {
-      expect(evaluate("discord:dm:456" as Condition, makeDiscord({ channelId: "456" }))).toBe(true);
+      expect(evaluate("discord:dm:456", makeDiscord({ channelId: "456" }))).toBe(true);
     });
 
     it("does not match different channel", () => {
-      expect(evaluate("discord:dm:456" as Condition, makeDiscord({ channelId: "789" }))).toBe(
-        false,
-      );
+      expect(evaluate("discord:dm:456", makeDiscord({ channelId: "789" }))).toBe(false);
     });
 
     it("does not match when in a guild", () => {
-      expect(
-        evaluate(
-          "discord:dm:456" as Condition,
-          makeDiscord({ channelId: "456", guildId: "guild1" }),
-        ),
-      ).toBe(false);
+      expect(evaluate("discord:dm:456", makeDiscord({ channelId: "456", guildId: "guild1" }))).toBe(
+        false,
+      );
     });
   });
 
   describe("discord:guild:<guildId>", () => {
     it("matches when guild matches", () => {
-      expect(
-        evaluate("discord:guild:guild1" as Condition, makeDiscord({ guildId: "guild1" })),
-      ).toBe(true);
+      expect(evaluate("discord:guild:guild1", makeDiscord({ guildId: "guild1" }))).toBe(true);
     });
 
     it("does not match different guild", () => {
-      expect(
-        evaluate("discord:guild:guild1" as Condition, makeDiscord({ guildId: "guild2" })),
-      ).toBe(false);
+      expect(evaluate("discord:guild:guild1", makeDiscord({ guildId: "guild2" }))).toBe(false);
     });
 
     it("does not match DM", () => {
-      expect(
-        evaluate("discord:guild:guild1" as Condition, makeDiscord({ guildId: undefined })),
-      ).toBe(false);
+      expect(evaluate("discord:guild:guild1", makeDiscord({ guildId: undefined }))).toBe(false);
     });
   });
 
   describe("discord:channel:<channelId>", () => {
     it("matches when channel matches", () => {
-      expect(evaluate("discord:channel:123" as Condition, makeDiscord({ channelId: "123" }))).toBe(
-        true,
-      );
+      expect(evaluate("discord:channel:123", makeDiscord({ channelId: "123" }))).toBe(true);
     });
 
     it("does not match different channel", () => {
-      expect(evaluate("discord:channel:123" as Condition, makeDiscord({ channelId: "456" }))).toBe(
-        false,
-      );
+      expect(evaluate("discord:channel:123", makeDiscord({ channelId: "456" }))).toBe(false);
     });
   });
   it("returns false for unknown conditions", () => {
-    expect(evaluate("unknown:thing" as Condition, makeDiscord({}))).toBe(false);
+    expect(evaluate("unknown:thing", makeDiscord({}))).toBe(false);
   });
 });
 
 describe("negated conditions", () => {
   it("!discord:nsfw matches when nsfw is false", () => {
-    expect(evaluate("!discord:nsfw" as Condition, makeDiscord({ isNsfw: false }))).toBe(true);
+    expect(evaluate("!discord:nsfw", makeDiscord({ isNsfw: false }))).toBe(true);
   });
 
   it("!discord:nsfw does not match when nsfw is true", () => {
-    expect(evaluate("!discord:nsfw" as Condition, makeDiscord({ isNsfw: true }))).toBe(false);
+    expect(evaluate("!discord:nsfw", makeDiscord({ isNsfw: true }))).toBe(false);
   });
 
   it("!tui matches non-tui sessions", () => {
-    expect(evaluate("!tui" as Condition, makeDiscord({}))).toBe(true);
+    expect(evaluate("!tui", makeDiscord({}))).toBe(true);
   });
 
   it("!tui does not match TuiSession", () => {
-    expect(evaluate("!tui" as Condition, new TuiSession())).toBe(false);
+    expect(evaluate("!tui", new TuiSession())).toBe(false);
   });
 
   it("!internal matches non-internal sessions", () => {
-    expect(evaluate("!internal" as Condition, makeDiscord({}))).toBe(true);
+    expect(evaluate("!internal", makeDiscord({}))).toBe(true);
   });
 
   it("!discord:dm matches guild channels", () => {
-    expect(evaluate("!discord:dm" as Condition, makeDiscord({ guildId: "g1" }))).toBe(true);
+    expect(evaluate("!discord:dm", makeDiscord({ guildId: "g1" }))).toBe(true);
   });
 
   it("!discord:dm does not match actual DMs", () => {
-    expect(evaluate("!discord:dm" as Condition, makeDiscord({ guildId: undefined }))).toBe(false);
+    expect(evaluate("!discord:dm", makeDiscord({ guildId: undefined }))).toBe(false);
   });
 
   it("!discord:guild:g1 matches different guild", () => {
-    expect(evaluate("!discord:guild:g1" as Condition, makeDiscord({ guildId: "g2" }))).toBe(true);
+    expect(evaluate("!discord:guild:g1", makeDiscord({ guildId: "g2" }))).toBe(true);
   });
 
   it("!discord:guild:g1 does not match same guild", () => {
-    expect(evaluate("!discord:guild:g1" as Condition, makeDiscord({ guildId: "g1" }))).toBe(false);
+    expect(evaluate("!discord:guild:g1", makeDiscord({ guildId: "g1" }))).toBe(false);
   });
 });
 

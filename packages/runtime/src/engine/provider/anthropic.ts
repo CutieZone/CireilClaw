@@ -2,14 +2,7 @@ import type { KeyPool } from "@cireilclaw/sdk";
 import * as vb from "valibot";
 
 import { DefaultReasoningBudget } from "#config/schemas/engine.js";
-import type {
-  ImageContent,
-  RedactedThinkingContent,
-  TextContent,
-  ThinkingContent,
-  ToolCallContent,
-  ToolResponseContent,
-} from "#engine/content.js";
+import type { ImageContent, TextContent, ToolResponseContent } from "#engine/content.js";
 import type { Context, UsageInfo } from "#engine/context.js";
 import { GenerationNoToolCallsError } from "#engine/errors.js";
 import type { AssistantMessage, Message } from "#engine/message.js";
@@ -417,12 +410,12 @@ export async function generate(
             signature: block.signature,
             thinking: block.thinking,
             type: "thinking",
-          } as ThinkingContent);
+          });
         } else if (block.type === "redacted_thinking" && block.data !== undefined) {
           contentBlocks.push({
             data: block.data,
             type: "redacted_thinking",
-          } as RedactedThinkingContent);
+          });
         } else if (block.type === "tool_use") {
           if (block.id === undefined || block.name === undefined) {
             throw new Error(
@@ -434,7 +427,7 @@ export async function generate(
             input: block.input ?? {},
             name: block.name,
             type: "toolCall",
-          } as ToolCallContent);
+          });
         }
       }
 

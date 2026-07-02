@@ -392,16 +392,19 @@ async function buildNixBindings(args: string[], binaries: string[]): Promise<boo
     }
   }
 
-  for (const pth of uniquePaths) {
-    args.push("--ro-bind", pth, pth);
-  }
+  const nixStoreBinds = [...uniquePaths].flatMap((pth) => ["--ro-bind", pth, pth]);
+  const symlinks = [...storePaths].flatMap(([key, data]) => [
+    "--symlink",
+    data.itself,
+    `/bin/${key}`,
+  ]);
 
-  for (const [key, data] of storePaths) {
-    args.push("--symlink", data.itself, `/bin/${key}`);
-  }
-
-  args.push("--ro-bind", "/lib64", "/lib64");
   args.push(
+    ...nixStoreBinds,
+    ...symlinks,
+    "--ro-bind",
+    "/lib64",
+    "/lib64",
     "--ro-bind",
     "/run/current-system/sw/share/nix-ld/lib/ld.so",
     "/run/current-system/sw/share/nix-ld/lib/ld.so",
@@ -412,14 +415,19 @@ async function buildNixBindings(args: string[], binaries: string[]): Promise<boo
   if (envBinPath !== undefined) {
     const envResult = await queryNixStore(envBinPath);
     if (envResult.success) {
-      for (const pth of envResult.requisites) {
-        if (!uniquePaths.has(pth)) {
-          args.push("--ro-bind", pth, pth);
-        }
-      }
-      args.push("--dir", "/usr");
-      args.push("--dir", "/usr/bin");
-      args.push("--symlink", realpathSync(envBinPath), "/usr/bin/env");
+      const envBinds = envResult.requisites.flatMap((pth) =>
+        uniquePaths.has(pth) ? [] : ["--ro-bind", pth, pth],
+      );
+      args.push(
+        ...envBinds,
+        "--dir",
+        "/usr",
+        "--dir",
+        "/usr/bin",
+        "--symlink",
+        realpathSync(envBinPath),
+        "/usr/bin/env",
+      );
     }
   }
 

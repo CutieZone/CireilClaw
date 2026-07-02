@@ -59,7 +59,7 @@ export const migration: ConfigMigration = {
     let pluginsToml: Record<string, unknown> = { plugins: [] };
     if (existsSync(pluginsTomlPath)) {
       const content = await readFile(pluginsTomlPath, "utf8");
-      pluginsToml = parse(content) as Record<string, unknown>;
+      pluginsToml = parse(content);
     }
 
     const plugins = vb.parse(

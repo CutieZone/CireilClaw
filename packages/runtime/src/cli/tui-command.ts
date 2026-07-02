@@ -53,14 +53,16 @@ async function run(_noFlags: {}, agentSlug: string): Promise<void> {
     });
   }
 
-  choices.push({
-    name: colors.keyword("New: TUI session"),
-    value: "new:tui",
-  });
-  choices.push({
-    name: colors.keyword("New: Named internal session"),
-    value: "new:internal",
-  });
+  choices.push(
+    {
+      name: colors.keyword("New: TUI session"),
+      value: "new:tui",
+    },
+    {
+      name: colors.keyword("New: Named internal session"),
+      value: "new:internal",
+    },
+  );
 
   const selectedValue = await select({
     choices,

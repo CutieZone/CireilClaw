@@ -19,7 +19,7 @@ function parseInstallationId(raw: string): number {
       `Invalid installationId "${raw}" in GitHub plugin config: expected a positive integer.`,
     );
   }
-  const value = Number.parseInt(raw, 10);
+  const value = Math.trunc(Number(raw));
   if (!Number.isInteger(value) || value < 1) {
     throw new ToolError(
       `Invalid installationId "${raw}" in GitHub plugin config: must be a positive integer.`,

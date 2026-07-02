@@ -134,7 +134,7 @@ function normalizeCodexModel(model: string | undefined): string {
 function gpt5Minor(model: string): number | undefined {
   const match = /^gpt-5\.(\d+)/u.exec(model);
   const raw = match?.[1];
-  return raw === undefined ? undefined : Number.parseInt(raw, 10);
+  return raw === undefined ? undefined : Math.trunc(Number(raw));
 }
 
 function resolveCodexReasoning(

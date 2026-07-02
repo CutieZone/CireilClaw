@@ -371,8 +371,10 @@ describe("pruneHistory", () => {
   it("handles legacy maxTurns path correctly", () => {
     const history: Message[] = [];
     for (let idx = 0; idx < 10; idx++) {
-      history.push({ content: { content: `Turn ${idx}`, type: "text" }, role: "user" });
-      history.push({ content: { content: `Reply ${idx}`, type: "text" }, role: "assistant" });
+      history.push(
+        { content: { content: `Turn ${idx}`, type: "text" }, role: "user" },
+        { content: { content: `Reply ${idx}`, type: "text" }, role: "assistant" },
+      );
     }
 
     const { modifiedHistory, newCursor } = pruneHistory(

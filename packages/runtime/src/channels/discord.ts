@@ -985,7 +985,7 @@ async function handleMessageUpdate(
     // Fetch full message to ensure we have content/author/attachments
     let realMsg: DiscordMessage | undefined = undefined;
     if ("author" in msg) {
-      realMsg = msg as DiscordMessage;
+      realMsg = msg;
     } else {
       try {
         realMsg = await client.rest.channels.getMessage(msg.channelID, msg.id);

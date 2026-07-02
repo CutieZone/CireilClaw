@@ -87,25 +87,23 @@ async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): 
 
     // Inject the summarizer system prompt so the agent knows it's now
     // acting as a context compaction assistant with a specific task.
-    session.pendingToolMessages.push({
-      content: {
-        content: SUMMARIZER_SYSTEM_PROMPT,
-        type: "text",
+    session.pendingToolMessages.push(
+      {
+        content: {
+          content: SUMMARIZER_SYSTEM_PROMPT,
+          type: "text",
+        },
+        role: "system",
       },
-      role: "system",
-    });
-
-    // Inject the user's summarization request with the topic name and description.
-    // Marked persist: false so the summarizer system prompt and request don't
-    // pollute the conversation history.
-    session.pendingToolMessages.push({
-      content: {
-        content: `<summarization-request name="${name}">${description}</summarization-request>\n\nCall \`read-session\` if you need to examine history beyond what's visible. When you've identified the range, call \`prune-boundaries\` to commit the compaction.`,
-        type: "text",
+      {
+        content: {
+          content: `<summarization-request name="${name}">${description}</summarization-request>\n\nCall \`read-session\` if you need to examine history beyond what's visible. When you've identified the range, call \`prune-boundaries\` to commit the compaction.`,
+          type: "text",
+        },
+        persist: false,
+        role: "user",
       },
-      persist: false,
-      role: "user",
-    });
+    );
 
     saveSession(ctx.agentSlug, session);
 

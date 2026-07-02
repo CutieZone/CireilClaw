@@ -11,7 +11,7 @@ export function StatusBar({ busy }: { busy: boolean }): ReactElement {
           {" thinking..."}
         </Text>
       ) : (
-        <Text dimColor>{"ready | /help for commands"}</Text>
+        <Text dimColor>ready | /help for commands</Text>
       )}
     </Box>
   );
