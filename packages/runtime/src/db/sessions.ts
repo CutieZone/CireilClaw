@@ -85,12 +85,12 @@ function serializeHistory(
   const persistable = history.filter((msg) => !("persist" in msg && msg.persist === false));
   const validated = validateHistory(persistable);
 
+  // oxlint-disable-next-line oxc/no-map-spread -- must NOT mutate session.history (Object.assign is the bug)
   const serialized = validated.map((msg) => {
     const content = Array.isArray(msg.content)
       ? msg.content.map(serializeContent)
       : serializeContent(msg.content);
-    Object.assign(msg, { content });
-    return msg;
+    return { ...msg, content };
   });
 
   return { json: JSON.stringify(serialized), pendingImages };
@@ -205,27 +205,6 @@ async function deserializeHistory(json: string, agentSlug: string): Promise<Mess
       }
     } else {
       messages.push(msg);
-    }
-  }
-
-  // Diagnostic: verify no image_ref survived deserialization
-  for (const msg of messages) {
-    if (msg.role !== "user") continue;
-    const blocks = Array.isArray(msg.content) ? msg.content : [msg.content];
-    for (const block of blocks) {
-      if (
-        typeof block === "object" &&
-        block !== null &&
-        "type" in block &&
-        (block as unknown as { type: unknown }).type === "image_ref"
-      ) {
-        warning(
-          "LEAK: image_ref survived deserializeHistory!",
-          `role=${msg.role}`,
-          `msgId=${msg.id ?? "none"}`,
-          `block=${JSON.stringify(block)}`,
-        );
-      }
     }
   }
 
