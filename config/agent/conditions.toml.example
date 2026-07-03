@@ -2,7 +2,7 @@
 # Copy to ~/.cireilclaw/agents/{slug}/config/conditions.toml
 #
 # Supported conditions: discord:nsfw, discord:dm, discord:dm:{channelId},
-#   discord:guild:{guildId}, discord:channel:{channelId}, tui, internal
+#   discord:guild:{guildId}, discord:channel:{channelId}, discord:forum:{forumId}, tui, internal
 # Negation is supported with a leading `!` (e.g., `!discord:nsfw`, `!tui`)
 
 # --- Block loading rules ---

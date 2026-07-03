@@ -13,11 +13,12 @@ const ConditionStringSchema = vb.message(
         /^discord:dm:\d+$/u.test(str) ||
         /^discord:guild:\d+$/u.test(str) ||
         /^discord:channel:\d+$/u.test(str) ||
+        /^discord:forum:\d+$/u.test(str) ||
         str === "tui" ||
         str === "internal",
     ),
   ),
-  "Invalid condition format. Supported: discord:nsfw, discord:dm[:id], discord:guild:id, discord:channel:id, tui, internal",
+  "Invalid condition format. Supported: discord:nsfw, discord:dm[:id], discord:guild:id, discord:channel:id, discord:forum:id, tui, internal",
 );
 
 const WhenSchema = vb.union([

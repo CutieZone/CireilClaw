@@ -823,16 +823,29 @@ async function handleMessageCreate(
       ? false
       : msgChannel.nsfw;
 
+  const parentChannelId =
+    msgChannel.type === ChannelTypes.PUBLIC_THREAD ||
+    msgChannel.type === ChannelTypes.PRIVATE_THREAD ||
+    msgChannel.type === ChannelTypes.ANNOUNCEMENT_THREAD
+      ? ((msgChannel as { parentID?: string | null }).parentID ?? undefined)
+      : undefined;
+
   if (session === undefined) {
     session = new DiscordSession({
       channelId: msg.channelID,
       guildId: msg.guildID ?? undefined,
       isNsfw,
+      parentChannelId,
     });
 
     agent.sessions.set(sessionId, session);
   } else {
     session.isNsfw = isNsfw;
+    // Populate parentChannelId for existing sessions too — for sessions
+    // created before the field was added or restored from an older DB dump.
+    if (parentChannelId !== undefined) {
+      session.parentChannelId = parentChannelId;
+    }
   }
 
   // Populate message history for both new and existing sessions. The function

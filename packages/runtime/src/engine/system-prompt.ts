@@ -244,6 +244,9 @@ async function buildSystemPrompt(
 
   if (session.channel === "discord") {
     lines.push(`The channel id is: ${session.channelId}`);
+    if (session.parentChannelId !== undefined) {
+      lines.push(`The parent forum/channel id is: ${session.parentChannelId}`);
+    }
     if (session.guildId === undefined) {
       lines.push("SFW/NSFW depending on the user");
     } else {

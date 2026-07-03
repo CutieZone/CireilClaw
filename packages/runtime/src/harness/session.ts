@@ -72,6 +72,7 @@ class DiscordSession extends BaseSession {
 
   public readonly channelId: string;
   public readonly guildId?: string;
+  public parentChannelId?: string;
   public isNsfw: boolean;
 
   public typingInterval?: NodeJS.Timeout = undefined;
@@ -82,6 +83,7 @@ class DiscordSession extends BaseSession {
     selectedProvider?: string;
     selectedModel?: string;
     guildId?: string;
+    parentChannelId?: string;
     isNsfw?: boolean;
   }) {
     super();
@@ -90,6 +92,7 @@ class DiscordSession extends BaseSession {
     this.selectedModel = opts.selectedModel;
 
     this.guildId = opts.guildId;
+    this.parentChannelId = opts.parentChannelId;
     this.isNsfw = opts.isNsfw ?? false;
   }
 

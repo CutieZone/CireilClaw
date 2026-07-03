@@ -219,6 +219,7 @@ const DiscordMetaSchema = vb.object({
   historyBarrier: vb.exactOptional(vb.number()),
   isNsfw: vb.exactOptional(vb.boolean()),
   lastContextWarningCursor: vb.exactOptional(LastContextWarningCursorSchema),
+  parentChannelId: vb.exactOptional(nonEmptyString),
   selectedModel: vb.exactOptional(nonEmptyString),
   selectedProvider: vb.exactOptional(nonEmptyString),
 });
@@ -269,6 +270,7 @@ function flushSession(agentSlug: string, session: Session): void {
       historyBarrier: session.historyBarrier,
       isNsfw: session.isNsfw,
       lastContextWarningCursor: session.lastContextWarningCursor,
+      parentChannelId: session.parentChannelId,
       selectedModel: session.selectedModel,
       selectedProvider: session.selectedProvider,
     } satisfies DiscordMeta;
@@ -368,6 +370,7 @@ async function loadSessions(agentSlug: string): Promise<Map<string, Session>> {
         channelId: meta.channelId,
         guildId: meta.guildId,
         isNsfw: meta.isNsfw,
+        parentChannelId: meta.parentChannelId,
         selectedModel: meta.selectedModel,
         selectedProvider: meta.selectedProvider,
       });

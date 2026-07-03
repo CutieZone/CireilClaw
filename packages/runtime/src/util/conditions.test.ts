@@ -17,12 +17,14 @@ import {
 function makeDiscord(opts: {
   channelId?: string;
   guildId?: string;
+  parentChannelId?: string;
   isNsfw?: boolean;
 }): DiscordSession {
   return new DiscordSession({
     channelId: opts.channelId ?? "123",
     guildId: opts.guildId,
     isNsfw: opts.isNsfw ?? false,
+    parentChannelId: opts.parentChannelId,
   });
 }
 
@@ -114,6 +116,34 @@ describe("evaluate", () => {
       expect(evaluate("discord:channel:123", makeDiscord({ channelId: "456" }))).toBe(false);
     });
   });
+
+  describe("discord:forum:<forumId>", () => {
+    it("matches when parentChannelId matches", () => {
+      expect(
+        evaluate("discord:forum:999", makeDiscord({ channelId: "123", parentChannelId: "999" })),
+      ).toBe(true);
+    });
+
+    it("does not match different forum", () => {
+      expect(
+        evaluate("discord:forum:999", makeDiscord({ channelId: "123", parentChannelId: "888" })),
+      ).toBe(false);
+    });
+
+    it("does not match when there is no parent (not a thread)", () => {
+      expect(
+        evaluate(
+          "discord:forum:999",
+          makeDiscord({ channelId: "123", parentChannelId: undefined }),
+        ),
+      ).toBe(false);
+    });
+
+    it("does not match non-discord sessions", () => {
+      expect(evaluate("discord:forum:999", new TuiSession())).toBe(false);
+    });
+  });
+
   it("returns false for unknown conditions", () => {
     expect(evaluate("unknown:thing", makeDiscord({}))).toBe(false);
   });
@@ -154,6 +184,18 @@ describe("negated conditions", () => {
 
   it("!discord:guild:g1 does not match same guild", () => {
     expect(evaluate("!discord:guild:g1", makeDiscord({ guildId: "g1" }))).toBe(false);
+  });
+
+  it("!discord:forum:f1 matches different forum", () => {
+    expect(evaluate("!discord:forum:f1", makeDiscord({ parentChannelId: "f2" }))).toBe(true);
+  });
+
+  it("!discord:forum:f1 does not match same forum", () => {
+    expect(evaluate("!discord:forum:f1", makeDiscord({ parentChannelId: "f1" }))).toBe(false);
+  });
+
+  it("!discord:forum:f1 matches when there is no parent", () => {
+    expect(evaluate("!discord:forum:f1", makeDiscord({ parentChannelId: undefined }))).toBe(true);
   });
 });
 

@@ -33,6 +33,8 @@ function evaluate(condition: Condition, session: Session): boolean {
         result = session.guildId === part2;
       } else if (part1 === "channel" && parts.length === 3 && part2 !== undefined) {
         result = session.channelId === part2;
+      } else if (part1 === "forum" && parts.length === 3 && part2 !== undefined) {
+        result = session.parentChannelId === part2;
       } else {
         result = false;
       }

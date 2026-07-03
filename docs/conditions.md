@@ -50,6 +50,7 @@ action = "allow"
 | `discord:dm:{channelId}`      | Specific Discord DM channel             |
 | `discord:guild:{guildId}`     | Specific Discord guild (server)         |
 | `discord:channel:{channelId}` | Specific Discord channel                |
+| `discord:forum:{forumId}`     | Any thread/child of a forum channel     |
 | `tui`                         | TUI session (run via `pnpm start tui`)  |
 | `internal`                    | Internal session (heartbeat, cron jobs) |
 
@@ -180,7 +181,23 @@ when = "discord:dm"
 action = "allow"
 ```
 
-### Channel-Specific Tools
+### Forum Channel Threads
+
+```toml
+# Load forum guidelines in any thread of a specific forum
+[blocks.forum-rules]
+when = "discord:forum:123456789"
+action = "load"
+
+# Allow workspace access only in threads of a specific forum
+[workspace."/forum-projects/"]
+when = "discord:forum:987654321"
+action = "allow"
+```
+
+The `discord:forum:{forumId}` condition matches any thread that is a child of the specified forum channel. This is useful for applying rules to all threads in a forum without having to list each thread individually.
+
+## Channel-Specific Tools
 
 ```toml
 # Deploy scripts only in specific channel

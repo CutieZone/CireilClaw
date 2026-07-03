@@ -14,12 +14,13 @@ const ConditionStringSchema = vb.message(
         /^discord:dm:\d+$/u.test(base) ||
         /^discord:guild:\d+$/u.test(base) ||
         /^discord:channel:\d+$/u.test(base) ||
+        /^discord:forum:\d+$/u.test(base) ||
         base === "tui" ||
         base === "internal"
       );
     }),
   ),
-  "Invalid condition format. Supported: [!]discord:nsfw, [!]discord:dm[:id], [!]discord:guild:id, [!]discord:channel:id, [!]tui, [!]internal",
+  "Invalid condition format. Supported: [!]discord:nsfw, [!]discord:dm[:id], [!]discord:guild:id, [!]discord:channel:id, [!]discord:forum:id, [!]tui, [!]internal",
 );
 
 const WhenSchema = vb.union([
