@@ -521,7 +521,11 @@ function historyInsertById(history: Message[], entry: Message): number {
     }
 
     const pivotId = history[loopStart]?.id;
-    if (pivotId !== undefined && BigInt(pivotId) < entryBig) {
+    if (pivotId === undefined) {
+      // No pivot ID to compare against — skip past the loop and continue.
+      idx = loopEnd;
+      regionStart = idx;
+    } else if (BigInt(pivotId) < entryBig) {
       // Entry goes after this entire loop.
       idx = loopEnd;
       regionStart = idx;
