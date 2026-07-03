@@ -651,6 +651,25 @@ export async function runTurn(
       }
       debug("Tool result", colors.keyword(call.name), result);
 
+      // Assign Discord message IDs to the assistant history entry immediately
+      // after respond sends, so agentic-loop entries carry proper snowflakes
+      // for historyInsertById's binary search on the next turn.
+      if (
+        call.name === "respond" &&
+        session.lastSentMessageIds !== undefined &&
+        session.lastSentMessageIds.length > 0
+      ) {
+        const assistant = session.history.findLast(
+          (entry) => entry.role === "assistant" && entry.id === undefined,
+        );
+        if (assistant !== undefined) {
+          const [firstId, ...restIds] = session.lastSentMessageIds;
+          assistant.id = firstId;
+          assistant.messageIds = restIds.length > 0 ? session.lastSentMessageIds : undefined;
+        }
+        session.lastSentMessageIds = undefined;
+      }
+
       // Track consecutive failures to catch looping behaviour.
       const toolFailed = typeof result["success"] === "boolean" && !result["success"];
       if (toolFailed) {
@@ -703,20 +722,6 @@ export async function runTurn(
     }
 
     if (done) {
-      // Apply sent message IDs from the channel handler to the assistant
-      // history entry, so delete/reroll commands can look up by Discord ID.
-      if (session.lastSentMessageIds !== undefined && session.lastSentMessageIds.length > 0) {
-        const lastAssistant = session.history.findLast(
-          (entry) => entry.role === "assistant" && entry.id === undefined,
-        );
-        if (lastAssistant !== undefined) {
-          const [firstId, ...restIds] = session.lastSentMessageIds;
-          lastAssistant.id = firstId;
-          lastAssistant.messageIds = restIds.length > 0 ? session.lastSentMessageIds : undefined;
-        }
-        session.lastSentMessageIds = undefined;
-      }
-
       for (const msg of session.pendingToolMessages) {
         msg.timestamp ??= Date.now();
       }
