@@ -8,7 +8,7 @@ import { repairSession } from "#util/repair-session.js";
 import type { HandlerCtx } from "./handler-ctx.js";
 
 const definition: CreateApplicationCommandOptions = {
-  description: "Repair media attachments by re-fetching from Discord",
+  description: "Repair a session: re-fetch attachments from Discord and sort history",
   name: "repair",
   type: ApplicationCommandTypes.CHAT_INPUT,
 };
@@ -25,7 +25,7 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
     const result = await repairSession(ctx.agentSlug, sessionId, ctx.client);
 
     await interaction.createFollowup({
-      content: `Repair complete: ${result.updated} updated, ${result.failed} failed, ${result.skipped} skipped`,
+      content: `Repair complete: ${result.reordered} reordered, ${result.updated} updated, ${result.failed} failed, ${result.skipped} skipped`,
       flags: MessageFlags.EPHEMERAL,
     });
   } catch (error) {

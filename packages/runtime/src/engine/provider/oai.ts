@@ -234,8 +234,9 @@ function translateMsg(message: Message): ChatCompletionMessageParam {
         // like DeepSeek and QwQ that expose reasoning in OAI-compat responses.
         const msg: Record<string, unknown> = { role: "assistant" };
 
-        if (thinkingBlocks.length > 0) {
-          msg["reasoning_content"] = thinkingBlocks.map((it) => it.thinking).join("\n\n");
+        const reasoningContent = thinkingBlocks.map((it) => it.thinking).join("\n\n");
+        if (reasoningContent.length > 0) {
+          msg["reasoning_content"] = reasoningContent;
         }
 
         if (toolCalls.length > 0) {
@@ -264,11 +265,19 @@ function translateMsg(message: Message): ChatCompletionMessageParam {
       }
       if (message.content.type === "thinking") {
         // Single thinking block, so send as reasoning_content with no text content.
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        if (message.content.thinking.length > 0) {
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+          return {
+            reasoning_content: message.content.thinking,
+            role: "assistant",
+          } as unknown as ChatCompletionMessageParam;
+        }
+        // Empty thinking block — nothing useful to send; fall back to an empty
+        // assistant message so the request stays valid.
         return {
-          reasoning_content: message.content.thinking,
+          content: "",
           role: "assistant",
-        } as unknown as ChatCompletionMessageParam;
+        };
       }
       if (message.content.type === "toolCall") {
         // Single toolCall block (normalized by history-validate from an array of 1).

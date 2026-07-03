@@ -126,6 +126,8 @@ async function run(): Promise<void> {
 
   info(
     "Repair complete:",
+    colors.keyword(result.reordered.toString()),
+    "reordered,",
     colors.keyword(result.updated.toString()),
     "updated,",
     colors.keyword(result.failed.toString()),
@@ -139,7 +141,7 @@ async function run(): Promise<void> {
 
 export const repairCommand = buildCommand({
   docs: {
-    brief: "Repair media attachments by re-fetching from Discord",
+    brief: "Repair a session: re-fetch media attachments from Discord and sort history",
   },
   func: run,
   parameters: {},

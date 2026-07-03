@@ -465,6 +465,87 @@ function isSuppressNotifications(msg: DiscordMessage): boolean {
   return (msg.flags & SUPPRESS_NOTIFICATIONS) !== 0;
 }
 
+/**
+ * Insert a message into history at the correct chronological position while
+ * keeping agentic-loop regions (`[assistant, toolResponse*, assistant, toolResponse*, ...]`)
+ * as atomic units. New messages are inserted either fully before or fully
+ * after each loop — never inside — preserving the API invariant that tool
+ * responses must immediately follow their issuing assistant message.
+ *
+ * Implementation: a linear pass identifies agentic-loop regions. Each region
+ * is bracketed by the snowflake ID of its first assistant message. Entries
+ * with a larger ID are placed after the loop; smaller-ID entries go before.
+ * Once past all loop boundaries, a binary search places the entry in
+ * chronological order within the remaining user/assistant sequence.
+ */
+function historyInsertById(history: Message[], entry: Message): void {
+  const entryId = entry.id;
+  if (entryId === undefined) {
+    history.push(entry);
+    return;
+  }
+  const entryBig = BigInt(entryId);
+
+  // Phase 1: walk history left-to-right, skipping agentic-loop regions that
+  // the entry should go after. An agentic loop is a contiguous run of
+  // (assistant | toolResponse)+ entries — it represents one turn's tool
+  // iteration. The entry goes after the loop iff its snowflake ID exceeds
+  // the first assistant message's ID in that loop.
+  let regionStart = 0;
+  let idx = 0;
+  while (idx < history.length) {
+    const msg = history[idx];
+    if (msg?.role !== "assistant") {
+      idx++;
+      continue;
+    }
+
+    // Agentic loop detected: find its end (next non-assistant, non-toolResponse).
+    const loopStart = idx;
+    let loopEnd = idx + 1;
+    while (
+      loopEnd < history.length &&
+      (history[loopEnd]?.role === "toolResponse" || history[loopEnd]?.role === "assistant")
+    ) {
+      loopEnd++;
+    }
+
+    const pivotId = history[loopStart]?.id;
+    if (pivotId !== undefined && BigInt(pivotId) < entryBig) {
+      // Entry goes after this entire loop.
+      idx = loopEnd;
+      regionStart = idx;
+    } else {
+      // Entry goes before this loop — stop scanning.
+      break;
+    }
+  }
+
+  // Phase 2: binary search within [regionStart, idx) for position by ID.
+  let lo = regionStart;
+  let hi = idx;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    const midEntry = history[mid];
+    if (midEntry === undefined) {
+      break;
+    }
+    const midId = midEntry.id;
+    if (midId === undefined) {
+      hi = mid;
+      continue;
+    }
+    const midBig = BigInt(midId);
+    if (midBig < entryBig) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+
+  history.splice(lo, 0, entry);
+}
+
 async function populateHistoryFromDiscord(
   client: OceanicClient,
   session: DiscordSession,
@@ -516,12 +597,12 @@ async function populateHistoryFromDiscord(
       : await formatHistoryContext(msg);
     const images = await fetchAllImages(msg);
 
-    session.history.push({
+    historyInsertById(session.history, {
       content: images.length > 0 ? [textContent, ...images] : textContent,
       id: msg.id,
       persist: false, // Historical context, don't persist to DB
       role,
-      timestamp: Date.now(),
+      timestamp: msg.createdAt.getTime(),
     });
   }
 }
@@ -796,13 +877,13 @@ async function handleMessageCreate(
           ? await formatAssistantContext(ancestor)
           : await formatHistoryContext(ancestor);
         const ancestorImages = await fetchAllImages(ancestor);
-        ds.history.push({
+        historyInsertById(ds.history, {
           content:
             ancestorImages.length > 0 ? [ancestorContent, ...ancestorImages] : ancestorContent,
           id: ancestor.id,
           persist: false,
           role: isFromBot ? "assistant" : "user",
-          timestamp: Date.now(),
+          timestamp: ancestor.createdAt.getTime(),
         });
       }
 
@@ -818,12 +899,12 @@ async function handleMessageCreate(
             ? await formatAssistantContext(directReply)
             : await formatHistoryContext(directReply);
           const replyImages = await fetchAllImages(directReply);
-          ds.history.push({
+          historyInsertById(ds.history, {
             content: replyImages.length > 0 ? [replyContent, ...replyImages] : replyContent,
             id: directReply.id,
             persist: true,
             role: isFromBot ? "assistant" : "user",
-            timestamp: Date.now(),
+            timestamp: directReply.createdAt.getTime(),
           });
         }
       }
@@ -859,7 +940,7 @@ async function handleMessageCreate(
       id: msg.id,
       persist: true,
       role: "user",
-      timestamp: Date.now(),
+      timestamp: msg.createdAt.getTime(),
     });
 
     // Start typing indicator — Discord shows "Bot is typing…" for ~5 s, so we

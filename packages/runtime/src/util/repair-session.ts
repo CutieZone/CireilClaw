@@ -6,6 +6,7 @@ import * as vb from "valibot";
 import { getDb } from "#db/index.js";
 import { sessions } from "#db/schema.js";
 import { DiscordMetaSchema, updateSessionImages, updateSessionVideoRefs } from "#db/sessions.js";
+import type { SerializedMessage } from "#db/validation.js";
 import { SerializedHistorySchema } from "#db/validation.js";
 import { isImageRef, isVideoRef } from "#engine/content.js";
 import { warning } from "#output/log.js";
@@ -16,6 +17,94 @@ interface RepairResult {
   failed: number;
   skipped: number;
   updated: number;
+  reordered: number;
+}
+
+interface HistorySegment {
+  type: "entry" | "loop";
+  entries: SerializedMessage[];
+  sortId: string | undefined;
+}
+
+/**
+ * Sort serialized history entries into chronological order while keeping
+ * agentic-loop regions (`[assistant, toolResponse*, assistant, toolResponse*, ...]`)
+ * as atomic units. Loops are never split; individual user/assistant entries
+ * are sorted by their Discord snowflake ID.
+ *
+ * Returns a new sorted array (or the same array if already in order).
+ */
+function sortHistoryEntries(history: SerializedMessage[]): SerializedMessage[] {
+  if (history.length < 2) {
+    return history;
+  }
+
+  // Phase 1: split into segments — agentic loops and individual entries.
+  const segments: HistorySegment[] = [];
+  let idx = 0;
+  while (idx < history.length) {
+    const msg = history[idx];
+    if (msg === undefined) {
+      idx++;
+      continue;
+    }
+
+    if (msg.role === "assistant") {
+      // Check for an agentic loop: continuous [assistant, toolResponse*, assistant, toolResponse*, ...]
+      const loopStart = idx;
+      let loopEnd = idx + 1;
+      while (
+        loopEnd < history.length &&
+        (history[loopEnd]?.role === "toolResponse" || history[loopEnd]?.role === "assistant")
+      ) {
+        loopEnd++;
+      }
+
+      if (loopEnd > loopStart + 1) {
+        // Has at least one follower — real loop.
+        segments.push({
+          entries: history.slice(loopStart, loopEnd),
+          sortId: msg.id,
+          type: "loop",
+        });
+        idx = loopEnd;
+        continue;
+      }
+    }
+
+    segments.push({
+      entries: [msg],
+      sortId: msg.id,
+      type: "entry",
+    });
+    idx++;
+  }
+
+  // Phase 2: sort segments by snowflake ID. Entries without IDs keep
+  // their relative order and sort before everything with IDs.
+  const sorted = segments.toSorted((first, second) => {
+    const firstId = first.sortId;
+    const secondId = second.sortId;
+    if (firstId === undefined && secondId === undefined) {
+      return 0;
+    }
+    if (firstId === undefined) {
+      return -1;
+    }
+    if (secondId === undefined) {
+      return 1;
+    }
+    if (firstId < secondId) {
+      return -1;
+    }
+    if (firstId > secondId) {
+      return 1;
+    }
+    return 0;
+  });
+
+  // Phase 3: flatten back to a message array.
+  return sorted.flatMap((seg) => seg.entries);
 }
 
 async function fetchSessionDisplayName(
@@ -67,13 +156,27 @@ async function repairSession(
   const row = db.select().from(sessions).where(eq(sessions.id, sessionId)).get();
 
   if (row === undefined) {
-    return { failed: 0, skipped: 0, updated: 0 };
+    return { failed: 0, reordered: 0, skipped: 0, updated: 0 };
   }
 
   const meta = vb.parse(DiscordMetaSchema, JSON.parse(row.meta));
   const { channelId } = meta;
 
   const history = vb.parse(SerializedHistorySchema, JSON.parse(row.history));
+
+  // Sort history entries chronologically by snowflake ID while keeping
+  // agentic-loop regions intact, then write back so the image/video repair
+  // functions below see the sorted data.
+  const sorted = sortHistoryEntries(history);
+  let reordered = 0;
+  if (sorted !== history) {
+    reordered = sorted.length;
+    const updatedHistory = JSON.stringify(sorted);
+    db.update(sessions).set({ history: updatedHistory }).where(eq(sessions.id, sessionId)).run();
+    // Use the sorted copy for the rest of the repair.
+    Object.assign(history, sorted);
+    history.length = sorted.length;
+  }
 
   const imagesToFetch: { msgId: string; url: string }[] = [];
   const videoRefsToFetch: { msgId: string; attachmentId: string }[] = [];
@@ -210,7 +313,7 @@ async function repairSession(
     updateSessionVideoRefs(agentSlug, sessionId, newVideoUrls);
   }
 
-  return { failed, skipped, updated };
+  return { failed, reordered, skipped, updated };
 }
 
 export type { RepairResult };
