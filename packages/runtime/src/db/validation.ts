@@ -2,7 +2,7 @@ import * as vb from "valibot";
 
 // Schema for serialized history messages (loose validation for repair tool)
 const SerializedMessageSchema = vb.looseObject({
-  content: vb.union([vb.string(), vb.array(vb.unknown()), vb.object({})]),
+  content: vb.union([vb.string(), vb.array(vb.unknown()), vb.looseObject({})]),
   id: vb.exactOptional(vb.string()),
   role: vb.exactOptional(vb.string()),
 });
