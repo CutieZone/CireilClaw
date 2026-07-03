@@ -448,12 +448,21 @@ async function fetchMessageHistory(
   limit = 30,
 ): Promise<DiscordMessage[]> {
   try {
-    const fetched = await client.rest.channels.getMessages(channelId, {
-      limit,
-    });
+    const fetched = await runDiscordRestWithRetries(
+      `GET /channels/{channel.id}/messages?limit=${limit}`,
+      async () =>
+        await client.rest.channels.getMessages(channelId, {
+          limit,
+        }),
+    );
     return fetched.toReversed();
-  } catch {
-    // Channel may not be readable, permissions issues, etc.
+  } catch (error: unknown) {
+    warning(
+      "Failed to fetch Discord message history for channel",
+      channelId,
+      "— surrounding context will be unavailable for this turn:",
+      error instanceof Error ? error.message : String(error),
+    );
     return [];
   }
 }
