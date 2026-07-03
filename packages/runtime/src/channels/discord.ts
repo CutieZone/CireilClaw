@@ -487,12 +487,11 @@ function isSuppressNotifications(msg: DiscordMessage): boolean {
  * Once past all loop boundaries, a binary search places the entry in
  * chronological order within the remaining user/assistant sequence.
  */
-function historyInsertById(history: Message[], entry: Message): number {
+function historyInsertById(history: Message[], entry: Message): void {
   const entryId = entry.id;
   if (entryId === undefined) {
-    const idx = history.length;
     history.push(entry);
-    return idx;
+    return;
   }
   const entryBig = BigInt(entryId);
 
@@ -558,7 +557,6 @@ function historyInsertById(history: Message[], entry: Message): number {
   }
 
   history.splice(lo, 0, entry);
-  return lo;
 }
 
 async function populateHistoryFromDiscord(
@@ -569,37 +567,20 @@ async function populateHistoryFromDiscord(
   limit = 30,
 ): Promise<void> {
   const messages = await fetchMessageHistory(client, session.channelId, limit);
-  debug(
-    "populateHistoryFromDiscord: fetched",
-    messages.length,
-    "messages, history has",
-    session.history.length,
-    "entries",
-  );
-
-  let skippedCurrent = 0;
-  let skippedInHistory = 0;
-  let skippedBarrier = 0;
-  let skippedSuppressed = 0;
-  let skippedEmpty = 0;
-  let inserted = 0;
 
   for (const msg of messages) {
     // Skip the current message - it's being processed separately
     if (msg.id === currentMessageId) {
-      skippedCurrent++;
       continue;
     }
 
     // Skip messages already in history (shouldn't happen on new sessions, but safe to check)
     if (isMessageInHistory(session.history, msg.id)) {
-      skippedInHistory++;
       continue;
     }
 
     // Skip messages before the history barrier (super-clear)
     if (session.historyBarrier !== undefined && msg.createdAt.getTime() < session.historyBarrier) {
-      skippedBarrier++;
       continue;
     }
 
@@ -607,7 +588,6 @@ async function populateHistoryFromDiscord(
     // make it to the LLM unless they're in the reply chain (which is handled
     // separately by crawlReplyTree)
     if (isSuppressNotifications(msg)) {
-      skippedSuppressed++;
       continue;
     }
 
@@ -619,7 +599,6 @@ async function populateHistoryFromDiscord(
     const hasText = msg.content.trim().length > 0;
 
     if (!hasText && !hasImages) {
-      skippedEmpty++;
       continue;
     }
 
@@ -631,32 +610,14 @@ async function populateHistoryFromDiscord(
       : await formatHistoryContext(msg);
     const images = await fetchAllImages(msg);
 
-    const idx = historyInsertById(session.history, {
+    historyInsertById(session.history, {
       content: images.length > 0 ? [textContent, ...images] : textContent,
       id: msg.id,
       persist: false, // Historical context, don't persist to DB
       role,
       timestamp: msg.createdAt.getTime(),
     });
-    inserted++;
-    debug("populateHistoryFromDiscord: inserted", msg.id, "at index", idx);
   }
-
-  debug(
-    "populateHistoryFromDiscord: done — inserted:",
-    inserted,
-    "skipped (current:",
-    skippedCurrent,
-    "inHistory:",
-    skippedInHistory,
-    "barrier:",
-    skippedBarrier,
-    "suppressed:",
-    skippedSuppressed,
-    "empty:",
-    skippedEmpty,
-    ")",
-  );
 }
 
 // When a split happens inside a fenced code block, close the chunk with
