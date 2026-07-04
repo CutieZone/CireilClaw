@@ -9,33 +9,20 @@ import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
 import { requiresFrontmatter, splitFrontmatter, validateFrontmatter } from "#util/frontmatter.js";
 
 import { generateDiff } from "./diff.js";
-import { applyEdits, getEditMetadata, type EditOperation } from "./matcher.js";
+import { applyEdits, getEditMetadata } from "./matcher.js";
+import type { EditOperation } from "./matcher.js";
 
 // ---------------------------------------------------------------------------
 // Schema
 // ---------------------------------------------------------------------------
 
 const NearObjectSchema = vb.strictObject({
-  symbol: vb.exactOptional(
+  direction: vb.exactOptional(
     vb.pipe(
-      vb.string(),
+      vb.union([vb.literal("before"), vb.literal("after")]),
       vb.description(
-        "Symbol/landmark text to find. Fuzzy-matched like oldText. Use with line, index, direction, or radius to disambiguate.",
+        "Search only before or after the matched landmark. Default searches around the landmark.",
       ),
-    ),
-  ),
-  line: vb.exactOptional(
-    vb.pipe(
-      vb.number(),
-      vb.description(
-        "Expected 1-indexed line of the symbol. The nearest occurrence within radius lines is used.",
-      ),
-    ),
-  ),
-  startLine: vb.exactOptional(
-    vb.pipe(
-      vb.number(),
-      vb.description("Start of an explicit 1-indexed line-range window. Use with endLine."),
     ),
   ),
   endLine: vb.exactOptional(
@@ -50,11 +37,11 @@ const NearObjectSchema = vb.strictObject({
       vb.description("1-indexed occurrence of the symbol to target (e.g. 2 for the second match)."),
     ),
   ),
-  direction: vb.exactOptional(
+  line: vb.exactOptional(
     vb.pipe(
-      vb.union([vb.literal("before"), vb.literal("after")]),
+      vb.number(),
       vb.description(
-        "Search only before or after the matched landmark. Default searches around the landmark.",
+        "Expected 1-indexed line of the symbol. The nearest occurrence within radius lines is used.",
       ),
     ),
   ),
@@ -62,6 +49,20 @@ const NearObjectSchema = vb.strictObject({
     vb.pipe(
       vb.number(),
       vb.description("Number of lines around the landmark to search. Default: 15."),
+    ),
+  ),
+  startLine: vb.exactOptional(
+    vb.pipe(
+      vb.number(),
+      vb.description("Start of an explicit 1-indexed line-range window. Use with endLine."),
+    ),
+  ),
+  symbol: vb.exactOptional(
+    vb.pipe(
+      vb.string(),
+      vb.description(
+        "Symbol/landmark text to find. Fuzzy-matched like oldText. Use with line, index, direction, or radius to disambiguate.",
+      ),
     ),
   ),
 });
@@ -73,43 +74,38 @@ const NearAnchorSchema = vb.union([
 ]);
 
 const SingleEditSchema = vb.strictObject({
-  oldText: vb.pipe(
-    vb.string(),
-    vb.description(
-      "Text to find. Fuzzy whitespace matching is used by default: differences in indentation, trailing spaces, tabs vs spaces, and intra-line spacing are forgiven. Newlines still matter as logical line separators. Standard JSON escape sequences are supported: \\n for newlines, \\t for tabs, \\\\ for a literal backslash, etc.",
-    ),
+  all: vb.exactOptional(
+    vb.pipe(vb.boolean(), vb.description("Replace all occurrences of oldText. Default: false.")),
   ),
+  near: vb.exactOptional(NearAnchorSchema),
   newText: vb.pipe(
     vb.string(),
     vb.description(
-      "Replacement text. Pass an empty string to delete oldText. Standard JSON escape sequences are supported: \\n for newlines, \\t for tabs, \\\\ for a literal backslash, etc.",
+      String.raw`Replacement text. Pass an empty string to delete oldText. Standard JSON escape sequences are supported: \n for newlines, \t for tabs, \\ for a literal backslash, etc.`,
     ),
   ),
-  near: vb.exactOptional(NearAnchorSchema),
-  all: vb.exactOptional(
-    vb.pipe(vb.boolean(), vb.description("Replace all occurrences of oldText. Default: false.")),
+  oldText: vb.pipe(
+    vb.string(),
+    vb.description(
+      String.raw`Text to find. Fuzzy whitespace matching is used by default: differences in indentation, trailing spaces, tabs vs spaces, and intra-line spacing are forgiven. Newlines still matter as logical line separators. Standard JSON escape sequences are supported: \n for newlines, \t for tabs, \\ for a literal backslash, etc.`,
+    ),
   ),
 });
 
 const EditSchema = vb.strictObject({
-  path: vb.pipe(
-    vb.string(),
-    vb.nonEmpty(),
-    vb.description("Sandbox path of the file to edit (e.g. /workspace/main.ts)."),
+  apply: vb.exactOptional(
+    vb.pipe(
+      vb.string(),
+      vb.description(
+        "Apply a previously computed dry-run by its applyId. The file must not have changed since the dry-run. When set, 'edits' must not be provided.",
+      ),
+    ),
   ),
   dryRun: vb.exactOptional(
     vb.pipe(
       vb.boolean(),
       vb.description(
         "If true, compute the diff/patch and metadata without writing to disk. Useful for previewing changes.",
-      ),
-    ),
-  ),
-  apply: vb.exactOptional(
-    vb.pipe(
-      vb.string(),
-      vb.description(
-        "Apply a previously computed dry-run by its applyId. The file must not have changed since the dry-run. When set, 'edits' must not be provided.",
       ),
     ),
   ),
@@ -121,48 +117,49 @@ const EditSchema = vb.strictObject({
       ),
     ),
   ),
+  path: vb.pipe(
+    vb.string(),
+    vb.nonEmpty(),
+    vb.description("Sandbox path of the file to edit (e.g. /workspace/main.ts)."),
+  ),
 });
 
 // ---------------------------------------------------------------------------
 // Legacy compatibility
 // ---------------------------------------------------------------------------
 
-/**
- * Convert legacy single-edit parameters (old_text/new_text) to the new
- * edits[] format, preserving backward compatibility.
- */
 function prepareArguments(input: unknown): unknown {
-  if (!input || typeof input !== "object") {
+  if (typeof input !== "object" || input === null) {
     return input;
   }
 
   const args = input as Record<string, unknown>;
 
-  // apply mode: no legacy conversion needed
   if (args["apply"] !== undefined) {
     return input;
   }
 
-  // If edits[] is already provided (even if alongside legacy params), use as-is
   if (Array.isArray(args["edits"]) && (args["edits"] as unknown[]).length > 0) {
     return input;
   }
 
-  // Check for legacy old_text/new_text (snake_case)
   const oldText = args["old_text"];
   const newText = args["new_text"];
 
   if (typeof oldText === "string" && typeof newText === "string") {
     const legacyEdit: Record<string, unknown> = {
-      oldText,
       newText,
+      oldText,
     };
 
-    // Carry over optional legacy params
     const argsNear = args["near"];
     const argsAll = args["all"];
-    if (argsNear !== undefined) legacyEdit["near"] = argsNear;
-    if (argsAll !== undefined) legacyEdit["all"] = argsAll;
+    if (argsNear !== undefined) {
+      legacyEdit["near"] = argsNear;
+    }
+    if (argsAll !== undefined) {
+      legacyEdit["all"] = argsAll;
+    }
 
     const { old_text: _o, new_text: _n, near: _near, all: _all, ...rest } = args;
     return {
@@ -180,21 +177,21 @@ function prepareArguments(input: unknown): unknown {
 
 interface DryRunCacheEntry {
   absolutePath: string;
-  baseContentHash: string;
   baseContent: string;
-  newContent: string;
-  path: string;
+  baseContentHash: string;
+  createdAt: number;
+  diff: string;
   edits: {
     editIndex: number;
-    startLine: number;
     endLine: number;
-    replacedLines: number;
     newLines: number;
+    replacedLines: number;
+    startLine: number;
   }[];
-  diff: string;
-  patch: string;
   firstChangedLine: number | undefined;
-  createdAt: number;
+  newContent: string;
+  patch: string;
+  path: string;
 }
 
 const dryRunCache = new Map<string, DryRunCacheEntry>();
@@ -205,8 +202,10 @@ function hashContent(content: string): string {
 }
 
 function pruneDryRunCache(): void {
-  if (dryRunCache.size <= MAX_DRY_RUN_CACHE_SIZE) return;
-  const entries = [...dryRunCache.entries()].sort((a, b) => a[1].createdAt - b[1].createdAt);
+  if (dryRunCache.size <= MAX_DRY_RUN_CACHE_SIZE) {
+    return;
+  }
+  const entries = [...dryRunCache.entries()].toSorted((a, b) => a[1].createdAt - b[1].createdAt);
   const overflow = entries.slice(0, entries.length - MAX_DRY_RUN_CACHE_SIZE);
   for (const [key] of overflow) {
     dryRunCache.delete(key);
@@ -221,10 +220,10 @@ function storeDryRun(
   path: string,
   edits: {
     editIndex: number;
-    startLine: number;
     endLine: number;
-    replacedLines: number;
     newLines: number;
+    replacedLines: number;
+    startLine: number;
   }[],
   diff: string,
   patch: string,
@@ -232,15 +231,15 @@ function storeDryRun(
 ): void {
   dryRunCache.set(applyId, {
     absolutePath,
-    baseContentHash: hashContent(baseContent),
     baseContent,
-    newContent,
-    path,
-    edits,
-    diff,
-    patch,
-    firstChangedLine,
+    baseContentHash: hashContent(baseContent),
     createdAt: Date.now(),
+    diff,
+    edits,
+    firstChangedLine,
+    newContent,
+    patch,
+    path,
   });
   pruneDryRunCache();
 }
@@ -263,7 +262,7 @@ async function applyDryRun(
   }
 
   const currentContent = await readFile(realPath, "utf8");
-  const normalizedContent = currentContent.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const normalizedContent = currentContent.replace(/\r\n/gu, "\n").replace(/\r/gu, "\n");
 
   if (hashContent(normalizedContent) !== entry.baseContentHash) {
     throw new ToolError(
@@ -278,9 +277,9 @@ async function applyDryRun(
     content: entry.newContent,
     detail: `Successfully applied dry-run ${applyId}: replaced ${entry.edits.length} block(s) in ${entry.path}.`,
     diff: entry.diff,
-    patch: entry.patch,
-    firstChangedLine: entry.firstChangedLine,
     edits: entry.edits,
+    firstChangedLine: entry.firstChangedLine,
+    patch: entry.patch,
     success: true,
   };
 }
@@ -289,7 +288,6 @@ async function applyDryRun(
 // Tool
 // ---------------------------------------------------------------------------
 
-// oxlint-disable-next-line sort-keys
 export const edit: ToolDef = {
   name: "edit",
   parameters: EditSchema,
@@ -328,12 +326,11 @@ export const edit: ToolDef = {
     await ctx.paths.checkConditionalAccess(data.path);
     await ctx.paths.checkWriteAccess(data.path);
 
-    // Handle apply mode
     if (data.apply !== undefined) {
       return applyDryRun(data.apply, realPath, data.path, ctx);
     }
 
-    if (!data.edits || data.edits.length === 0) {
+    if (data.edits === undefined || data.edits.length === 0) {
       throw new ToolError(
         "No edits provided.",
         "Provide at least one edit in the `edits` array, or use `apply` to apply a previous dry-run.",
@@ -349,11 +346,8 @@ export const edit: ToolDef = {
 
     const fileContent = await readFile(realPath, "utf8");
 
-    // For files with required frontmatter (blocks, skills), extract the
-    // frontmatter and search/replace within the body only. The frontmatter
-    // is transparently preserved so the agent never accidentally corrupts it.
     let searchContent = fileContent;
-    let frontmatter: string | undefined = undefined;
+    let frontmatter: string | undefined;
     let frontmatterLineCount = 0;
 
     if (requiresFrontmatter(data.path)) {
@@ -364,22 +358,19 @@ export const edit: ToolDef = {
       }
     }
 
-    // Apply edits using the matcher
     let result;
     try {
       result = applyEdits(
         searchContent,
-        data.edits as EditOperation[],
+        // valibot guarantees the shape matches EditOperation
+        data.edits as unknown as EditOperation[],
         data.path,
         frontmatterLineCount,
       );
     } catch (error) {
-      if (error instanceof ToolError) throw error;
       throw new ToolError((error as Error).message);
     }
 
-    // Validate preserved frontmatter before writing — catches pre-existing
-    // corruption so the agent gets immediate feedback instead of a load failure later.
     if (frontmatter !== undefined) {
       try {
         validateFrontmatter(frontmatter, data.path.startsWith("/blocks/"));
@@ -391,14 +382,10 @@ export const edit: ToolDef = {
     const newContent =
       frontmatter === undefined ? result.newContent : frontmatter + result.newContent;
 
-    // Generate diff
     const diffResult = generateDiff(data.path, result.baseContent, result.newContent);
-
-    // Build edit metadata
     const editMetadata = getEditMetadata(result.baseContent, result.edits);
 
-    if (data.dryRun) {
-      // Store dry-run for later application
+    if (data.dryRun === true) {
       const applyId = randomUUID();
       storeDryRun(
         applyId,
@@ -416,9 +403,9 @@ export const edit: ToolDef = {
         applyId,
         detail: `Dry-run: would replace ${result.edits.length} block(s) in ${data.path}. Apply with applyId: ${applyId}`,
         diff: diffResult.diff,
-        patch: diffResult.patch,
-        firstChangedLine: diffResult.firstChangedLine,
         edits: editMetadata,
+        firstChangedLine: diffResult.firstChangedLine,
+        patch: diffResult.patch,
         success: true,
       };
     }
@@ -429,9 +416,9 @@ export const edit: ToolDef = {
     return {
       detail: `Successfully replaced ${result.edits.length} block(s) in ${data.path}.`,
       diff: diffResult.diff,
-      patch: diffResult.patch,
-      firstChangedLine: diffResult.firstChangedLine,
       edits: editMetadata,
+      firstChangedLine: diffResult.firstChangedLine,
+      patch: diffResult.patch,
       success: true,
     };
   },

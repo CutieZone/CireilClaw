@@ -5,7 +5,12 @@
  * numbers) and standard unified patches.
  */
 
-import { createTwoFilesPatch, diffLines, type Change } from "diff";
+import { createTwoFilesPatch, diffLines } from "diff";
+import type { Change } from "diff";
+
+// ---------------------------------------------------------------------------
+// Display diff
+// ---------------------------------------------------------------------------
 
 export interface DiffResult {
   /** Display-oriented diff string with line numbers. */
@@ -15,10 +20,6 @@ export interface DiffResult {
   /** 1-indexed line number of the first change in the new file, if any. */
   firstChangedLine: number | undefined;
 }
-
-// ---------------------------------------------------------------------------
-// Display diff
-// ---------------------------------------------------------------------------
 
 interface DiffLine {
   text: string;
@@ -37,7 +38,9 @@ function emitLines(
 ): void {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (line === undefined) continue;
+    if (line === undefined) {
+      continue;
+    }
     const num = String(baseLineNum + i).padStart(lineNumWidth, " ");
     output.push(` ${num} ${line.text}`);
   }
@@ -45,11 +48,10 @@ function emitLines(
 
 function buildHunks(changes: Change[]): Hunk[] {
   const hunks: Hunk[] = [];
-  let currentHunk: Hunk | null = null;
+  let currentHunk: Hunk | undefined;
 
   for (const change of changes) {
     const lines = change.value.split("\n");
-    // diffLines includes trailing newline as empty string — remove it
     if (lines.length > 0 && lines[lines.length - 1] === "") {
       lines.pop();
     }
@@ -61,10 +63,11 @@ function buildHunks(changes: Change[]): Hunk[] {
         : "unchanged";
 
     for (const line of lines) {
-      if (line === undefined) continue;
+      if (line === undefined) {
+        continue;
+      }
 
-      // Start a new hunk when the type changes
-      if (currentHunk === null || currentHunk.lines[0]?.type !== type) {
+      if (currentHunk === undefined || currentHunk.lines[0]?.type !== type) {
         currentHunk = { lines: [] };
         hunks.push(currentHunk);
       }
@@ -76,8 +79,7 @@ function buildHunks(changes: Change[]): Hunk[] {
 }
 
 /**
- * Generate a display-oriented diff string with line numbers, matching the
- * format produced by most diff tools.
+ * Generate a display-oriented diff string with line numbers.
  */
 export function generateDisplayDiff(
   oldContent: string,
@@ -100,7 +102,9 @@ export function generateDisplayDiff(
 
   for (let hunkIdx = 0; hunkIdx < hunks.length; hunkIdx++) {
     const hunk = hunks[hunkIdx];
-    if (hunk === undefined) continue;
+    if (hunk === undefined) {
+      continue;
+    }
     const type = hunk.lines[0]?.type;
     const nextHunk = hunks[hunkIdx + 1];
 
@@ -122,20 +126,17 @@ export function generateDisplayDiff(
       }
       lastWasChange = true;
     } else {
-      // Unchanged context block
       const raw = hunk.lines;
       const nextIsChange = nextHunk !== undefined && nextHunk.lines[0]?.type !== "unchanged";
       const prevIsChange = lastWasChange;
 
       if (!prevIsChange && !nextIsChange) {
-        // Isolated context — skip entirely
         oldLineNum += raw.length;
         newLineNum += raw.length;
         continue;
       }
 
       if (prevIsChange && nextIsChange) {
-        // Between two changes: show up to contextLines on each side
         if (raw.length <= contextLines * 2) {
           emitLines(raw, output, lineNumWidth, oldLineNum);
           oldLineNum += raw.length;
@@ -158,7 +159,6 @@ export function generateDisplayDiff(
           newLineNum += trailingLines.length;
         }
       } else if (prevIsChange) {
-        // After a change: show up to contextLines
         const shownLines = raw.slice(0, contextLines);
         const skippedLines = raw.length - shownLines.length;
 
@@ -172,7 +172,6 @@ export function generateDisplayDiff(
           newLineNum += skippedLines;
         }
       } else {
-        // Before a change: show up to contextLines
         const skippedLines = Math.max(0, raw.length - contextLines);
         if (skippedLines > 0) {
           output.push(` ${"".padStart(lineNumWidth, " ")} ...`);
@@ -208,7 +207,7 @@ export function generateUnifiedPatch(
   newContent: string,
   contextLines = 4,
 ): string {
-  const patchPath = path.replace(/^\//, "");
+  const patchPath = path.replace(/^\//u, "");
   const rawPatch = createTwoFilesPatch(
     `a/${patchPath}`,
     `b/${patchPath}`,
@@ -219,7 +218,6 @@ export function generateUnifiedPatch(
     { context: contextLines },
   );
 
-  // Strip the "Index: ..." header and separator that createTwoFilesPatch adds
   const lines = rawPatch.split("\n");
   while (
     lines.length > 0 &&
@@ -248,5 +246,5 @@ export function generateDiff(
 ): DiffResult {
   const { diff, firstChangedLine } = generateDisplayDiff(oldContent, newContent, contextLines);
   const patch = generateUnifiedPatch(path, oldContent, newContent, contextLines);
-  return { diff, patch, firstChangedLine };
+  return { diff, firstChangedLine, patch };
 }
