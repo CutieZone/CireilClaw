@@ -19,7 +19,7 @@ import type { EditOperation } from "./matcher.js";
 const NearObjectSchema = vb.strictObject({
   direction: vb.exactOptional(
     vb.pipe(
-      vb.union([vb.literal("before"), vb.literal("after")]),
+      vb.picklist(["before", "after"] as const),
       vb.description(
         "Search only before or after the matched landmark. Default searches around the landmark.",
       ),
