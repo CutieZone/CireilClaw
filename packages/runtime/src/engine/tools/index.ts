@@ -1,6 +1,6 @@
 import { closeFile } from "#engine/tools/close-file.js";
 import { downloadAttachments } from "#engine/tools/download-attachments.js";
-import { edit } from "#engine/tools/edit.js";
+import { edit } from "#engine/tools/edit/index.js";
 import { exec } from "#engine/tools/exec.js";
 import { listDir } from "#engine/tools/list-dir.js";
 import { listSessions } from "#engine/tools/list-sessions.js";

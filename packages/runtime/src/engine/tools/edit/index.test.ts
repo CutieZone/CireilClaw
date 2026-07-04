@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { edit } from "#engine/tools/edit.js";
+import { edit } from "#engine/tools/edit/index.js";
 import type { ToolContext } from "#engine/tools/tool-def.js";
 
 const mockFs = {
@@ -53,7 +53,7 @@ describe("edit — exact matching", () => {
     const ctx = makeToolContext();
     ctx.paths.resolve = vi.fn().mockResolvedValue("/workspace/notes.txt");
     const result = await edit.execute(
-      { new_text: "red", old_text: "brown", path: "/workspace/notes.txt" },
+      { old_text: "brown", new_text: "red", path: "/workspace/notes.txt" },
       ctx,
     );
 
@@ -65,7 +65,7 @@ describe("edit — exact matching", () => {
     );
   });
 
-  it("returns context around the replacement", async () => {
+  it("returns detail about the replacement", async () => {
     mockFs.existsSync.mockReturnValue(true);
     mockFsPromises.readFile.mockResolvedValue("Line 1\nLine 2\nLine 3\nLine 4\nLine 5");
 
@@ -73,16 +73,19 @@ describe("edit — exact matching", () => {
     ctx.paths.resolve = vi.fn().mockResolvedValue("/workspace/notes.txt");
     const result = await edit.execute(
       {
-        new_text: "Changed line",
         old_text: "Line 3",
+        new_text: "Changed line",
         path: "/workspace/notes.txt",
       },
       ctx,
     );
 
-    expect(result["context"]).toContain("Changed line");
-    expect(result["context"]).toContain("Line 2");
-    expect(result["context"]).toContain("Line 4");
+    expect(result["detail"]).toContain("Successfully replaced");
+    expect(result["detail"]).toContain("1 block(s)");
+    expect(result["diff"]).toContain("Changed line");
+    expect(result["diff"]).toContain("Line 2");
+    expect(result["diff"]).toContain("Line 4");
+    expect(result["edits"]).toHaveLength(1);
   });
 
   it("throws when file does not exist", async () => {
@@ -92,8 +95,8 @@ describe("edit — exact matching", () => {
     await expect(
       edit.execute(
         {
-          new_text: "nothing",
           old_text: "anything",
+          new_text: "nothing",
           path: "/blocks/person.md",
         },
         ctx,
@@ -113,22 +116,22 @@ describe("edit — fuzzy whitespace matching", () => {
 
     const ctx = makeToolContext();
     ctx.paths.resolve = vi.fn().mockResolvedValue("/workspace/notes.txt");
-    const result = await edit.execute(
+    await edit.execute(
       {
         all: true,
-        new_text: "there",
         old_text: "world",
+        new_text: "there",
         path: "/workspace/notes.txt",
       },
       ctx,
     );
 
-    expect(result["success"]).toBe(true);
     const { calls } = mockFsPromises.writeFile.mock;
     const [firstElement] = calls;
     const [, writtenContent] = (firstElement as unknown[] | undefined) ?? [];
 
-    expect(writtenContent).toBe("  hello\nthere\n  foo");
+    // Leading whitespace is preserved — only the matched text is replaced
+    expect(writtenContent).toBe("  hello\n    there\n  foo");
   });
 
   it("forgives trailing spaces", async () => {
@@ -137,18 +140,16 @@ describe("edit — fuzzy whitespace matching", () => {
 
     const ctx = makeToolContext();
     ctx.paths.resolve = vi.fn().mockResolvedValue("/workspace/notes.txt");
-    await edit.execute({ new_text: "hi", old_text: "hello", path: "/workspace/notes.txt" }, ctx);
+    await edit.execute({ old_text: "hello", new_text: "hi", path: "/workspace/notes.txt" }, ctx);
 
     const { calls } = mockFsPromises.writeFile.mock;
     const [, writtenContent] = (calls[0] as unknown[] | undefined) ?? [];
-    // Trailing spaces after "hello" are not consumed by the match,
-    // so they remain in the output
     expect(writtenContent).toBe("hi   \nworld");
   });
 
   it("forgives tabs vs spaces", async () => {
     mockFs.existsSync.mockReturnValue(true);
-    // File has spaces before 'bar', old_text has tab
+    // File has spaces before 'bar', old_text has no leading whitespace
     mockFsPromises.readFile.mockResolvedValue("foo\n    bar\nbaz");
 
     const ctx = makeToolContext();
@@ -156,8 +157,8 @@ describe("edit — fuzzy whitespace matching", () => {
     await edit.execute(
       {
         all: true,
-        new_text: "qux",
         old_text: "bar",
+        new_text: "qux",
         path: "/workspace/notes.txt",
       },
       ctx,
@@ -166,7 +167,8 @@ describe("edit — fuzzy whitespace matching", () => {
     const { calls } = mockFsPromises.writeFile.mock;
     const [firstElement] = calls;
     const [, writtenContent] = (firstElement as unknown[] | undefined) ?? [];
-    expect(writtenContent).toBe("foo\nqux\nbaz");
+    // Leading whitespace is preserved — only the matched text is replaced
+    expect(writtenContent).toBe("foo\n    qux\nbaz");
   });
 
   it("forgives extra spaces between words", async () => {
@@ -177,8 +179,8 @@ describe("edit — fuzzy whitespace matching", () => {
     ctx.paths.resolve = vi.fn().mockResolvedValue("/workspace/notes.txt");
     const result = await edit.execute(
       {
-        new_text: "fast",
         old_text: "quick brown",
+        new_text: "fast",
         path: "/workspace/notes.txt",
       },
       ctx,
@@ -200,14 +202,13 @@ describe("edit — fuzzy whitespace matching", () => {
     const ctx = makeToolContext();
     ctx.paths.resolve = vi.fn().mockResolvedValue("/workspace/notes.txt");
     await edit.execute(
-      { new_text: "qux", old_text: "foo\n\nbar", path: "/workspace/notes.txt" },
+      { old_text: "foo\n\nbar", new_text: "qux", path: "/workspace/notes.txt" },
       ctx,
     );
 
     const { calls } = mockFsPromises.writeFile.mock;
     const [firstElement] = calls;
     const [, writtenContent] = (firstElement as unknown[] | undefined) ?? [];
-    // "foo\n\nbar" replaces everything, leaving only the replacement
     expect(writtenContent).toBe("qux");
   });
 
@@ -217,7 +218,7 @@ describe("edit — fuzzy whitespace matching", () => {
 
     const ctx = makeToolContext();
     ctx.paths.resolve = vi.fn().mockResolvedValue("/workspace/notes.txt");
-    await edit.execute({ new_text: "", old_text: "world", path: "/workspace/notes.txt" }, ctx);
+    await edit.execute({ old_text: "world", new_text: "", path: "/workspace/notes.txt" }, ctx);
 
     const { calls } = mockFsPromises.writeFile.mock;
     const [firstElement] = calls;
@@ -240,8 +241,8 @@ describe("edit — all flag", () => {
     await edit.execute(
       {
         all: true,
-        new_text: "qux",
         old_text: "foo",
+        new_text: "qux",
         path: "/workspace/notes.txt",
       },
       ctx,
@@ -254,7 +255,7 @@ describe("edit — all flag", () => {
     );
   });
 
-  it("reports replaced count", async () => {
+  it("reports replaced count via edits array length", async () => {
     mockFs.existsSync.mockReturnValue(true);
     mockFsPromises.readFile.mockResolvedValue("foo bar foo");
 
@@ -263,14 +264,14 @@ describe("edit — all flag", () => {
     const result = await edit.execute(
       {
         all: true,
-        new_text: "qux",
         old_text: "foo",
+        new_text: "qux",
         path: "/workspace/notes.txt",
       },
       ctx,
     );
 
-    expect(result["replaced"]).toBe(2);
+    expect(result["edits"]).toHaveLength(2);
   });
 
   it("throws when all: false and multiple matches exist", async () => {
@@ -280,8 +281,8 @@ describe("edit — all flag", () => {
     const ctx = makeToolContext();
     ctx.paths.resolve = vi.fn().mockResolvedValue("/workspace/notes.txt");
     await expect(
-      edit.execute({ new_text: "qux", old_text: "foo", path: "/workspace/notes.txt" }, ctx),
-    ).rejects.toThrow('Found 3 matches for "old_text"');
+      edit.execute({ old_text: "foo", new_text: "qux", path: "/workspace/notes.txt" }, ctx),
+    ).rejects.toThrow("Found 3 matches for edits[0]");
   });
 
   it("all: true works with fuzzy whitespace and different-original-text matches", async () => {
@@ -294,18 +295,17 @@ describe("edit — all flag", () => {
     await edit.execute(
       {
         all: true,
-        new_text: "qux",
         old_text: "foo",
+        new_text: "qux",
         path: "/workspace/notes.txt",
       },
       ctx,
     );
 
-    // Both "  foo" and "\tfoo" should be replaced (removed entirely since
-    // the match span includes the whitespace consumed by normalization)
+    // Leading whitespace is preserved — only the matched text is replaced
     expect(mockFsPromises.writeFile).toHaveBeenCalledWith(
       expect.any(String),
-      "qux\nbar\nqux\nbaz",
+      "  qux\nbar\n\tqux\nbaz",
       "utf8",
     );
   });
@@ -318,7 +318,6 @@ describe("edit — near anchor", () => {
 
   it("scopes search to within 15 lines of near match", async () => {
     mockFs.existsSync.mockReturnValue(true);
-    // Two functions with same 'foo' variable — near disambiguates
     mockFsPromises.readFile.mockResolvedValue(
       "function alpha() {\n  const foo = 1;\n}\n\nfunction beta() {\n  const foo = 2;\n}\n",
     );
@@ -329,8 +328,8 @@ describe("edit — near anchor", () => {
       {
         all: true,
         near: "function beta",
-        new_text: "const foo = 42;",
         old_text: "  const foo = 2;",
+        new_text: "const foo = 42;",
         path: "/workspace/notes.txt",
       },
       ctx,
@@ -354,8 +353,8 @@ describe("edit — near anchor", () => {
       edit.execute(
         {
           near: "nonexistent",
-          new_text: "qux",
           old_text: "hello",
+          new_text: "qux",
           path: "/workspace/notes.txt",
         },
         ctx,
@@ -379,13 +378,13 @@ describe("edit — near anchor", () => {
       edit.execute(
         {
           near: "anchor",
-          new_text: "replaced",
           old_text: "target",
+          new_text: "replaced",
           path: "/workspace/notes.txt",
         },
         ctx,
       ),
-    ).rejects.toThrow("not found within 15 lines");
+    ).rejects.toThrow("not found within");
   });
 
   it("throws when all: false and multiple matches in different near windows", async () => {
@@ -400,13 +399,13 @@ describe("edit — near anchor", () => {
       edit.execute(
         {
           near: "// start",
-          new_text: "const foo = 42;",
           old_text: "const foo",
+          new_text: "const foo = 42;",
           path: "/workspace/notes.txt",
         },
         ctx,
       ),
-    ).rejects.toThrow('Found 2 matches for "old_text"');
+    ).rejects.toThrow("Found 2 matches for edits[0]");
   });
 });
 
@@ -423,7 +422,7 @@ describe("edit — frontmatter preservation", () => {
 
     const ctx = makeToolContext();
     const result = await edit.execute(
-      { new_text: "Alice", old_text: "Bob", path: "/blocks/person.md" },
+      { old_text: "Bob", new_text: "Alice", path: "/blocks/person.md" },
       ctx,
     );
 
@@ -444,8 +443,8 @@ describe("edit — frontmatter preservation", () => {
     const ctx = makeToolContext();
     const result = await edit.execute(
       {
-        new_text: "New body",
         old_text: "Old body",
+        new_text: "New body",
         path: "/skills/my-skill/SKILL.md",
       },
       ctx,
@@ -469,16 +468,16 @@ describe("edit — frontmatter preservation", () => {
     await expect(
       edit.execute(
         {
-          new_text: "New description",
           old_text: "Personality",
+          new_text: "New description",
           path: "/blocks/person.md",
         },
         ctx,
       ),
-    ).rejects.toThrow('Could not find "old_text"');
+    ).rejects.toThrow("Could not find edits[0]");
   });
 
-  it("returns context with correct positions accounting for frontmatter offset", async () => {
+  it("returns diff with correct positions accounting for frontmatter offset", async () => {
     mockFs.existsSync.mockReturnValue(true);
     mockFsPromises.readFile.mockResolvedValue(
       '+++\ndescription="Personality"\n+++\nLine 1\nLine 2\nLine 3\nLine 4\nLine 5',
@@ -487,19 +486,20 @@ describe("edit — frontmatter preservation", () => {
     const ctx = makeToolContext();
     const result = await edit.execute(
       {
-        new_text: "Changed line",
         old_text: "Line 3",
+        new_text: "Changed line",
         path: "/blocks/person.md",
       },
       ctx,
     );
 
     expect(result["success"]).toBe(true);
-    expect(result["context"]).toContain("Changed line");
-    expect(result["context"]).toContain("Line 2");
-    expect(result["context"]).toContain("Line 4");
-    // Frontmatter lines should not appear in context
-    expect(result["context"]).not.toContain("+++");
+    // Diff should reference the changed content
+    expect(result["diff"]).toContain("Changed line");
+    expect(result["diff"]).toContain("Line 2");
+    expect(result["diff"]).toContain("Line 4");
+    // Frontmatter lines should not appear in diff
+    expect(result["diff"]).not.toContain("+++");
   });
 
   it("throws when existing block frontmatter has invalid schema", async () => {
@@ -510,8 +510,8 @@ describe("edit — frontmatter preservation", () => {
     await expect(
       edit.execute(
         {
-          new_text: "Updated body",
           old_text: "Body content",
+          new_text: "Updated body",
           path: "/blocks/person.md",
         },
         ctx,
@@ -530,8 +530,8 @@ describe("edit — frontmatter preservation", () => {
     await expect(
       edit.execute(
         {
-          new_text: "New body",
           old_text: "Old body",
+          new_text: "New body",
           path: "/skills/my-skill/SKILL.md",
         },
         ctx,
@@ -545,7 +545,7 @@ describe("edit — error messages", () => {
     vi.clearAllMocks();
   });
 
-  it("shows file excerpt when old_text not found", async () => {
+  it("shows error when old_text not found", async () => {
     mockFs.existsSync.mockReturnValue(true);
     mockFsPromises.readFile.mockResolvedValue("hello world");
 
@@ -554,16 +554,16 @@ describe("edit — error messages", () => {
     await expect(
       edit.execute(
         {
-          new_text: "qux",
           old_text: "nonexistent",
+          new_text: "qux",
           path: "/workspace/notes.txt",
         },
         ctx,
       ),
-    ).rejects.toThrow("File content (first 500 chars)");
+    ).rejects.toThrow("Could not find edits[0]");
   });
 
-  it("shows file excerpt when near not found", async () => {
+  it("shows error when near not found", async () => {
     mockFs.existsSync.mockReturnValue(true);
     mockFsPromises.readFile.mockResolvedValue("some content here");
 
@@ -573,13 +573,13 @@ describe("edit — error messages", () => {
       edit.execute(
         {
           near: "bogus",
-          new_text: "qux",
           old_text: "content",
+          new_text: "qux",
           path: "/workspace/notes.txt",
         },
         ctx,
       ),
-    ).rejects.toThrow("File content (first 500 chars)");
+    ).rejects.toThrow('Could not find "near"');
   });
 });
 
@@ -587,7 +587,7 @@ describe("edit — validation", () => {
   it("rejects empty old_text", async () => {
     const ctx = makeToolContext();
     await expect(
-      edit.execute({ new_text: "qux", old_text: "", path: "/workspace/foo.txt" }, ctx),
+      edit.execute({ old_text: "", new_text: "qux", path: "/workspace/foo.txt" }, ctx),
     ).rejects.toThrow();
   });
 });
