@@ -14,7 +14,7 @@
 // Types
 // ---------------------------------------------------------------------------
 
-export interface FuzzyMatch {
+interface FuzzyMatch {
   /** Byte offset in the original (LF-normalized) content where the match ends. */
   end: number;
   /** 1-indexed line number where the match starts. */
@@ -23,7 +23,7 @@ export interface FuzzyMatch {
   start: number;
 }
 
-export interface NearObject {
+interface NearObject {
   /** Search only before or after the matched landmark. */
   direction?: "before" | "after";
   /** Explicit 1-indexed end line of a window. Use with startLine. */
@@ -40,21 +40,21 @@ export interface NearObject {
   symbol?: string;
 }
 
-export type NearAnchor = string | NearObject | (string | NearObject)[];
+type NearAnchor = string | NearObject | (string | NearObject)[];
 
-export interface EditOperation {
+interface EditOperation {
   oldText: string;
   newText: string;
   near?: NearAnchor;
   all?: boolean;
 }
 
-export interface ResolvedEdit extends FuzzyMatch {
+interface ResolvedEdit extends FuzzyMatch {
   newText: string;
   editIndex: number;
 }
 
-export interface ApplyResult {
+interface ApplyResult {
   /** The original LF-normalized content. */
   baseContent: string;
   /** The content after all edits are applied. */
@@ -63,7 +63,7 @@ export interface ApplyResult {
   edits: ResolvedEdit[];
 }
 
-export interface EditMetadata {
+interface EditMetadata {
   /** Index into the original edits[] array. */
   editIndex: number;
   /** 1-indexed end line in the new file. */
@@ -566,7 +566,7 @@ function resolveAnchorWindows(
 // Edit resolution & application
 // ---------------------------------------------------------------------------
 
-function hasAnchor(edit: EditOperation): boolean {
+function editHasAnchor(edit: EditOperation): boolean {
   if (edit.near === undefined) {
     return false;
   }
@@ -589,7 +589,7 @@ function resolveEdit(
   let searchWindows: ByteWindow[] | undefined;
   let anchorResult: AnchorResult | undefined;
 
-  if (hasAnchor(edit)) {
+  if (editHasAnchor(edit)) {
     const result = resolveAnchorWindows(
       content,
       edit.near!,
@@ -603,8 +603,6 @@ function resolveEdit(
     anchorResult = result;
     searchWindows = result.windows;
   }
-
-  let matches: FuzzyMatch[];
 
   if (searchWindows !== undefined) {
     const seenStarts = new Set<number>();
@@ -651,12 +649,25 @@ function resolveEdit(
       };
     }
 
-    matches = deduplicateMatches(windowedMatches);
-  } else {
-    matches = deduplicateMatches(findAllMatches(content, edit.oldText));
+    const dedupedWindowed = deduplicateMatches(windowedMatches);
+    if (edit.all !== true && dedupedWindowed.length > 1) {
+      return {
+        context: matchesToString(dedupedWindowed, content),
+        message:
+          `Found ${dedupedWindowed.length} matches for edits[${editIndex}]. ` +
+          `Set "all: true" to replace all, add "near" to target a specific one, or make oldText more specific.`,
+      };
+    }
+    return dedupedWindowed.map((m) => ({
+      ...m,
+      editIndex,
+      newText: edit.newText,
+    }));
   }
 
-  if (matches.length === 0) {
+  const allMatches = deduplicateMatches(findAllMatches(content, edit.oldText));
+
+  if (allMatches.length === 0) {
     const excerpt = content.length > 500 ? `${content.slice(0, 500)}...` : content;
     return {
       context: excerpt,
@@ -664,23 +675,23 @@ function resolveEdit(
     };
   }
 
-  if (edit.all !== true && matches.length > 1) {
+  if (edit.all !== true && allMatches.length > 1) {
     return {
-      context: matchesToString(matches, content),
+      context: matchesToString(allMatches, content),
       message:
-        `Found ${matches.length} matches for edits[${editIndex}]. ` +
+        `Found ${allMatches.length} matches for edits[${editIndex}]. ` +
         `Set "all: true" to replace all, add "near" to target a specific one, or make oldText more specific.`,
     };
   }
 
-  return matches.map((m) => ({ ...m, editIndex, newText: edit.newText }));
+  return allMatches.map((m) => ({ ...m, editIndex, newText: edit.newText }));
 }
 
 /**
  * Apply a batch of edits to content. Edits are matched against the original
  * content, not incrementally. Throws on any failure.
  */
-export function applyEdits(
+function applyEdits(
   content: string,
   edits: EditOperation[],
   path: string,
@@ -761,7 +772,7 @@ function countLinesInSnippet(text: string): number {
 /**
  * Build per-edit metadata (start/end lines and line counts) for the new file.
  */
-export function getEditMetadata(baseContent: string, edits: ResolvedEdit[]): EditMetadata[] {
+function getEditMetadata(baseContent: string, edits: ResolvedEdit[]): EditMetadata[] {
   const lineOffsets = computeLineOffsets(baseContent);
   let lineDelta = 0;
   const result: EditMetadata[] = [];
@@ -785,3 +796,6 @@ export function getEditMetadata(baseContent: string, edits: ResolvedEdit[]): Edi
 
   return result;
 }
+
+export { applyEdits, getEditMetadata };
+export type { ApplyResult, EditMetadata, EditOperation, NearAnchor, NearObject, ResolvedEdit };

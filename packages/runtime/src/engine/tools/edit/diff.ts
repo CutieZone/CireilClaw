@@ -9,17 +9,8 @@ import { createTwoFilesPatch, diffLines } from "diff";
 import type { Change } from "diff";
 
 // ---------------------------------------------------------------------------
-// Display diff
+// Types
 // ---------------------------------------------------------------------------
-
-export interface DiffResult {
-  /** Display-oriented diff string with line numbers. */
-  diff: string;
-  /** Standard unified patch. */
-  patch: string;
-  /** 1-indexed line number of the first change in the new file, if any. */
-  firstChangedLine: number | undefined;
-}
 
 interface DiffLine {
   text: string;
@@ -30,18 +21,31 @@ interface Hunk {
   lines: DiffLine[];
 }
 
+interface DiffResult {
+  /** Display-oriented diff string with line numbers. */
+  diff: string;
+  /** Standard unified patch. */
+  patch: string;
+  /** 1-indexed line number of the first change in the new file, if any. */
+  firstChangedLine: number | undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Display diff
+// ---------------------------------------------------------------------------
+
 function emitLines(
   lines: DiffLine[],
   output: string[],
   lineNumWidth: number,
   baseLineNum: number,
 ): void {
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+  for (let idx = 0; idx < lines.length; idx++) {
+    const line = lines[idx];
     if (line === undefined) {
       continue;
     }
-    const num = String(baseLineNum + i).padStart(lineNumWidth, " ");
+    const num = String(baseLineNum + idx).padStart(lineNumWidth, " ");
     output.push(` ${num} ${line.text}`);
   }
 }
@@ -56,18 +60,15 @@ function buildHunks(changes: Change[]): Hunk[] {
       lines.pop();
     }
 
-    const type: "added" | "removed" | "unchanged" = change.added
-      ? "added"
-      : change.removed
-        ? "removed"
-        : "unchanged";
+    const type: "added" | "removed" | "unchanged" =
+      change.added !== undefined ? "added" : change.removed !== undefined ? "removed" : "unchanged";
 
     for (const line of lines) {
       if (line === undefined) {
         continue;
       }
 
-      if (currentHunk === undefined || currentHunk.lines[0]?.type !== type) {
+      if (currentHunk === undefined || currentHunk.lines.at(0)?.type !== type) {
         currentHunk = { lines: [] };
         hunks.push(currentHunk);
       }
@@ -78,10 +79,7 @@ function buildHunks(changes: Change[]): Hunk[] {
   return hunks;
 }
 
-/**
- * Generate a display-oriented diff string with line numbers.
- */
-export function generateDisplayDiff(
+function generateDisplayDiff(
   oldContent: string,
   newContent: string,
   contextLines = 4,
@@ -105,7 +103,7 @@ export function generateDisplayDiff(
     if (hunk === undefined) {
       continue;
     }
-    const type = hunk.lines[0]?.type;
+    const type = hunk.lines.at(0)?.type;
     const nextHunk = hunks[hunkIdx + 1];
 
     if (type === "added" || type === "removed") {
@@ -127,7 +125,7 @@ export function generateDisplayDiff(
       lastWasChange = true;
     } else {
       const raw = hunk.lines;
-      const nextIsChange = nextHunk !== undefined && nextHunk.lines[0]?.type !== "unchanged";
+      const nextIsChange = nextHunk !== undefined && nextHunk.lines.at(0)?.type !== "unchanged";
       const prevIsChange = lastWasChange;
 
       if (!prevIsChange && !nextIsChange) {
@@ -198,10 +196,7 @@ export function generateDisplayDiff(
 // Unified patch
 // ---------------------------------------------------------------------------
 
-/**
- * Generate a standard unified diff patch using the `diff` library.
- */
-export function generateUnifiedPatch(
+function generateUnifiedPatch(
   path: string,
   oldContent: string,
   newContent: string,
@@ -235,10 +230,7 @@ export function generateUnifiedPatch(
 // Combined
 // ---------------------------------------------------------------------------
 
-/**
- * Generate both display diff and unified patch in one pass.
- */
-export function generateDiff(
+function generateDiff(
   path: string,
   oldContent: string,
   newContent: string,
@@ -248,3 +240,6 @@ export function generateDiff(
   const patch = generateUnifiedPatch(path, oldContent, newContent, contextLines);
   return { diff, firstChangedLine, patch };
 }
+
+export { generateDiff, generateDisplayDiff, generateUnifiedPatch };
+export type { DiffResult };

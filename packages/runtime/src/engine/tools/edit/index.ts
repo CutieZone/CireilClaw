@@ -248,7 +248,7 @@ async function applyDryRun(
   applyId: string,
   realPath: string,
   dataPath: string,
-  ctx: ToolContext,
+  context: ToolContext,
 ): Promise<Record<string, unknown>> {
   const entry = dryRunCache.get(applyId);
   if (entry === undefined) {
@@ -262,7 +262,7 @@ async function applyDryRun(
   }
 
   const currentContent = await readFile(realPath, "utf8");
-  const normalizedContent = currentContent.replace(/\r\n/gu, "\n").replace(/\r/gu, "\n");
+  const normalizedContent = currentContent.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
 
   if (hashContent(normalizedContent) !== entry.baseContentHash) {
     throw new ToolError(
@@ -271,7 +271,7 @@ async function applyDryRun(
   }
 
   await writeFile(realPath, entry.newContent, "utf8");
-  ctx.session.activeFileSections.delete(dataPath);
+  context.session.activeFileSections.delete(dataPath);
 
   return {
     content: entry.newContent,
@@ -288,9 +288,7 @@ async function applyDryRun(
 // Tool
 // ---------------------------------------------------------------------------
 
-export const edit: ToolDef = {
-  name: "edit",
-  parameters: EditSchema,
+const editTool: ToolDef = {
   description:
     "Performs string replacements in an existing file with fuzzy whitespace matching.\n\n" +
     "Whitespace in `oldText` and `near` is matched fuzzily: differences in " +
@@ -319,15 +317,17 @@ export const edit: ToolDef = {
     "- Creating new files or rewriting an entire file — use `write` instead.\n" +
     "- The file doesn't exist yet — use `write` instead.\n\n" +
     "Note that paths used here *must* be absolute.",
-  async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
+  name: "edit",
+  parameters: EditSchema,
+  async execute(input: unknown, context: ToolContext): Promise<Record<string, unknown>> {
     const data = vb.parse(EditSchema, prepareArguments(input));
-    const realPath = await ctx.paths.resolve(data.path);
+    const realPath = await context.paths.resolve(data.path);
 
-    await ctx.paths.checkConditionalAccess(data.path);
-    await ctx.paths.checkWriteAccess(data.path);
+    await context.paths.checkConditionalAccess(data.path);
+    await context.paths.checkWriteAccess(data.path);
 
     if (data.apply !== undefined) {
-      return applyDryRun(data.apply, realPath, data.path, ctx);
+      return applyDryRun(data.apply, realPath, data.path, context);
     }
 
     if (data.edits === undefined || data.edits.length === 0) {
@@ -346,7 +346,7 @@ export const edit: ToolDef = {
 
     const fileContent = await readFile(realPath, "utf8");
 
-    let searchContent = fileContent;
+    let searchContent: string = fileContent;
     let frontmatter: string | undefined;
     let frontmatterLineCount = 0;
 
@@ -358,24 +358,20 @@ export const edit: ToolDef = {
       }
     }
 
-    let result;
+    let result: ReturnType<typeof applyEdits>;
     try {
-      result = applyEdits(
-        searchContent,
-        // valibot guarantees the shape matches EditOperation
-        data.edits as unknown as EditOperation[],
-        data.path,
-        frontmatterLineCount,
-      );
+      // valibot guarantees the shape matches EditOperation
+      const edits = data.edits as unknown as EditOperation[];
+      result = applyEdits(searchContent, edits, data.path, frontmatterLineCount);
     } catch (error) {
-      throw new ToolError((error as Error).message);
+      throw new ToolError(String(error instanceof Error ? error.message : error));
     }
 
     if (frontmatter !== undefined) {
       try {
         validateFrontmatter(frontmatter, data.path.startsWith("/blocks/"));
       } catch (error) {
-        throw new ToolError((error as Error).message);
+        throw new ToolError(String(error instanceof Error ? error.message : error));
       }
     }
 
@@ -411,7 +407,7 @@ export const edit: ToolDef = {
     }
 
     await writeFile(realPath, newContent, "utf8");
-    ctx.session.activeFileSections.delete(data.path);
+    context.session.activeFileSections.delete(data.path);
 
     return {
       detail: `Successfully replaced ${result.edits.length} block(s) in ${data.path}.`,
@@ -423,3 +419,5 @@ export const edit: ToolDef = {
     };
   },
 };
+
+export { editTool as edit };
