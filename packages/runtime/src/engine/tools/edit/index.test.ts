@@ -53,7 +53,7 @@ describe("edit — exact matching", () => {
     const ctx = makeToolContext();
     ctx.paths.resolve = vi.fn().mockResolvedValue("/workspace/notes.txt");
     const result = await edit.execute(
-      { old_text: "brown", new_text: "red", path: "/workspace/notes.txt" },
+      { new_text: "red", old_text: "brown", path: "/workspace/notes.txt" },
       ctx,
     );
 
@@ -73,8 +73,8 @@ describe("edit — exact matching", () => {
     ctx.paths.resolve = vi.fn().mockResolvedValue("/workspace/notes.txt");
     const result = await edit.execute(
       {
-        old_text: "Line 3",
         new_text: "Changed line",
+        old_text: "Line 3",
         path: "/workspace/notes.txt",
       },
       ctx,
@@ -95,8 +95,8 @@ describe("edit — exact matching", () => {
     await expect(
       edit.execute(
         {
-          old_text: "anything",
           new_text: "nothing",
+          old_text: "anything",
           path: "/blocks/person.md",
         },
         ctx,
@@ -119,8 +119,8 @@ describe("edit — fuzzy whitespace matching", () => {
     await edit.execute(
       {
         all: true,
-        old_text: "world",
         new_text: "there",
+        old_text: "world",
         path: "/workspace/notes.txt",
       },
       ctx,
@@ -140,7 +140,7 @@ describe("edit — fuzzy whitespace matching", () => {
 
     const ctx = makeToolContext();
     ctx.paths.resolve = vi.fn().mockResolvedValue("/workspace/notes.txt");
-    await edit.execute({ old_text: "hello", new_text: "hi", path: "/workspace/notes.txt" }, ctx);
+    await edit.execute({ new_text: "hi", old_text: "hello", path: "/workspace/notes.txt" }, ctx);
 
     const { calls } = mockFsPromises.writeFile.mock;
     const [, writtenContent] = (calls[0] as unknown[] | undefined) ?? [];
@@ -157,8 +157,8 @@ describe("edit — fuzzy whitespace matching", () => {
     await edit.execute(
       {
         all: true,
-        old_text: "bar",
         new_text: "qux",
+        old_text: "bar",
         path: "/workspace/notes.txt",
       },
       ctx,
@@ -179,8 +179,8 @@ describe("edit — fuzzy whitespace matching", () => {
     ctx.paths.resolve = vi.fn().mockResolvedValue("/workspace/notes.txt");
     const result = await edit.execute(
       {
-        old_text: "quick brown",
         new_text: "fast",
+        old_text: "quick brown",
         path: "/workspace/notes.txt",
       },
       ctx,
@@ -202,7 +202,7 @@ describe("edit — fuzzy whitespace matching", () => {
     const ctx = makeToolContext();
     ctx.paths.resolve = vi.fn().mockResolvedValue("/workspace/notes.txt");
     await edit.execute(
-      { old_text: "foo\n\nbar", new_text: "qux", path: "/workspace/notes.txt" },
+      { new_text: "qux", old_text: "foo\n\nbar", path: "/workspace/notes.txt" },
       ctx,
     );
 
@@ -218,7 +218,7 @@ describe("edit — fuzzy whitespace matching", () => {
 
     const ctx = makeToolContext();
     ctx.paths.resolve = vi.fn().mockResolvedValue("/workspace/notes.txt");
-    await edit.execute({ old_text: "world", new_text: "", path: "/workspace/notes.txt" }, ctx);
+    await edit.execute({ new_text: "", old_text: "world", path: "/workspace/notes.txt" }, ctx);
 
     const { calls } = mockFsPromises.writeFile.mock;
     const [firstElement] = calls;
@@ -241,8 +241,8 @@ describe("edit — all flag", () => {
     await edit.execute(
       {
         all: true,
-        old_text: "foo",
         new_text: "qux",
+        old_text: "foo",
         path: "/workspace/notes.txt",
       },
       ctx,
@@ -264,8 +264,8 @@ describe("edit — all flag", () => {
     const result = await edit.execute(
       {
         all: true,
-        old_text: "foo",
         new_text: "qux",
+        old_text: "foo",
         path: "/workspace/notes.txt",
       },
       ctx,
@@ -281,7 +281,7 @@ describe("edit — all flag", () => {
     const ctx = makeToolContext();
     ctx.paths.resolve = vi.fn().mockResolvedValue("/workspace/notes.txt");
     await expect(
-      edit.execute({ old_text: "foo", new_text: "qux", path: "/workspace/notes.txt" }, ctx),
+      edit.execute({ new_text: "qux", old_text: "foo", path: "/workspace/notes.txt" }, ctx),
     ).rejects.toThrow("Found 3 matches for edits[0]");
   });
 
@@ -295,8 +295,8 @@ describe("edit — all flag", () => {
     await edit.execute(
       {
         all: true,
-        old_text: "foo",
         new_text: "qux",
+        old_text: "foo",
         path: "/workspace/notes.txt",
       },
       ctx,
@@ -328,8 +328,8 @@ describe("edit — near anchor", () => {
       {
         all: true,
         near: "function beta",
-        old_text: "  const foo = 2;",
         new_text: "const foo = 42;",
+        old_text: "  const foo = 2;",
         path: "/workspace/notes.txt",
       },
       ctx,
@@ -353,8 +353,8 @@ describe("edit — near anchor", () => {
       edit.execute(
         {
           near: "nonexistent",
-          old_text: "hello",
           new_text: "qux",
+          old_text: "hello",
           path: "/workspace/notes.txt",
         },
         ctx,
@@ -378,8 +378,8 @@ describe("edit — near anchor", () => {
       edit.execute(
         {
           near: "anchor",
-          old_text: "target",
           new_text: "replaced",
+          old_text: "target",
           path: "/workspace/notes.txt",
         },
         ctx,
@@ -399,8 +399,8 @@ describe("edit — near anchor", () => {
       edit.execute(
         {
           near: "// start",
-          old_text: "const foo",
           new_text: "const foo = 42;",
+          old_text: "const foo",
           path: "/workspace/notes.txt",
         },
         ctx,
@@ -422,7 +422,7 @@ describe("edit — frontmatter preservation", () => {
 
     const ctx = makeToolContext();
     const result = await edit.execute(
-      { old_text: "Bob", new_text: "Alice", path: "/blocks/person.md" },
+      { new_text: "Alice", old_text: "Bob", path: "/blocks/person.md" },
       ctx,
     );
 
@@ -443,8 +443,8 @@ describe("edit — frontmatter preservation", () => {
     const ctx = makeToolContext();
     const result = await edit.execute(
       {
-        old_text: "Old body",
         new_text: "New body",
+        old_text: "Old body",
         path: "/skills/my-skill/SKILL.md",
       },
       ctx,
@@ -468,8 +468,8 @@ describe("edit — frontmatter preservation", () => {
     await expect(
       edit.execute(
         {
-          old_text: "Personality",
           new_text: "New description",
+          old_text: "Personality",
           path: "/blocks/person.md",
         },
         ctx,
@@ -486,8 +486,8 @@ describe("edit — frontmatter preservation", () => {
     const ctx = makeToolContext();
     const result = await edit.execute(
       {
-        old_text: "Line 3",
         new_text: "Changed line",
+        old_text: "Line 3",
         path: "/blocks/person.md",
       },
       ctx,
@@ -510,8 +510,8 @@ describe("edit — frontmatter preservation", () => {
     await expect(
       edit.execute(
         {
-          old_text: "Body content",
           new_text: "Updated body",
+          old_text: "Body content",
           path: "/blocks/person.md",
         },
         ctx,
@@ -530,8 +530,8 @@ describe("edit — frontmatter preservation", () => {
     await expect(
       edit.execute(
         {
-          old_text: "Old body",
           new_text: "New body",
+          old_text: "Old body",
           path: "/skills/my-skill/SKILL.md",
         },
         ctx,
@@ -554,8 +554,8 @@ describe("edit — error messages", () => {
     await expect(
       edit.execute(
         {
-          old_text: "nonexistent",
           new_text: "qux",
+          old_text: "nonexistent",
           path: "/workspace/notes.txt",
         },
         ctx,
@@ -573,8 +573,8 @@ describe("edit — error messages", () => {
       edit.execute(
         {
           near: "bogus",
-          old_text: "content",
           new_text: "qux",
+          old_text: "content",
           path: "/workspace/notes.txt",
         },
         ctx,
@@ -587,7 +587,7 @@ describe("edit — validation", () => {
   it("rejects empty old_text", async () => {
     const ctx = makeToolContext();
     await expect(
-      edit.execute({ old_text: "", new_text: "qux", path: "/workspace/foo.txt" }, ctx),
+      edit.execute({ new_text: "qux", old_text: "", path: "/workspace/foo.txt" }, ctx),
     ).rejects.toThrow();
   });
 });

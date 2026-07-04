@@ -52,23 +52,27 @@ function emitLines(
 
 function buildHunks(changes: Change[]): Hunk[] {
   const hunks: Hunk[] = [];
-  let currentHunk: Hunk | undefined;
+  let currentHunk: Hunk | undefined = undefined;
 
   for (const change of changes) {
-    const lines = change.value.split("\n");
-    if (lines.length > 0 && lines[lines.length - 1] === "") {
-      lines.pop();
+    const rawLines = change.value.split("\n");
+    if (rawLines.length > 0 && rawLines.at(-1) === "") {
+      rawLines.pop();
     }
 
-    const type: "added" | "removed" | "unchanged" =
-      change.added !== undefined ? "added" : change.removed !== undefined ? "removed" : "unchanged";
+    let type: "added" | "removed" | "unchanged" = "unchanged";
+    if (change.added) {
+      type = "added";
+    } else if (change.removed) {
+      type = "removed";
+    }
 
-    for (const line of lines) {
-      if (line === undefined) {
-        continue;
-      }
-
-      if (currentHunk === undefined || currentHunk.lines.at(0)?.type !== type) {
+    for (const line of rawLines) {
+      if (
+        currentHunk === undefined ||
+        currentHunk.lines.length === 0 ||
+        currentHunk.lines[0]?.type !== type
+      ) {
         currentHunk = { lines: [] };
         hunks.push(currentHunk);
       }
@@ -96,7 +100,7 @@ function generateDisplayDiff(
   let oldLineNum = 1;
   let newLineNum = 1;
   let lastWasChange = false;
-  let firstChangedLine: number | undefined;
+  let firstChangedLine: number | undefined = undefined;
 
   for (let hunkIdx = 0; hunkIdx < hunks.length; hunkIdx++) {
     const hunk = hunks[hunkIdx];
@@ -107,9 +111,7 @@ function generateDisplayDiff(
     const nextHunk = hunks[hunkIdx + 1];
 
     if (type === "added" || type === "removed") {
-      if (firstChangedLine === undefined) {
-        firstChangedLine = newLineNum;
-      }
+      firstChangedLine ??= newLineNum;
 
       for (const line of hunk.lines) {
         if (line.type === "added") {
@@ -214,13 +216,18 @@ function generateUnifiedPatch(
   );
 
   const lines = rawPatch.split("\n");
-  while (
-    lines.length > 0 &&
-    (lines[0]?.startsWith("Index:") ||
-      (lines[0]?.startsWith("=") && lines[0]?.endsWith("=")) ||
-      lines[0] === "")
-  ) {
-    lines.shift();
+  while (lines.length > 0) {
+    const [firstLine] = lines;
+    if (firstLine === undefined) {
+      break;
+    }
+    if (firstLine.startsWith("Index:") || firstLine === "") {
+      lines.shift();
+    } else if (firstLine.startsWith("=") && firstLine.endsWith("=")) {
+      lines.shift();
+    } else {
+      break;
+    }
   }
 
   return lines.join("\n");

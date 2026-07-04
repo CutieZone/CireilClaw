@@ -133,7 +133,7 @@ function prepareArguments(input: unknown): unknown {
     return input;
   }
 
-  const args = input as Record<string, unknown>;
+  const args = vb.parse(vb.record(vb.string(), vb.unknown()), input);
 
   if (args["apply"] !== undefined) {
     return input;
@@ -205,7 +205,9 @@ function pruneDryRunCache(): void {
   if (dryRunCache.size <= MAX_DRY_RUN_CACHE_SIZE) {
     return;
   }
-  const entries = [...dryRunCache.entries()].toSorted((a, b) => a[1].createdAt - b[1].createdAt);
+  const entries = [...dryRunCache.entries()].toSorted(
+    (left, right) => left[1].createdAt - right[1].createdAt,
+  );
   const overflow = entries.slice(0, entries.length - MAX_DRY_RUN_CACHE_SIZE);
   for (const [key] of overflow) {
     dryRunCache.delete(key);
@@ -317,10 +319,9 @@ const editTool: ToolDef = {
     "- Creating new files or rewriting an entire file — use `write` instead.\n" +
     "- The file doesn't exist yet — use `write` instead.\n\n" +
     "Note that paths used here *must* be absolute.",
-  name: "edit",
-  parameters: EditSchema,
   async execute(input: unknown, context: ToolContext): Promise<Record<string, unknown>> {
-    const data = vb.parse(EditSchema, prepareArguments(input));
+    const preparedInput = prepareArguments(input);
+    const data = vb.parse(EditSchema, preparedInput);
     const realPath = await context.paths.resolve(data.path);
 
     await context.paths.checkConditionalAccess(data.path);
@@ -347,7 +348,7 @@ const editTool: ToolDef = {
     const fileContent = await readFile(realPath, "utf8");
 
     let searchContent: string = fileContent;
-    let frontmatter: string | undefined;
+    let frontmatter: string | undefined = undefined;
     let frontmatterLineCount = 0;
 
     if (requiresFrontmatter(data.path)) {
@@ -358,11 +359,10 @@ const editTool: ToolDef = {
       }
     }
 
-    let result: ReturnType<typeof applyEdits>;
+    let applyResult: ReturnType<typeof applyEdits> | undefined = undefined;
     try {
-      // valibot guarantees the shape matches EditOperation
-      const edits = data.edits as unknown as EditOperation[];
-      result = applyEdits(searchContent, edits, data.path, frontmatterLineCount);
+      const edits = (data.edits ?? []) as EditOperation[];
+      applyResult = applyEdits(searchContent, edits, data.path, frontmatterLineCount);
     } catch (error) {
       throw new ToolError(String(error instanceof Error ? error.message : error));
     }
@@ -376,17 +376,17 @@ const editTool: ToolDef = {
     }
 
     const newContent =
-      frontmatter === undefined ? result.newContent : frontmatter + result.newContent;
+      frontmatter === undefined ? applyResult.newContent : frontmatter + applyResult.newContent;
 
-    const diffResult = generateDiff(data.path, result.baseContent, result.newContent);
-    const editMetadata = getEditMetadata(result.baseContent, result.edits);
+    const diffResult = generateDiff(data.path, applyResult.baseContent, applyResult.newContent);
+    const editMetadata = getEditMetadata(applyResult.baseContent, applyResult.edits);
 
     if (data.dryRun === true) {
       const applyId = randomUUID();
       storeDryRun(
         applyId,
         realPath,
-        result.baseContent,
+        applyResult.baseContent,
         newContent,
         data.path,
         editMetadata,
@@ -397,7 +397,7 @@ const editTool: ToolDef = {
 
       return {
         applyId,
-        detail: `Dry-run: would replace ${result.edits.length} block(s) in ${data.path}. Apply with applyId: ${applyId}`,
+        detail: `Dry-run: would replace ${applyResult.edits.length} block(s) in ${data.path}. Apply with applyId: ${applyId}`,
         diff: diffResult.diff,
         edits: editMetadata,
         firstChangedLine: diffResult.firstChangedLine,
@@ -410,7 +410,7 @@ const editTool: ToolDef = {
     context.session.activeFileSections.delete(data.path);
 
     return {
-      detail: `Successfully replaced ${result.edits.length} block(s) in ${data.path}.`,
+      detail: `Successfully replaced ${applyResult.edits.length} block(s) in ${data.path}.`,
       diff: diffResult.diff,
       edits: editMetadata,
       firstChangedLine: diffResult.firstChangedLine,
@@ -418,6 +418,8 @@ const editTool: ToolDef = {
       success: true,
     };
   },
+  name: "edit",
+  parameters: EditSchema,
 };
 
 export { editTool as edit };

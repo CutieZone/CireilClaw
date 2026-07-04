@@ -15,28 +15,18 @@
 // ---------------------------------------------------------------------------
 
 interface FuzzyMatch {
-  /** Byte offset in the original (LF-normalized) content where the match ends. */
   end: number;
-  /** 1-indexed line number where the match starts. */
   line: number;
-  /** Byte offset in the original (LF-normalized) content where the match starts. */
   start: number;
 }
 
 interface NearObject {
-  /** Search only before or after the matched landmark. */
   direction?: "before" | "after";
-  /** Explicit 1-indexed end line of a window. Use with startLine. */
   endLine?: number;
-  /** 1-indexed occurrence of the symbol to target (e.g. 2 for the second match). */
   index?: number;
-  /** Expected 1-indexed line of the symbol. */
   line?: number;
-  /** Lines around the landmark to search. Default: 15. */
   radius?: number;
-  /** Explicit 1-indexed start line of a window. Use with endLine. */
   startLine?: number;
-  /** Symbol/landmark text to find. Fuzzy-matched like oldText. */
   symbol?: string;
 }
 
@@ -55,24 +45,16 @@ interface ResolvedEdit extends FuzzyMatch {
 }
 
 interface ApplyResult {
-  /** The original LF-normalized content. */
   baseContent: string;
-  /** The content after all edits are applied. */
   newContent: string;
-  /** The resolved edits, sorted by start position ascending. */
   edits: ResolvedEdit[];
 }
 
 interface EditMetadata {
-  /** Index into the original edits[] array. */
   editIndex: number;
-  /** 1-indexed end line in the new file. */
   endLine: number;
-  /** Number of new lines inserted. */
   newLines: number;
-  /** Number of original lines replaced. */
   replacedLines: number;
-  /** 1-indexed start line in the new file. */
   startLine: number;
 }
 
@@ -108,17 +90,6 @@ function normalizeForMatch(str: string): string {
     .join("\n");
 }
 
-/**
- * Returns the next normalized character at `pos` in `content` along with the
- * number of original bytes consumed.
- *
- * Rules (in order):
- *  1. `\n` → emit `\n`, consume 1
- *  2. Leading whitespace (between line-start and first non-ws) → skip entirely
- *  3. Trailing whitespace (between last non-ws and newline/EOF) → skip entirely
- *  4. Content whitespace (mid-line ws runs) → emit `' '`, consume entire run
- *  5. Non-whitespace → emit the char, consume 1
- */
 function nextNormChar(content: string, pos: number): [string | undefined, number] {
   if (pos >= content.length) {
     return [undefined, 0];
@@ -258,7 +229,11 @@ function findAllMatches(content: string, needle: string): FuzzyMatch[] {
   let idx = content.indexOf(needle);
   const lineOffsets = computeLineOffsets(content);
   while (idx !== -1) {
-    exact.push({ end: idx + needle.length, line: findLine(lineOffsets, idx), start: idx });
+    exact.push({
+      end: idx + needle.length,
+      line: findLine(lineOffsets, idx),
+      start: idx,
+    });
     idx = content.indexOf(needle, idx + 1);
   }
   if (exact.length > 0) {
@@ -268,7 +243,9 @@ function findAllMatches(content: string, needle: string): FuzzyMatch[] {
 }
 
 function deduplicateMatches(matches: FuzzyMatch[]): FuzzyMatch[] {
-  const sorted = [...matches].toSorted((a, b) => a.start - b.start || a.end - b.end);
+  const sorted = [...matches].toSorted(
+    (left, right) => left.start - right.start || left.end - right.end,
+  );
   const deduped: FuzzyMatch[] = [];
 
   for (const match of sorted) {
@@ -335,7 +312,7 @@ function formatMatchContext(match: FuzzyMatch, lineOffsets: number[], fileConten
 
 function matchesToString(matches: FuzzyMatch[], fileContent: string): string {
   const lineOffsets = computeLineOffsets(fileContent);
-  return matches.map((m) => formatMatchContext(m, lineOffsets, fileContent)).join("\n\n");
+  return matches.map((match) => formatMatchContext(match, lineOffsets, fileContent)).join("\n\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -347,7 +324,7 @@ function mergeWindows(windows: ByteWindow[]): ByteWindow[] {
     return windows;
   }
   const merged: ByteWindow[] = [];
-  for (const win of windows.toSorted((a, b) => a.start - b.start)) {
+  for (const win of windows.toSorted((left, right) => left.start - right.start)) {
     const last = merged.at(-1);
     if (last !== undefined && win.start <= last.end) {
       last.end = Math.max(last.end, win.end);
@@ -372,6 +349,52 @@ function intersectWindows(initial: ByteWindow[], next: ByteWindow[]): ByteWindow
   return mergeWindows(result);
 }
 
+function resolveLandmark(
+  chosen: FuzzyMatch | undefined,
+  direction: string | undefined,
+  radius: number,
+  lineOffsets: number[],
+  contentLength: number,
+  editIndex: number,
+  symbol: string,
+): AnchorResult | MatchError {
+  if (chosen === undefined) {
+    return {
+      message: `Could not find symbol "${symbol}" for edits[${editIndex}].`,
+    };
+  }
+
+  const landmarkLine = chosen.line;
+  let startLine: number | undefined = undefined;
+  let endLine: number | undefined = undefined;
+
+  if (direction === "after") {
+    startLine = landmarkLine + 1;
+    endLine = landmarkLine + radius;
+  } else if (direction === "before") {
+    startLine = Math.max(1, landmarkLine - radius);
+    endLine = landmarkLine - 1;
+  } else {
+    startLine = Math.max(1, landmarkLine - radius);
+    endLine = landmarkLine + radius;
+  }
+
+  if (startLine > endLine) {
+    const where = direction ?? "around";
+    return {
+      message:
+        `"near" ${where} window for symbol "${symbol}" at line ${landmarkLine} ` +
+        `is empty for edits[${editIndex}].`,
+    };
+  }
+
+  return {
+    landmarkLine,
+    radius,
+    windows: [lineRangeToOffsets(lineOffsets, startLine, endLine, contentLength)],
+  };
+}
+
 function resolveSingleAnchorWindows(
   content: string,
   anchor: string | NearObject,
@@ -391,10 +414,10 @@ function resolveSingleAnchorWindows(
       };
     }
 
-    const windows: ByteWindow[] = nearMatches.map((m) => {
-      const startLine = Math.max(1, m.line - NEAR_WINDOW_LINES);
-      const endLine = Math.min(lineOffsets.length, m.line + NEAR_WINDOW_LINES);
-      return lineRangeToOffsets(lineOffsets, startLine, endLine, contentLength);
+    const windows: ByteWindow[] = nearMatches.map((match) => {
+      const windowStartLine = Math.max(1, match.line - NEAR_WINDOW_LINES);
+      const windowEndLine = Math.min(lineOffsets.length, match.line + NEAR_WINDOW_LINES);
+      return lineRangeToOffsets(lineOffsets, windowStartLine, windowEndLine, contentLength);
     });
 
     return {
@@ -436,23 +459,34 @@ function resolveSingleAnchorWindows(
     }
 
     const radius = obj.radius ?? NEAR_WINDOW_LINES;
-    let chosen: FuzzyMatch;
 
     if (obj.index !== undefined) {
-      const idx = Math.floor(obj.index) - 1;
-      if (idx < 0 || idx >= symbolMatches.length) {
+      const adjustedIndex = Math.floor(obj.index) - 1;
+      const chosenMatch = symbolMatches[adjustedIndex];
+      if (chosenMatch === undefined) {
         return {
           message:
             `Symbol "${obj.symbol}" has ${symbolMatches.length} occurrence(s); ` +
             `requested index ${obj.index} is out of range for edits[${editIndex}].`,
         };
       }
-      chosen = symbolMatches[idx]!;
-    } else if (obj.line !== undefined) {
+      return resolveLandmark(
+        chosenMatch,
+        obj.direction,
+        radius,
+        lineOffsets,
+        contentLength,
+        editIndex,
+        obj.symbol,
+      );
+    }
+
+    if (obj.line !== undefined) {
       const candidates = symbolMatches
-        .map((m) => ({ dist: Math.abs(m.line - obj.line!), m }))
+        // oxlint-disable-next-line typescript/no-non-null-assertion
+        .map((match) => ({ dist: Math.abs(match.line - obj.line!), match }))
         .filter(({ dist }) => dist <= radius)
-        .toSorted((a, b) => a.dist - b.dist);
+        .toSorted((left, right) => left.dist - right.dist);
 
       if (candidates.length === 0) {
         return {
@@ -462,7 +496,14 @@ function resolveSingleAnchorWindows(
         };
       }
 
-      if (candidates.length > 1 && candidates[0]?.dist === candidates[1]?.dist) {
+      const first = candidates.at(0);
+      const second = candidates.at(1);
+      if (first === undefined) {
+        return {
+          message: `Could not find symbol "${obj.symbol}" for edits[${editIndex}].`,
+        };
+      }
+      if (second !== undefined && first.dist === second.dist) {
         return {
           message:
             `Symbol "${obj.symbol}" near line ${obj.line} is ambiguous for edits[${editIndex}] ` +
@@ -470,47 +511,34 @@ function resolveSingleAnchorWindows(
         };
       }
 
-      chosen = candidates[0]!.m;
-    } else {
-      if (symbolMatches.length > 1) {
-        return {
-          message:
-            `Symbol "${obj.symbol}" is ambiguous (${symbolMatches.length} matches) for edits[${editIndex}]. ` +
-            `Add line, index, or direction to disambiguate.`,
-        };
-      }
-      chosen = symbolMatches[0]!;
+      return resolveLandmark(
+        first.match,
+        obj.direction,
+        radius,
+        lineOffsets,
+        contentLength,
+        editIndex,
+        obj.symbol,
+      );
     }
 
-    const landmarkLine = chosen.line;
-    let startLine: number;
-    let endLine: number;
-
-    if (obj.direction === "after") {
-      startLine = landmarkLine + 1;
-      endLine = landmarkLine + radius;
-    } else if (obj.direction === "before") {
-      startLine = Math.max(1, landmarkLine - radius);
-      endLine = landmarkLine - 1;
-    } else {
-      startLine = Math.max(1, landmarkLine - radius);
-      endLine = landmarkLine + radius;
-    }
-
-    if (startLine > endLine) {
-      const where = obj.direction ?? "around";
+    if (symbolMatches.length > 1) {
       return {
         message:
-          `"near" ${where} window for symbol "${obj.symbol}" at line ${landmarkLine} ` +
-          `is empty for edits[${editIndex}].`,
+          `Symbol "${obj.symbol}" is ambiguous (${symbolMatches.length} matches) for edits[${editIndex}]. ` +
+          `Add line, index, or direction to disambiguate.`,
       };
     }
 
-    return {
-      landmarkLine,
+    return resolveLandmark(
+      symbolMatches[0],
+      obj.direction,
       radius,
-      windows: [lineRangeToOffsets(lineOffsets, startLine, endLine, contentLength)],
-    };
+      lineOffsets,
+      contentLength,
+      editIndex,
+      obj.symbol,
+    );
   }
 
   return {
@@ -532,8 +560,8 @@ function resolveAnchorWindows(
 
     let windows: ByteWindow[] = [{ end: contentLength, start: 0 }];
 
-    for (let i = 0; i < anchor.length; i++) {
-      const item = anchor[i];
+    for (let idx = 0; idx < anchor.length; idx++) {
+      const item = anchor[idx];
       if (item === undefined) {
         continue;
       }
@@ -551,7 +579,7 @@ function resolveAnchorWindows(
       windows = intersectWindows(windows, itemResult.windows);
       if (windows.length === 0) {
         return {
-          message: `"near" anchors for edits[${editIndex}] have no overlapping window after landmark ${i + 1}.`,
+          message: `"near" anchors for edits[${editIndex}] have no overlapping window after landmark ${idx + 1}.`,
         };
       }
     }
@@ -586,22 +614,23 @@ function resolveEdit(
 ): ResolvedEdit[] | MatchError {
   const lineOffsets = computeLineOffsets(content);
 
-  let searchWindows: ByteWindow[] | undefined;
-  let anchorResult: AnchorResult | undefined;
+  let searchWindows: ByteWindow[] | undefined = undefined;
+  let anchorResult: AnchorResult | undefined = undefined;
 
-  if (editHasAnchor(edit)) {
-    const result = resolveAnchorWindows(
+  const nearAnchor = edit.near;
+  if (nearAnchor !== undefined && editHasAnchor(edit)) {
+    const resolved = resolveAnchorWindows(
       content,
-      edit.near!,
+      nearAnchor,
       lineOffsets,
       content.length,
       editIndex,
     );
-    if ("message" in result) {
-      return result;
+    if ("message" in resolved) {
+      return resolved;
     }
-    anchorResult = result;
-    searchWindows = result.windows;
+    anchorResult = resolved;
+    searchWindows = resolved.windows;
   }
 
   if (searchWindows !== undefined) {
@@ -626,7 +655,12 @@ function resolveEdit(
     }
 
     if (windowedMatches.length === 0) {
-      const firstWin = searchWindows[0]!;
+      const [firstWin] = searchWindows;
+      if (firstWin === undefined) {
+        return {
+          message: `Could not find edits[${editIndex}] in the file (empty search window).`,
+        };
+      }
       const winStartLine = findLine(lineOffsets, firstWin.start);
       const winEndLine = findLine(lineOffsets, Math.max(0, firstWin.end - 1));
       const excerpt = content
@@ -658,11 +692,16 @@ function resolveEdit(
           `Set "all: true" to replace all, add "near" to target a specific one, or make oldText more specific.`,
       };
     }
-    return dedupedWindowed.map((m) => ({
-      ...m,
-      editIndex,
-      newText: edit.newText,
-    }));
+    return dedupedWindowed.map((match) => {
+      const result: ResolvedEdit = {
+        editIndex,
+        end: match.end,
+        line: match.line,
+        newText: edit.newText,
+        start: match.start,
+      };
+      return result;
+    });
   }
 
   const allMatches = deduplicateMatches(findAllMatches(content, edit.oldText));
@@ -684,13 +723,18 @@ function resolveEdit(
     };
   }
 
-  return allMatches.map((m) => ({ ...m, editIndex, newText: edit.newText }));
+  return allMatches.map((match) => {
+    const result: ResolvedEdit = {
+      editIndex,
+      end: match.end,
+      line: match.line,
+      newText: edit.newText,
+      start: match.start,
+    };
+    return result;
+  });
 }
 
-/**
- * Apply a batch of edits to content. Edits are matched against the original
- * content, not incrementally. Throws on any failure.
- */
 function applyEdits(
   content: string,
   edits: EditOperation[],
@@ -702,26 +746,23 @@ function applyEdits(
   }
 
   const resolvedPerEdit: ResolvedEdit[][] = [];
-  for (let i = 0; i < edits.length; i++) {
-    const iterEdit = edits[i];
+  for (let idx = 0; idx < edits.length; idx++) {
+    const iterEdit = edits[idx];
     if (iterEdit === undefined) {
       continue;
     }
     if (iterEdit.oldText.trim().length === 0) {
-      throw new Error(`edits[${i}].oldText must not be empty or whitespace-only in ${path}.`);
+      throw new Error(`edits[${idx}].oldText must not be empty or whitespace-only in ${path}.`);
     }
 
     if (iterEdit.oldText === iterEdit.newText) {
       continue;
     }
 
-    const resolved = resolveEdit(content, iterEdit, i);
+    const resolved = resolveEdit(content, iterEdit, idx);
     if ("message" in resolved) {
-      const err = new Error(
-        resolved.message +
-          (resolved.context !== undefined ? `\n\nContext:\n${resolved.context}` : ""),
-      );
-      throw err;
+      const context = resolved.context === undefined ? "" : `\n\nContext:\n${resolved.context}`;
+      throw new Error(resolved.message + context);
     }
     resolvedPerEdit.push(resolved);
   }
@@ -729,15 +770,15 @@ function applyEdits(
   const allResolved = resolvedPerEdit.flat();
 
   if (frontmatterOffset !== undefined) {
-    for (const r of allResolved) {
-      r.line += frontmatterOffset;
+    for (const resolved of allResolved) {
+      resolved.line += frontmatterOffset;
     }
   }
 
-  const sorted = [...allResolved].toSorted((a, b) => a.start - b.start);
-  for (let i = 1; i < sorted.length; i++) {
-    const prev = sorted[i - 1];
-    const curr = sorted[i];
+  const sorted = [...allResolved].toSorted((left, right) => left.start - right.start);
+  for (let idx = 1; idx < sorted.length; idx++) {
+    const prev = sorted[idx - 1];
+    const curr = sorted[idx];
     if (prev !== undefined && curr !== undefined && prev.end > curr.start) {
       throw new Error(
         `edits[${prev.editIndex}] and edits[${curr.editIndex}] overlap in ${path}. Merge them into one edit or target disjoint regions.`,
@@ -746,8 +787,8 @@ function applyEdits(
   }
 
   let newContent = content;
-  for (let i = sorted.length - 1; i >= 0; i--) {
-    const edit = sorted[i];
+  for (let idx = sorted.length - 1; idx >= 0; idx--) {
+    const edit = sorted[idx];
     if (edit === undefined) {
       continue;
     }
@@ -769,9 +810,6 @@ function countLinesInSnippet(text: string): number {
   return text.endsWith("\n") ? lines.length - 1 : lines.length;
 }
 
-/**
- * Build per-edit metadata (start/end lines and line counts) for the new file.
- */
 function getEditMetadata(baseContent: string, edits: ResolvedEdit[]): EditMetadata[] {
   const lineOffsets = computeLineOffsets(baseContent);
   let lineDelta = 0;
