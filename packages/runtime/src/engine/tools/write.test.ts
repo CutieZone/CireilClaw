@@ -214,6 +214,27 @@ describe("write tool frontmatter preservation", () => {
     expect(mockFsPromises.writeFile).not.toHaveBeenCalled();
   });
 
+  it("throws when agent provides new frontmatter missing name for existing skill file", async () => {
+    const existingContent = "---\nname: my-skill\ndescription: A skill\n---\nOriginal body";
+    mockFs.existsSync.mockReturnValue(true);
+    mockFsPromises.readFile.mockResolvedValue(existingContent);
+
+    const ctx = makeToolContext();
+    ctx.paths.resolve = vi
+      .fn()
+      .mockResolvedValue("/home/test/.cireilclaw/agents/testagent/skills/my-skill/SKILL.md");
+    await expect(
+      write.execute(
+        {
+          content: "---\ndescription: Only description\n---\nNew body with missing name",
+          path: "/skills/my-skill/SKILL.md",
+        },
+        ctx,
+      ),
+    ).rejects.toThrow("Invalid frontmatter");
+    expect(mockFsPromises.writeFile).not.toHaveBeenCalled();
+  });
+
   it("allows new block file without frontmatter (no validation for agent content without delimiters)", async () => {
     mockFs.existsSync.mockReturnValue(false);
 

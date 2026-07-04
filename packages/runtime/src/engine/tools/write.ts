@@ -56,21 +56,27 @@ export const write: ToolDef = {
 
     // When overwriting an existing block/skill file that requires frontmatter,
     // preserve the existing frontmatter if the new content doesn't include it.
+    // If the agent provides new frontmatter, validate it immediately to prevent
+    // removing required fields (name, description for skills; description for blocks).
     if (requiresFrontmatter(data.path) && existsSync(realPath)) {
       const existing = await readFile(realPath, "utf8");
       const isBlock = data.path.startsWith("/blocks/");
       const split = splitFrontmatter(existing, isBlock);
-      if (split !== undefined) {
+      const delim = isBlock ? "+++" : "---";
+
+      if (data.content.startsWith(delim)) {
+        // Agent is providing new frontmatter — validate it before writing.
+        validateFrontmatter(data.content, isBlock);
+        // Use agent's content as-is (includes their frontmatter)
+      } else if (split !== undefined) {
+        // Agent didn't provide frontmatter; preserve existing one.
         // Validate preserved frontmatter before writing — catches pre-existing
         // corruption so the agent gets immediate feedback instead of a load failure later.
         validateFrontmatter(split.frontmatter, isBlock);
-
-        const { frontmatter } = split;
-        const delim = isBlock ? "+++" : "---";
-        if (!data.content.startsWith(delim)) {
-          content = frontmatter + data.content;
-        }
+        content = split.frontmatter + data.content;
       }
+      // If split === undefined and agent didn't provide frontmatter,
+      // write content as-is (existing file has no valid frontmatter either).
     } else if (requiresFrontmatter(data.path) && !existsSync(realPath)) {
       // New block/skill file — validate the agent-provided frontmatter immediately.
       const isBlock = data.path.startsWith("/blocks/");

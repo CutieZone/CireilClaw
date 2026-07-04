@@ -10,6 +10,7 @@ import type { ConditionsConfig } from "#config/schemas/conditions.js";
 import type { MemoryBlock } from "#engine/block.js";
 import type { Session } from "#harness/session.js";
 import colors from "#output/colors.js";
+import { warning } from "#output/log.js";
 import { getMatchingBlockNames } from "#util/conditions.js";
 import { BlockFrontmatterSchema, SkillFrontmatterSchema } from "#util/frontmatter.js";
 import { root } from "#util/paths.js";
@@ -138,28 +139,35 @@ async function loadSkills(agentSlug: string): Promise<Skill[]> {
       continue;
     }
 
-    const content = await readFile(filePath, { encoding: "utf8" });
+    try {
+      const content = await readFile(filePath, { encoding: "utf8" });
 
-    if (!content.startsWith("---")) {
-      throw new Error(
-        `Skill file ${colors.keyword(slug)} at path ${colors.path(filePath)} has invalid frontmatter (expected YAML, file does not start with '${colors.keyword("---")}')`,
-      );
+      if (!content.startsWith("---")) {
+        warning(
+          `Skill "${slug}" at ${colors.path(filePath)} has invalid frontmatter (expected YAML, does not start with "---"). Skipping.`,
+        );
+        continue;
+      }
+
+      const ending = content.indexOf("---", 3);
+      if (ending === -1) {
+        warning(
+          `Skill "${slug}" at ${colors.path(filePath)} has invalid frontmatter (missing closing "---"). Skipping.`,
+        );
+        continue;
+      }
+
+      const yamlData = content.slice(3, ending);
+      const frontmatter = vb.parse(SkillFrontmatterSchema, parseYaml(yamlData));
+
+      skills.push({
+        description: frontmatter.description,
+        slug,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      warning(`Skill "${slug}" at ${colors.path(filePath)} failed to load: ${message}. Skipping.`);
     }
-
-    const ending = content.indexOf("---", 3);
-    if (ending === -1) {
-      throw new Error(
-        `Skill file ${colors.keyword(slug)} at path ${colors.path(filePath)} has invalid frontmatter (expected closing '${colors.keyword("---")}', but none found)`,
-      );
-    }
-
-    const yamlData = content.slice(3, ending);
-    const frontmatter = vb.parse(SkillFrontmatterSchema, parseYaml(yamlData));
-
-    skills.push({
-      description: frontmatter.description,
-      slug,
-    });
   }
 
   return skills;

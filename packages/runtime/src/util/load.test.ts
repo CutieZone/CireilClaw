@@ -11,6 +11,14 @@ import {
   loadSkills,
 } from "#util/load.js";
 
+const mockLog = {
+  warning: vi.fn(),
+};
+
+vi.mock("#output/log.js", () => ({
+  warning: (...args: unknown[]): unknown => mockLog.warning(...args),
+}));
+
 const mockFs = {
   existsSync: vi.fn(),
 };
@@ -134,14 +142,52 @@ describe("loadSkills", () => {
     expect(result).toEqual([]);
   });
 
-  it("throws when skill frontmatter is invalid", async () => {
+  it("skips invalid skill instead of throwing", async () => {
     mockFs.existsSync.mockReturnValue(true);
     mockFsPromises.readdir.mockResolvedValue([
       { isDirectory: (): boolean => true, name: "broken" },
     ]);
     mockFsPromises.readFile.mockResolvedValue("---\nbad: yaml\n---\ncontent");
 
-    await expect(loadSkills("testagent")).rejects.toThrow();
+    const result = await loadSkills("testagent");
+    expect(result).toEqual([]);
+    expect(mockLog.warning).toHaveBeenCalledOnce();
+  });
+
+  it("skips skill without YAML delimiters instead of throwing", async () => {
+    mockFs.existsSync.mockReturnValue(true);
+    mockFsPromises.readdir.mockResolvedValue([
+      { isDirectory: (): boolean => true, name: "borked" },
+    ]);
+    mockFsPromises.readFile.mockResolvedValue("Just plain text, no frontmatter at all");
+
+    const result = await loadSkills("testagent");
+    expect(result).toEqual([]);
+    expect(mockLog.warning).toHaveBeenCalled();
+  });
+
+  it("skips skill with missing closing YAML delimiter instead of throwing", async () => {
+    mockFs.existsSync.mockReturnValue(true);
+    mockFsPromises.readdir.mockResolvedValue([
+      { isDirectory: (): boolean => true, name: "nocloser" },
+    ]);
+    mockFsPromises.readFile.mockResolvedValue("---\nname: test\ndescription: test");
+
+    const result = await loadSkills("testagent");
+    expect(result).toEqual([]);
+    expect(mockLog.warning).toHaveBeenCalled();
+  });
+
+  it("skips skill with missing required fields (name) instead of throwing", async () => {
+    mockFs.existsSync.mockReturnValue(true);
+    mockFsPromises.readdir.mockResolvedValue([
+      { isDirectory: (): boolean => true, name: "noname" },
+    ]);
+    mockFsPromises.readFile.mockResolvedValue("---\ndescription: A skill\n---\ncontent");
+
+    const result = await loadSkills("testagent");
+    expect(result).toEqual([]);
+    expect(mockLog.warning).toHaveBeenCalled();
   });
 });
 
