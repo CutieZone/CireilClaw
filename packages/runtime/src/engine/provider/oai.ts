@@ -396,6 +396,21 @@ export async function generate(
     tools: context.tools.map(translateTool),
   };
 
+  let imageCount = 0;
+  for (const msg of params.messages) {
+    const content = Array.isArray(msg.content) ? msg.content : [msg.content];
+    for (const part of content) {
+      if (typeof part === "object" && part !== null && "type" in part && part.type === "image_url") {
+        imageCount++;
+      }
+    }
+  }
+  debug(
+    "OpenAI request images",
+    `model: ${model}`,
+    `imageCount: ${imageCount}`,
+  );
+
   if (reasoning === true) {
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     (params as unknown as Record<string, unknown>)["reasoning"] = {

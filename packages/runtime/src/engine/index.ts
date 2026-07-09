@@ -100,6 +100,19 @@ async function resolveChannelUnsupported(_spec: string): Promise<ChannelResoluti
   return { error: "channel resolution not supported" };
 }
 
+function countImageRefs(messages: Message[]): number {
+  let count = 0;
+  for (const msg of messages) {
+    const blocks = Array.isArray(msg.content) ? msg.content : [msg.content];
+    for (const block of blocks) {
+      if (block.type === "image" || block.type === "image_ref") {
+        count++;
+      }
+    }
+  }
+  return count;
+}
+
 export async function runTurn(
   session: Session,
   agentSlug: string,
@@ -302,8 +315,8 @@ export async function runTurn(
 
   const contextBudget = modelCfg.contextBudget ?? 0.6;
   const contextHardBudget = modelCfg.contextHardBudget ?? 0.85;
-  const supportsVision = modelCfg.supportsVision ?? true;
-  const supportsVideo = modelCfg.supportsVideo ?? false;
+  const supportsVision = modelCfg.supportsVision;
+  const supportsVideo = modelCfg.supportsVideo;
   const effectiveContextWindow = await resolveModelContextWindow(
     selectedProvider,
     selectedModel,
@@ -317,7 +330,7 @@ export async function runTurn(
     `model: ${colors.keyword(selectedModel)}`,
     `supportsVision: ${supportsVision}`,
     `supportsVideo: ${supportsVideo}`,
-    `historyImages: ${session.history.reduce((count, msg) => count + (Array.isArray(msg.content) ? msg.content.filter((b) => b.type === "image" || b.type === "image_ref").length : (msg.content.type === "image" || msg.content.type === "image_ref" ? 1 : 0)), 0)}`,
+    `historyImages: ${countImageRefs(session.history)}`,
     `pendingImages: ${session.pendingImages.length}`,
   );
 
@@ -427,16 +440,7 @@ export async function runTurn(
       supportsVideo,
     );
 
-    const filteredImageCount = filteredMessages.reduce(
-      (count, msg) =>
-        count +
-        (Array.isArray(msg.content)
-          ? msg.content.filter((b) => b.type === "image" || b.type === "image_ref").length
-          : msg.content.type === "image" || msg.content.type === "image_ref"
-            ? 1
-            : 0),
-      0,
-    );
+    const filteredImageCount = countImageRefs(filteredMessages);
     debug(
       "Filtered images for model",
       colors.keyword(agentSlug),
