@@ -310,12 +310,19 @@ async function fetchAttachmentImages(msg: DiscordMessage): Promise<ImageContent[
         return undefined;
       }
       try {
-        const response = await fetch(attachment.url);
+        const response = await fetch(attachment.url, { cache: "no-store" });
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
         const raw = await response.arrayBuffer();
         const data = await toWebp(raw, mediaType);
+        debug(
+          "Fetched image attachment",
+          "msg:", msg.id,
+          "attachment:", attachment.id,
+          "bytes:", data.length,
+          "mediaType:", mediaType,
+        );
         return {
           data,
           id: attachment.id,
@@ -358,7 +365,7 @@ async function fetchStickerImages(msg: DiscordMessage): Promise<ImageContent[]> 
             ? `https://media.discordapp.net/stickers/${sticker.id}.gif`
             : `https://cdn.discordapp.com/stickers/${sticker.id}.png`;
 
-        const response = await fetch(url);
+        const response = await fetch(url, { cache: "no-store" });
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
@@ -411,7 +418,7 @@ async function fetchAttachmentVideos(msg: DiscordMessage): Promise<VideoContent[
         return undefined;
       }
       try {
-        const response = await fetch(attachment.url);
+        const response = await fetch(attachment.url, { cache: "no-store" });
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
@@ -1301,11 +1308,18 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
       const msg = await client.rest.channels.getMessage(session.channelId, messageId);
       const results: { filename: string; data: Buffer }[] = [];
       for (const attachment of msg.attachments.values()) {
-        const response = await fetch(attachment.url);
+        const response = await fetch(attachment.url, { cache: "no-store" });
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
         const data = Buffer.from(await response.arrayBuffer());
+        debug(
+          "Downloaded attachment",
+          "msg:", messageId,
+          "attachment:", attachment.id,
+          "filename:", attachment.filename,
+          "bytes:", data.length,
+        );
         results.push({ data, filename: attachment.filename });
       }
       return results;

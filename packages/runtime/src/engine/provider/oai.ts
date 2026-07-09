@@ -115,9 +115,10 @@ function translateContent(
       };
     case "image": {
       const encoded = content.memoized?.data ?? encode(content.data);
+      const mediaType = content.memoized?.kind === "jpeg" ? "image/jpeg" : content.mediaType;
       return {
         image_url: {
-          url: `data:${content.mediaType};base64,${encoded}`,
+          url: `data:${mediaType};base64,${encoded}`,
         },
         type: "image_url",
       };

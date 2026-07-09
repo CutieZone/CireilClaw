@@ -162,7 +162,7 @@ async function repairSession(
   const meta = vb.parse(DiscordMetaSchema, JSON.parse(row.meta));
   const { channelId } = meta;
 
-  const history = vb.parse(SerializedHistorySchema, JSON.parse(row.history));
+  let history = vb.parse(SerializedHistorySchema, JSON.parse(row.history));
 
   // Sort history entries chronologically by snowflake ID while keeping
   // agentic-loop regions intact, then write back so the image/video repair
@@ -174,8 +174,7 @@ async function repairSession(
     const updatedHistory = JSON.stringify(sorted);
     db.update(sessions).set({ history: updatedHistory }).where(eq(sessions.id, sessionId)).run();
     // Use the sorted copy for the rest of the repair.
-    Object.assign(history, sorted);
-    history.length = sorted.length;
+    history = sorted;
   }
 
   const imagesToFetch: { msgId: string; url: string }[] = [];
@@ -253,7 +252,7 @@ async function repairSession(
   const imageResults = await Promise.all(
     imagesToFetch.map(async ({ msgId, url }) => {
       try {
-        const response = await fetch(url);
+        const response = await fetch(url, { cache: "no-store" });
         if (!response.ok) {
           return { status: "failed" as const };
         }

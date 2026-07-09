@@ -274,8 +274,6 @@ export async function runTurn(
     session,
   };
 
-  debug("Turn start", colors.keyword(agentSlug), colors.keyword(session.id()));
-
   const providerName = override.provider ?? session.selectedProvider;
   let selectedProvider =
     providerName === undefined ? engineDefaults.provider.config : engineCfg[providerName];
@@ -304,10 +302,23 @@ export async function runTurn(
 
   const contextBudget = modelCfg.contextBudget ?? 0.6;
   const contextHardBudget = modelCfg.contextHardBudget ?? 0.85;
+  const supportsVision = modelCfg.supportsVision ?? true;
+  const supportsVideo = modelCfg.supportsVideo ?? false;
   const effectiveContextWindow = await resolveModelContextWindow(
     selectedProvider,
     selectedModel,
     modelCfg,
+  );
+
+  debug(
+    "Vision config",
+    colors.keyword(agentSlug),
+    colors.keyword(session.id()),
+    `model: ${colors.keyword(selectedModel)}`,
+    `supportsVision: ${supportsVision}`,
+    `supportsVideo: ${supportsVideo}`,
+    `historyImages: ${session.history.reduce((count, msg) => count + (Array.isArray(msg.content) ? msg.content.filter((b) => b.type === "image" || b.type === "image_ref").length : (msg.content.type === "image" || msg.content.type === "image_ref" ? 1 : 0)), 0)}`,
+    `pendingImages: ${session.pendingImages.length}`,
   );
 
   let generationRetries = 0;
@@ -376,8 +387,8 @@ export async function runTurn(
       session,
       capabilities,
       conditions,
-      modelCfg.supportsVision,
-      modelCfg.supportsVideo,
+      supportsVision,
+      supportsVideo,
     );
 
     const openedFilesBlock = await buildOpenedFilesBlock(agentSlug, session);
@@ -412,8 +423,25 @@ export async function runTurn(
     // metadata via Discord's <attachment> tags and can choose to download them.
     const filteredMessages = stripMediaForModel(
       messages,
-      modelCfg.supportsVision,
-      modelCfg.supportsVideo,
+      supportsVision,
+      supportsVideo,
+    );
+
+    const filteredImageCount = filteredMessages.reduce(
+      (count, msg) =>
+        count +
+        (Array.isArray(msg.content)
+          ? msg.content.filter((b) => b.type === "image" || b.type === "image_ref").length
+          : msg.content.type === "image" || msg.content.type === "image_ref"
+            ? 1
+            : 0),
+      0,
+    );
+    debug(
+      "Filtered images for model",
+      colors.keyword(agentSlug),
+      colors.keyword(session.id()),
+      `filteredImages: ${filteredImageCount}`,
     );
 
     // Extract the latest user message so context metadata can sit right

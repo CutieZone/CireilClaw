@@ -5,6 +5,7 @@ import path from "node:path";
 import * as vb from "valibot";
 
 import { ToolError } from "#engine/errors.js";
+import { debug } from "#output/log.js";
 import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
 
 const Schema = vb.strictObject({
@@ -50,6 +51,13 @@ const downloadAttachments: ToolDef = {
 
       await mkdir(path.dirname(realPath), { recursive: true });
       await writeFile(realPath, data);
+      debug(
+        "Saved downloaded attachment",
+        "msg:", message_id,
+        "filename:", filename,
+        "path:", sandboxPath,
+        "bytes:", data.length,
+      );
       saved.push(sandboxPath);
     }
 

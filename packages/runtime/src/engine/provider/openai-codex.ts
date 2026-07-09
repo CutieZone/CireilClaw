@@ -206,7 +206,7 @@ async function translateUserContent(
     case "image":
       return {
         detail: "auto",
-        image_url: `data:${content.mediaType};base64,${await prepareImage(content, forceJpeg)}`,
+        image_url: `data:${content.memoized?.kind === "jpeg" ? "image/jpeg" : content.mediaType};base64,${await prepareImage(content, forceJpeg)}`,
         type: "input_image",
       };
     case "image_ref":

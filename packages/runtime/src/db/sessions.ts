@@ -121,7 +121,7 @@ async function deserializeHistory(json: string, agentSlug: string): Promise<Mess
     if (ct.type === "video_ref") {
       const ref = ct;
       try {
-        const response = await fetch(ref.url);
+        const response = await fetch(ref.url, { cache: "no-store" });
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
