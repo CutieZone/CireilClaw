@@ -416,6 +416,54 @@ export async function runTurn(
       modelCfg.supportsVideo,
     );
 
+    // Enforce per-request image limit, trimming oldest images first. Some
+    // providers/endpoints cap images per request (e.g. Xiaomi limits to 5).
+    const { maxImagesPerRequest } = modelCfg;
+    if (maxImagesPerRequest !== undefined) {
+      let imagesInRequest = 0;
+      for (const msg of filteredMessages) {
+        const blocks = Array.isArray(msg.content) ? msg.content : [msg.content];
+        for (const block of blocks) {
+          if (block.type === "image" || block.type === "image_ref") {
+            imagesInRequest++;
+          }
+        }
+      }
+
+      if (imagesInRequest > maxImagesPerRequest) {
+        let toRemove = imagesInRequest - maxImagesPerRequest;
+        for (const msg of filteredMessages) {
+          if (toRemove <= 0) {
+            break;
+          }
+          if (msg.role !== "user") {
+            continue;
+          }
+
+          const blocks = Array.isArray(msg.content) ? msg.content : [msg.content];
+          // oxlint-disable-next-line eslint/no-loop-func
+          const filtered = blocks.filter((block) => {
+            if (toRemove <= 0) {
+              return true;
+            }
+            if (block.type === "image" || block.type === "image_ref") {
+              toRemove--;
+              return false;
+            }
+            return true;
+          });
+
+          if (filtered.length === 0) {
+            msg.content = { content: "[images removed]", type: "text" };
+          } else if (Array.isArray(msg.content)) {
+            msg.content = filtered;
+          } else {
+            msg.content = filtered[0] ?? { content: "[images removed]", type: "text" };
+          }
+        }
+      }
+    }
+
     // Extract the latest user message so context metadata can sit right
     // before it (after opened files), preventing the agent from confusing
     // a system status ping with the user's actual input.

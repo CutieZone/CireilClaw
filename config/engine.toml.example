@@ -45,6 +45,8 @@ maxTurns = 30
 #   supportsVideo = false       # Video support flag. Default: false
 #   supportsVision = true      # Vision support flag. Default: true
 #   toolFailThreshold = 3       # Max tool failures before giving up. Default: 3
+#   maxImagesPerRequest = 5     # Max images per request. Older images trimmed first.
+#                                 Some providers have hardware limits (e.g. Xiaomi: 5). Default: no limit
 #   contextWindow = 128000      # Model context window in tokens. Explicit config is authoritative.
 #                                 When available (configured here, or discovered from provider metadata),
 #                                 the engine evicts stale tool responses before dropping turns.
