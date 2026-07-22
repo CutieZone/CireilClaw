@@ -148,6 +148,10 @@ class PluginProcess {
   private readonly rpc: RpcChannel;
   private readonly pending = new Map<string, ToolContext>();
   private nextInvocation = 1;
+  // Buffer for addToolMessage RPCs that arrive after the invocation
+  // context has already been cleaned up (fire-and-forget from async
+  // plugin callbacks). Drained into the next invocation's ctx.
+  private readonly orphanedAddToolMessages: string[] = [];
 
   public constructor(id: string, worker: Worker, rpc: RpcChannel) {
     this.id = id;
@@ -194,6 +198,11 @@ class PluginProcess {
       tools[toolName] = {
         description: entry.description,
         execute: async (input, ctx): Promise<Record<string, unknown>> => {
+          // Drain any addToolMessage calls that arrived too late for
+          // the previous invocation before starting this one.
+          for (const msg of this.orphanedAddToolMessages.splice(0)) {
+            ctx.addToolMessage(msg);
+          }
           const invocationId = `${this.id}#${this.nextInvocation++}`;
           this.pending.set(invocationId, ctx);
           try {
@@ -296,7 +305,14 @@ class PluginProcess {
     });
     this.rpc.handle("addToolMessage", (args) => {
       const [invocationId, content] = args;
-      this.requireCtx(invocationId).addToolMessage(content as string);
+      try {
+        this.requireCtx(invocationId).addToolMessage(content as string);
+      } catch {
+        // Late arrival after the invocation context was cleaned up
+        // (e.g. plugin spawned async work that called addToolMessage
+        // after execute() returned). Queue for the next invocation.
+        this.orphanedAddToolMessages.push(content as string);
+      }
       return Promise.resolve(undefined);
     });
     this.rpc.handle("paths.resolve", (args) => {
