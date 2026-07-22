@@ -126,12 +126,19 @@ export async function runTurn(
   const toolsConfig = await loadTools(agentSlug);
   const tools = await buildTools(agentSlug, session, toolsConfig);
   const sandboxConfig = await loadSandboxConfig(agentSlug);
+
+  // Buffer for addToolMessage calls during tool execution. Like
+  // disableNotifications, these must be pushed AFTER all tool responses
+  // to keep tool_use/tool_result blocks adjacent (required by both
+  // OpenAI and Anthropic APIs). Flushed after disableNotifications.
+  const pendingAddToolMessages: Message[] = [];
+
   const ctx: ToolContext = {
     addImage: (data: Uint8Array, mediaType: string): void => {
       session.pendingImages.push({ data, mediaType, type: "image" });
     },
     addToolMessage: (content: string): void => {
-      session.pendingToolMessages.push({
+      pendingAddToolMessages.push({
         content: { content, type: "text" },
         role: "user",
       });
@@ -469,7 +476,17 @@ export async function runTurn(
     // a system status ping with the user's actual input.
     const lastUserIdx = filteredMessages.findLastIndex((msg) => msg.role === "user");
     let latestUserMessage: Message | undefined = undefined;
-    if (lastUserIdx !== -1) {
+    // Only relocate the user message when there's no model activity after
+    // it — i.e. on the first iteration of the agentic loop. On subsequent
+    // iterations the user's request is followed by assistant tool calls
+    // and tool responses; splicing it to the end would invert causality,
+    // making the model see its own work before the request that produced it.
+    const hasActivityAfterUser =
+      lastUserIdx !== -1 &&
+      filteredMessages
+        .slice(lastUserIdx + 1)
+        .some((msg) => msg.role === "assistant" || msg.role === "toolResponse");
+    if (lastUserIdx !== -1 && !hasActivityAfterUser) {
       [latestUserMessage] = filteredMessages.splice(lastUserIdx, 1);
     }
 
@@ -767,6 +784,14 @@ export async function runTurn(
         content: { content: disableNotifications.join("\n\n"), type: "text" },
         role: "user",
       });
+    }
+
+    // Flush addToolMessage injections after all tool responses (and
+    // disableNotifications) so tool_use/tool_result adjacency is
+    // preserved. See the declaration comment for rationale.
+    if (pendingAddToolMessages.length > 0) {
+      session.pendingToolMessages.push(...pendingAddToolMessages);
+      pendingAddToolMessages.length = 0;
     }
 
     if (done) {
