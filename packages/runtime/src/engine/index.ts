@@ -132,12 +132,29 @@ export async function runTurn(
   // to keep tool_use/tool_result blocks adjacent (required by both
   // OpenAI and Anthropic APIs). Flushed after disableNotifications.
   const pendingAddToolMessages: Message[] = [];
+  // Set after pendingToolMessages is committed to session.history so
+  // late addToolMessage RPCs (fire-and-forget from plugin workers) can
+  // route to a safe fallback instead of mutating a batch already in the
+  // history.
+  let toolMessagesCommitted = false;
 
   const ctx: ToolContext = {
     addImage: (data: Uint8Array, mediaType: string): void => {
       session.pendingImages.push({ data, mediaType, type: "image" });
     },
     addToolMessage: (content: string): void => {
+      // After the current batch is committed to history, late arrivals
+      // (from plugin workers that fire-and-forget the RPC) must still
+      // be preserved. Queue them directly to pendingToolMessages — on
+      // the next turn they will be merged into the message array before
+      // any new tool responses, preserving approximate ordering.
+      if (toolMessagesCommitted) {
+        session.pendingToolMessages.push({
+          content: { content, type: "text" },
+          role: "user",
+        });
+        return;
+      }
       pendingAddToolMessages.push({
         content: { content, type: "text" },
         role: "user",
@@ -685,133 +702,150 @@ export async function runTurn(
     // single immediately-following user message.
     const disableNotifications: string[] = [];
 
-    for (const call of toolCalls) {
-      const def = getToolRegistry()[call.name];
-      if (def === undefined) {
-        throw new Error(`Unknown tool: ${colors.keyword(call.name)}`);
-      }
-
-      debug("Tool call", colors.keyword(call.name), call);
-      let result: Record<string, unknown> = {};
-      try {
-        result = await def.execute(call.input, ctx);
-      } catch (error: unknown) {
-        if (error instanceof vb.ValiError) {
-          result = {
-            error: error.message,
-            issues: error.issues,
-            success: false,
-          };
-        } else if (error instanceof ParseError) {
-          result = {
-            error: error.message,
-            issues: error.issues,
-            success: false,
-          };
-        } else if (error instanceof ToolError) {
-          result = { error: error.message, hint: error.hint, success: false };
-        } else {
-          result = { error: sanitizeError(error, agentSlug), success: false };
+    try {
+      for (const call of toolCalls) {
+        const def = getToolRegistry()[call.name];
+        if (def === undefined) {
+          throw new Error(`Unknown tool: ${colors.keyword(call.name)}`);
         }
-      }
-      debug("Tool result", colors.keyword(call.name), result);
 
-      // Assign Discord message IDs to the assistant history entry immediately
-      // after respond sends, so agentic-loop entries carry proper snowflakes
-      // for historyInsertById's binary search on the next turn.
-      if (
-        call.name === "respond" &&
-        session.lastSentMessageIds !== undefined &&
-        session.lastSentMessageIds.length > 0
-      ) {
-        const assistant = session.history.findLast(
-          (entry) => entry.role === "assistant" && entry.id === undefined,
-        );
-        if (assistant !== undefined) {
-          const [firstId, ...restIds] = session.lastSentMessageIds;
-          assistant.id = firstId;
-          assistant.messageIds = restIds.length > 0 ? session.lastSentMessageIds : undefined;
+        debug("Tool call", colors.keyword(call.name), call);
+        let result: Record<string, unknown> = {};
+        try {
+          result = await def.execute(call.input, ctx);
+        } catch (error: unknown) {
+          if (error instanceof vb.ValiError) {
+            result = {
+              error: error.message,
+              issues: error.issues,
+              success: false,
+            };
+          } else if (error instanceof ParseError) {
+            result = {
+              error: error.message,
+              issues: error.issues,
+              success: false,
+            };
+          } else if (error instanceof ToolError) {
+            result = { error: error.message, hint: error.hint, success: false };
+          } else {
+            result = { error: sanitizeError(error, agentSlug), success: false };
+          }
         }
-        session.lastSentMessageIds = undefined;
-      }
+        debug("Tool result", colors.keyword(call.name), result);
 
-      // Track consecutive failures to catch looping behaviour.
-      const toolFailed = typeof result["success"] === "boolean" && !result["success"];
-      if (toolFailed) {
-        const fails = (toolConsecutiveFailures.get(call.name) ?? 0) + 1;
-        toolConsecutiveFailures.set(call.name, fails);
+        // Assign Discord message IDs to the assistant history entry immediately
+        // after respond sends, so agentic-loop entries carry proper snowflakes
+        // for historyInsertById's binary search on the next turn.
         if (
-          fails >= toolFailThreshold &&
-          !disabledTools.has(call.name) &&
-          call.name !== "respond" &&
-          call.name !== "no-response"
+          call.name === "respond" &&
+          session.lastSentMessageIds !== undefined &&
+          session.lastSentMessageIds.length > 0
         ) {
-          disabledTools.add(call.name);
-          warning(
-            `Disabling tool '${call.name}' after ${fails} consecutive failures (threshold: ${toolFailThreshold})`,
-            colors.keyword(agentSlug),
-            colors.keyword(session.id()),
+          const assistant = session.history.findLast(
+            (entry) => entry.role === "assistant" && entry.id === undefined,
           );
-          disableNotifications.push(
-            `The tool '${call.name}' has failed ${fails} times in a row and has been disabled for this turn. Please either stop trying, ask the user for more information, or do something else.`,
-          );
+          if (assistant !== undefined) {
+            const [firstId, ...restIds] = session.lastSentMessageIds;
+            assistant.id = firstId;
+            assistant.messageIds = restIds.length > 0 ? session.lastSentMessageIds : undefined;
+          }
+          session.lastSentMessageIds = undefined;
         }
-      } else {
-        toolConsecutiveFailures.delete(call.name);
-      }
 
-      const response: ToolMessage = {
-        content: {
-          id: call.id,
-          name: call.name,
-          output: result,
-          type: "toolResponse",
-        },
-        role: "toolResponse",
-      };
-      session.pendingToolMessages.push(response);
-
-      if (
-        (call.name === "respond" && result["success"] !== false && result["final"] !== false) ||
-        call.name === "no-response"
-      ) {
-        done = true;
-      }
-    }
-
-    if (disableNotifications.length > 0) {
-      session.pendingToolMessages.push({
-        content: { content: disableNotifications.join("\n\n"), type: "text" },
-        role: "user",
-      });
-    }
-
-    // Flush addToolMessage injections after all tool responses (and
-    // disableNotifications) so tool_use/tool_result adjacency is
-    // preserved. See the declaration comment for rationale.
-    if (pendingAddToolMessages.length > 0) {
-      session.pendingToolMessages.push(...pendingAddToolMessages);
-      pendingAddToolMessages.length = 0;
-    }
-
-    if (done) {
-      for (const msg of session.pendingToolMessages) {
-        msg.timestamp ??= Date.now();
-      }
-      session.history.push(...session.pendingToolMessages);
-      session.pendingToolMessages.length = 0;
-
-      // Prune ephemeral context (historical/reply-tree backfills) that we no
-      // longer need to send now that the turn is complete.
-      session.history = session.history.filter((msg) => {
-        if (msg.role === "user" || msg.role === "assistant") {
-          return msg.persist !== false;
+        // Track consecutive failures to catch looping behaviour.
+        const toolFailed = typeof result["success"] === "boolean" && !result["success"];
+        if (toolFailed) {
+          const fails = (toolConsecutiveFailures.get(call.name) ?? 0) + 1;
+          toolConsecutiveFailures.set(call.name, fails);
+          if (
+            fails >= toolFailThreshold &&
+            !disabledTools.has(call.name) &&
+            call.name !== "respond" &&
+            call.name !== "no-response"
+          ) {
+            disabledTools.add(call.name);
+            warning(
+              `Disabling tool '${call.name}' after ${fails} consecutive failures (threshold: ${toolFailThreshold})`,
+              colors.keyword(agentSlug),
+              colors.keyword(session.id()),
+            );
+            disableNotifications.push(
+              `The tool '${call.name}' has failed ${fails} times in a row and has been disabled for this turn. Please either stop trying, ask the user for more information, or do something else.`,
+            );
+          }
+        } else {
+          toolConsecutiveFailures.delete(call.name);
         }
-        return true;
-      });
 
-      debug("Turn end", colors.keyword(agentSlug), colors.keyword(session.id()));
-      return;
+        const response: ToolMessage = {
+          content: {
+            id: call.id,
+            name: call.name,
+            output: result,
+            type: "toolResponse",
+          },
+          role: "toolResponse",
+        };
+        session.pendingToolMessages.push(response);
+
+        if (
+          (call.name === "respond" && result["success"] !== false && result["final"] !== false) ||
+          call.name === "no-response"
+        ) {
+          done = true;
+        }
+      }
+
+      if (disableNotifications.length > 0) {
+        session.pendingToolMessages.push({
+          content: { content: disableNotifications.join("\n\n"), type: "text" },
+          role: "user",
+        });
+      }
+
+      // Flush addToolMessage injections after all tool responses (and
+      // disableNotifications) so tool_use/tool_result adjacency is
+      // preserved. See the declaration comment for rationale.
+      if (pendingAddToolMessages.length > 0) {
+        session.pendingToolMessages.push(...pendingAddToolMessages);
+        pendingAddToolMessages.length = 0;
+      }
+
+      if (done) {
+        for (const msg of session.pendingToolMessages) {
+          msg.timestamp ??= Date.now();
+        }
+        session.history.push(...session.pendingToolMessages);
+        session.pendingToolMessages.length = 0;
+
+        // Mark committed so late addToolMessage RPCs from plugin
+        // workers don't mutate a batch already in history.
+        toolMessagesCommitted = true;
+
+        // Prune ephemeral context (historical/reply-tree backfills) that we no
+        // longer need to send now that the turn is complete.
+        session.history = session.history.filter((msg) => {
+          if (msg.role === "user" || msg.role === "assistant") {
+            return msg.persist !== false;
+          }
+          return true;
+        });
+
+        debug("Turn end", colors.keyword(agentSlug), colors.keyword(session.id()));
+        return;
+      }
+    } finally {
+      // If the tool loop threw (e.g. unknown tool), drain buffered
+      // addToolMessage calls so they aren't silently lost. On the
+      // normal path the buffer is already empty from the flush above.
+      if (pendingAddToolMessages.length > 0) {
+        session.pendingToolMessages.push(...pendingAddToolMessages);
+        pendingAddToolMessages.length = 0;
+        // The turn is aborting — no further tool calls will execute,
+        // so mark committed to guard against late RPC arrivals.
+        toolMessagesCommitted = true;
+      }
     }
   }
 }
