@@ -307,11 +307,20 @@ class PluginProcess {
       const [invocationId, content] = args;
       try {
         this.requireCtx(invocationId).addToolMessage(content as string);
-      } catch {
-        // Late arrival after the invocation context was cleaned up
-        // (e.g. plugin spawned async work that called addToolMessage
-        // after execute() returned). Queue for the next invocation.
-        this.orphanedAddToolMessages.push(content as string);
+      } catch (error: unknown) {
+        // Only buffer when the invocationId is a valid string with no
+        // matching pending context (late arrival after cleanup).
+        // TypeError from malformed IDs and errors from addToolMessage
+        // itself must propagate.
+        if (
+          typeof invocationId === "string" &&
+          error instanceof Error &&
+          error.message.startsWith("Unknown invocationId")
+        ) {
+          this.orphanedAddToolMessages.push(content as string);
+        } else {
+          throw error;
+        }
       }
       return Promise.resolve(undefined);
     });
