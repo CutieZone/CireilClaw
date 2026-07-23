@@ -1,8 +1,6 @@
 [config]
 model = "openrouter/meituan/longcat-2.0"
-fallback_models = [
-  "openrouter/deepseek/deepseek-v4-flash",
-]
+fallback_models = ["openrouter/deepseek/deepseek-v4-flash"]
 # Both models have 1M context — lift token limits accordingly
 max_model_tokens = 1048576
 custom_model_max_tokens = 1048576
