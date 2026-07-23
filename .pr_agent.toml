@@ -1,0 +1,46 @@
+[config]
+model = "openrouter/meituan/longcat-2.0"
+fallback_models = [
+  "openrouter/deepseek/deepseek-v4-flash",
+]
+# Both models have 1M context — lift token limits accordingly
+max_model_tokens = 1048576
+custom_model_max_tokens = 1048576
+response_language = "en-US"
+# Pulls context from AGENTS.md in the repo root for extra project-aware prompting
+repo_context_files = ["AGENTS.md", "CONTRIBUTING.md"]
+
+[openrouter]
+# Hard cap on completion (output) tokens — these reasoning models can churn
+max_tokens = 120000
+
+[pr_reviewer]
+# Findings output
+num_max_findings = 5
+persistent_comment = true
+final_update_message = true
+enable_help_text = false
+
+# Security review is on by default; these keep it prominent
+require_security_review = true
+require_ticket_analysis_review = true
+enable_review_labels_security = true
+
+extra_instructions = """
+Focus on anything that the PR's own summary does not cover. Flag any
+security-critical changes. Security-critical changes are considered
+anything that affects the following subsystems:
+- Path Isolation/Verification  (runtime/src/util/paths.ts)
+- Sandbox                       (runtime/src/util/sandbox.ts)
+- Parsing and Validation        (runtime/src/engine/tools/exec.ts)
+"""
+
+[pr_description]
+generate_ai_title = true
+use_bullet_points = true
+enable_pr_diagram = true
+
+[pr_code_suggestions]
+focus_only_on_problems = true
+num_code_suggestions = 6
+suggestions_score_threshold = 5
