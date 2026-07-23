@@ -705,31 +705,35 @@ export async function runTurn(
     try {
       for (const call of toolCalls) {
         const def = getToolRegistry()[call.name];
-        if (def === undefined) {
-          throw new Error(`Unknown tool: ${colors.keyword(call.name)}`);
-        }
 
         debug("Tool call", colors.keyword(call.name), call);
         let result: Record<string, unknown> = {};
-        try {
-          result = await def.execute(call.input, ctx);
-        } catch (error: unknown) {
-          if (error instanceof vb.ValiError) {
-            result = {
-              error: error.message,
-              issues: error.issues,
-              success: false,
-            };
-          } else if (error instanceof ParseError) {
-            result = {
-              error: error.message,
-              issues: error.issues,
-              success: false,
-            };
-          } else if (error instanceof ToolError) {
-            result = { error: error.message, hint: error.hint, success: false };
-          } else {
-            result = { error: sanitizeError(error, agentSlug), success: false };
+        if (def === undefined) {
+          result = {
+            error: `Unknown tool: ${call.name}`,
+            success: false,
+          };
+        } else {
+          try {
+            result = await def.execute(call.input, ctx);
+          } catch (error: unknown) {
+            if (error instanceof vb.ValiError) {
+              result = {
+                error: error.message,
+                issues: error.issues,
+                success: false,
+              };
+            } else if (error instanceof ParseError) {
+              result = {
+                error: error.message,
+                issues: error.issues,
+                success: false,
+              };
+            } else if (error instanceof ToolError) {
+              result = { error: error.message, hint: error.hint, success: false };
+            } else {
+              result = { error: sanitizeError(error, agentSlug), success: false };
+            }
           }
         }
         debug("Tool result", colors.keyword(call.name), result);
