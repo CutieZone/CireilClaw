@@ -16,7 +16,7 @@ jobs:
       - name: PR Agent action step
         uses: the-pr-agent/pr-agent@main
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER__KEY: ${{ secrets.OPENROUTER_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Disable auto-triggers, only comment commands
           PR_AGENT_AUTO_REVIEW: "false"
