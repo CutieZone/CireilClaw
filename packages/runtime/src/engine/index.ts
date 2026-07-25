@@ -618,30 +618,29 @@ export async function runTurn(
         }
       }
     } catch (error) {
-      if (
-        error instanceof GenerationNoToolCallsError &&
-        generationRetries < selectedProvider.maxGenerationRetries
-      ) {
+      if (generationRetries < selectedProvider.maxGenerationRetries) {
         generationRetries++;
-        warning(
-          `Generation produced no tool calls (retry ${generationRetries}/${selectedProvider.maxGenerationRetries})`,
-          colors.keyword(agentSlug),
-          colors.keyword(session.id()),
-        );
-        if (error.text !== undefined && error.text.length > 0) {
+        if (error instanceof GenerationNoToolCallsError) {
+          warning(
+            `Generation produced no tool calls (retry ${generationRetries}/${selectedProvider.maxGenerationRetries})`,
+            colors.keyword(agentSlug),
+            colors.keyword(session.id()),
+          );
+          if (error.text !== undefined && error.text.length > 0) {
+            session.pendingToolMessages.push({
+              content: { content: error.text, type: "text" },
+              role: "assistant",
+            });
+          }
           session.pendingToolMessages.push({
-            content: { content: error.text, type: "text" },
-            role: "assistant",
+            content: {
+              content:
+                "Your previous message was **NOT delivered** to the user. It was discarded and is not visible.\n\nYou **MUST** call the `respond` tool to send any text. Plain text output is never delivered and will always be ignored. Call `respond` now with the exact message content you intended to send.",
+              type: "text",
+            },
+            role: "user",
           });
         }
-        session.pendingToolMessages.push({
-          content: {
-            content:
-              "Your previous message was **NOT delivered** to the user. It was discarded and is not visible.\n\nYou **MUST** call the `respond` tool to send any text. Plain text output is never delivered and will always be ignored. Call `respond` now with the exact message content you intended to send.",
-            type: "text",
-          },
-          role: "user",
-        });
         continue;
       }
       throw error;
