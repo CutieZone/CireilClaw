@@ -18,7 +18,7 @@ jobs:
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Disable auto-triggers — only comment commands
-          github_action_config.auto_review: "false"
-          github_action_config.auto_describe: "false"
-          github_action_config.auto_improve: "false"
+          # Disable auto-triggers, only comment commands
+          PR_AGENT_AUTO_REVIEW: "false"
+          PR_AGENT_AUTO_DESCRIBE: "false"
+          PR_AGENT_AUTO_IMPROVE: "false"
