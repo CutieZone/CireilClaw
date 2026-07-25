@@ -16,8 +16,7 @@ jobs:
       - name: PR Agent action step
         uses: the-pr-agent/pr-agent@main
         env:
-          OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
-          OPENAI.API_BASE: ${{ secrets.OPENAI_API_BASE }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Disable auto-triggers — only comment commands
           github_action_config.auto_review: "false"
