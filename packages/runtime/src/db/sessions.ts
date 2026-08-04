@@ -8,8 +8,15 @@ import * as vb from "valibot";
 import { nonEmptyString } from "#config/schemas/shared.js";
 import { getDb } from "#db/index.js";
 import { images, sessions, summaries as summariesTable } from "#db/schema.js";
-import type { Content, ImageContent, ImageRef, VideoContent, VideoRef } from "#engine/content.js";
-import { isImageRef, isVideoContent, isVideoRef } from "#engine/content.js";
+import type {
+  Content,
+  ImageContent,
+  ImageRef,
+  ToolResponseContent,
+  VideoContent,
+  VideoRef,
+} from "#engine/content.js";
+import { isImageRef, isVideoContent, isVideoRef, toolResponseMedia } from "#engine/content.js";
 import { validateHistory } from "#engine/history-validate.js";
 import { isMessage } from "#engine/message.js";
 import type { AssistantContent, Message, UserContent } from "#engine/message.js";
@@ -78,6 +85,22 @@ function serializeHistory(
         type: "video_ref",
         url: ct.url,
       } satisfies VideoRef;
+    }
+    // Media parked in a tool response has to be reduced to refs too, or
+    // JSON.stringify writes the raw Uint8Array out as {"0":26,"1":153,…} —
+    // megabytes of numbered keys that deserialize into untyped garbage.
+    const media = toolResponseMedia(ct);
+    if (media !== undefined) {
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      const content = ct as ToolResponseContent;
+      return {
+        ...content,
+        output: {
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+          ...(content.output as Record<string, unknown>),
+          _media: media.map((it) => serializeContent(it)),
+        },
+      };
     }
     return ct;
   }
@@ -204,7 +227,27 @@ async function deserializeHistory(json: string, agentSlug: string): Promise<Mess
         messages.push({ ...msg, content });
       }
     } else {
-      messages.push(msg);
+      // Tool responses carrying media need the same ref resolution as user
+      // content — otherwise the restored blocks are refs with no bytes, and
+      // the files-API upload has nothing to send.
+      const media = msg.role === "toolResponse" ? toolResponseMedia(msg.content) : undefined;
+      if (msg.role !== "toolResponse" || media === undefined) {
+        messages.push(msg);
+        continue;
+      }
+
+      const resolved = await Promise.all(media.map(async (it) => await deserializeUserContent(it)));
+      messages.push({
+        ...msg,
+        content: {
+          ...msg.content,
+          output: {
+            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+            ...(msg.content.output as Record<string, unknown>),
+            _media: resolved.filter((it): it is UserContent => it !== undefined),
+          },
+        },
+      });
     }
   }
 
