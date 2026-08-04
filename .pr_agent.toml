@@ -1,15 +1,12 @@
 [config]
-model = "openrouter/meituan/longcat-2.0"
-fallback_models = ["openrouter/deepseek/deepseek-v4-flash"]
-# Both models have 1M context — lift token limits accordingly
+model = "openrouter/~deepseek/deepseek-v4-flash-latest"
 max_model_tokens = 1048576
 custom_model_max_tokens = 1048576
 response_language = "en-US"
-# Pulls context from AGENTS.md in the repo root for extra project-aware prompting
+# Pulls context from AGENTS.md and CONTIRBUTING.md in the repo root for extra project-aware prompting
 repo_context_files = ["AGENTS.md", "CONTRIBUTING.md"]
 
 [openrouter]
-# Hard cap on completion (output) tokens — these reasoning models can churn
 max_tokens = 120000
 
 [pr_reviewer]
