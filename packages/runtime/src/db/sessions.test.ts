@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { eq } from "drizzle-orm";
+import * as vb from "valibot";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getDb, initDb } from "#db/index.js";
@@ -164,6 +165,114 @@ describe("session persistence", () => {
         { id: untouchedId, mediaType: "image/webp", sessionId },
       ].toSorted((left, right) => left.id.localeCompare(right.id)),
     );
+  });
+
+  // useFilesApi=kimi hides video one level down, in a faked tool response's
+  // `output._media`. Serializing that without reducing it to a ref writes the
+  // raw Uint8Array out as {"0":26,"1":153,…} — megabytes of numbered keys that
+  // come back as untyped objects the provider can't translate.
+  it("reduces video parked in a tool response to a ref", () => {
+    const { slug } = initTestDb();
+    const session = new NamedInternalSession("kimi-video");
+    session.history.push(
+      {
+        content: [{ id: "recv-video-1", input: {}, name: "receive_video", type: "toolCall" }],
+        role: "assistant",
+      },
+      {
+        content: {
+          id: "recv-video-1",
+          name: "receive_video",
+          output: {
+            _media: [
+              {
+                attachmentId: "42",
+                data: new Uint8Array([26, 153, 7]),
+                mediaType: "video/mp4",
+                type: "video",
+                url: "https://cdn.example/clip.mp4",
+              },
+            ],
+          },
+          type: "toolResponse",
+        },
+        role: "toolResponse",
+      },
+    );
+
+    saveSession(slug, session);
+    flushAllSessions();
+
+    const row = getDb(slug).select().from(sessions).where(eq(sessions.id, session.id())).get();
+    const history = vb.parse(vb.array(vb.unknown()), JSON.parse(row?.history ?? "[]"));
+
+    expect(history[1]).toEqual({
+      content: {
+        id: "recv-video-1",
+        name: "receive_video",
+        output: {
+          _media: [
+            {
+              attachmentId: "42",
+              mediaType: "video/mp4",
+              type: "video_ref",
+              url: "https://cdn.example/clip.mp4",
+            },
+          ],
+        },
+        type: "toolResponse",
+      },
+      role: "toolResponse",
+    });
+    expect(row?.history).not.toContain(`"0":26`);
+  });
+
+  it("re-fetches video parked in a tool response on load", async () => {
+    const { slug } = initTestDb();
+    const sessionId = insertSession(slug, {
+      history: [
+        {
+          content: [{ id: "recv-video-1", input: {}, name: "receive_video", type: "toolCall" }],
+          role: "assistant",
+        },
+        {
+          content: {
+            id: "recv-video-1",
+            name: "receive_video",
+            output: {
+              _media: [
+                {
+                  attachmentId: "42",
+                  mediaType: "video/mp4",
+                  type: "video_ref",
+                  url: "https://cdn.example/clip.mp4",
+                },
+              ],
+            },
+            type: "toolResponse",
+          },
+          role: "toolResponse",
+        },
+      ],
+      id: "internal:kimi-video-load",
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => await Promise.resolve(new Response(new Uint8Array([26, 153, 7])))),
+    );
+
+    const loaded = await loadSessions(slug);
+    const restored = loaded.get(sessionId)?.history[1];
+
+    // Bytes, not a bare URL — the files-API upload has nothing to send otherwise.
+    expect(restored?.content).toMatchObject({
+      output: {
+        _media: [{ data: new Uint8Array([26, 153, 7]), mediaType: "video/mp4", type: "video" }],
+      },
+    });
+
+    vi.unstubAllGlobals();
   });
 
   it("canonicalizes legacy internal session IDs during load", async () => {

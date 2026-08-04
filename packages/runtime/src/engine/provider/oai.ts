@@ -14,6 +14,7 @@ import type {
 import * as vb from "valibot";
 
 import type { Content, ThinkingContent, ToolCallContent } from "#engine/content.js";
+import { toolResponseMedia } from "#engine/content.js";
 import type { Context, UsageInfo } from "#engine/context.js";
 import { GenerationNoToolCallsError } from "#engine/errors.js";
 import type { AssistantMessage, Message } from "#engine/message.js";
@@ -28,20 +29,45 @@ import { toJsonSchemaSafe } from "#util/schema.js";
 // turns skip the doomed WebP attempt entirely.
 const jpegRequiredEndpoints = new Set<string>();
 
-async function prepareMedia(messages: Message[], useJpeg: boolean): Promise<void> {
-  const wantKind = useJpeg ? "jpeg" : "webp";
+// How long an uploaded file handle is assumed good for. Kimi's ms:// IDs are
+// short-lived and the API gives no expiry back, so anything older is re-uploaded
+// rather than gambled on — a stale handle fails the whole generation, while a
+// redundant upload costs one request against a file we still have in memory.
+const FilesApiHandleTtl = 15 * 60 * 1000;
+
+// Every media block in the request, flattened. Blocks parked in a tool
+// response's `_media` are returned alongside top-level parts so the encode and
+// upload passes below reach them; the objects are the originals, so memoizing
+// onto them writes through to session history.
+function flattenContentParts(messages: Message[]): Content[] {
+  const collected: Content[] = [];
+
   for (const msg of messages) {
     const parts = Array.isArray(msg.content) ? msg.content : [msg.content];
     for (const part of parts) {
-      if (part.type === "image") {
-        if (part.memoized?.kind === wantKind) {
-          continue;
-        }
-        const rawData = useJpeg ? await toJpeg(part.data) : part.data;
-        part.memoized = { data: encode(rawData), kind: wantKind };
-      } else if (part.type === "video" && part.memoized === undefined) {
-        part.memoized = { data: encode(part.data) };
+      const nested = toolResponseMedia(part);
+      if (nested === undefined) {
+        collected.push(part);
+      } else {
+        collected.push(...nested);
       }
+    }
+  }
+
+  return collected;
+}
+
+async function prepareMedia(messages: Message[], useJpeg: boolean): Promise<void> {
+  const wantKind = useJpeg ? "jpeg" : "webp";
+  for (const part of flattenContentParts(messages)) {
+    if (part.type === "image") {
+      if (part.memoized?.kind === wantKind) {
+        continue;
+      }
+      const rawData = useJpeg ? await toJpeg(part.data) : part.data;
+      part.memoized = { data: encode(rawData), kind: wantKind };
+    } else if (part.type === "video" && part.memoized === undefined) {
+      part.memoized = { data: encode(part.data) };
     }
   }
 }
@@ -84,20 +110,24 @@ async function uploadMedia(
     return;
   }
 
-  for (const msg of messages) {
-    const parts = Array.isArray(msg.content) ? msg.content : [msg.content];
-    for (const part of parts) {
-      if (part.type !== "video") {
-        continue;
-      }
-      if (part.filesApiMemoized?.mode === useFilesApi) {
-        continue;
-      }
-
-      const apiKey = keyPool.getNextKey();
-      const fileId = await uploadKimiFile(apiBase, apiKey, part.data, part.mediaType);
-      part.filesApiMemoized = { fileId, mode: useFilesApi };
+  const now = Date.now();
+  for (const part of flattenContentParts(messages)) {
+    if (part.type !== "video") {
+      continue;
     }
+    const cached = part.filesApiMemoized;
+    if (cached?.mode === useFilesApi && now - cached.uploadedAt < FilesApiHandleTtl) {
+      continue;
+    }
+
+    const apiKey = keyPool.getNextKey();
+    const fileId = await uploadKimiFile(apiBase, apiKey, part.data, part.mediaType);
+    debug(
+      cached === undefined
+        ? `useFilesApi=${useFilesApi}: uploaded ${part.mediaType} as ${fileId}`
+        : `useFilesApi=${useFilesApi}: re-uploaded expired ${cached.fileId} as ${fileId}`,
+    );
+    part.filesApiMemoized = { fileId, mode: useFilesApi, uploadedAt: Date.now() };
   }
 }
 
@@ -178,25 +208,17 @@ function translateMsg(message: Message): ChatCompletionMessageParam {
       } as unknown as ChatCompletionMessageParam;
 
     case "toolResponse": {
-      if (
-        typeof message.content.output === "object" &&
-        message.content.output !== null &&
-        "_media" in message.content.output
-      ) {
+      const media = toolResponseMedia(message.content);
+      if (media !== undefined) {
         debug(
-          `useFilesApi=kimi: translating _media tool response (${message.content.name}) with ${vb.parse(vb.array(vb.unknown()), (message.content.output as Record<string, unknown>)["_media"]).length} part(s)`,
-        );
-        const media = vb.parse(
-          vb.array(vb.unknown()),
-          (message.content.output as Record<string, unknown>)["_media"],
+          `useFilesApi=kimi: translating _media tool response (${message.content.name}) with ${media.length} part(s)`,
         );
 
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         return {
           // oxlint-disable-next-line typescript/no-unsafe-type-assertion
           content: media.map((it) =>
-            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-            translateContent(it as Content),
+            translateContent(it),
           ) as unknown as ChatCompletionMessageParam["content"],
           role: "tool",
           tool_call_id: message.content.id,
@@ -342,7 +364,7 @@ interface Options {
 
 const knownKimiOffenders = ["2.5", "-for-code"];
 
-export async function generate(
+async function generate(
   context: Context,
   apiBase: string,
   keyPool: KeyPool,
@@ -356,9 +378,9 @@ export async function generate(
   }: Options,
 ): Promise<{ message: AssistantMessage; usage?: UsageInfo }> {
   let useJpeg = forceJpeg || jpegRequiredEndpoints.has(apiBase);
-  await prepareMedia(context.messages, useJpeg);
-  await uploadMedia(context.messages, apiBase, keyPool, useFilesApi);
 
+  // Strip before encoding/uploading, not after — these videos are on their way
+  // to the bin, and uploading them first just burns a request per turn.
   if (useFilesApi === "kimi") {
     for (const msg of context.messages) {
       if (msg.role === "user") {
@@ -384,6 +406,9 @@ export async function generate(
       }
     }
   }
+
+  await prepareMedia(context.messages, useJpeg);
+  await uploadMedia(context.messages, apiBase, keyPool, useFilesApi);
 
   const params: ChatCompletionCreateParamsNonStreaming = {
     messages: [
@@ -622,3 +647,5 @@ export async function generate(
     }
   }
 }
+
+export { flattenContentParts, uploadMedia, translateMsg, generate };

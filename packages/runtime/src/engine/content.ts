@@ -11,7 +11,9 @@ interface ImageContent {
   // a JPEG-mode provider can detect and skip a WebP-encoded cache entry.
   memoized?: { data: string; kind: "webp" | "jpeg" };
   // Cached file-upload ID from a provider-specific files API (e.g. Kimi ms://).
-  filesApiMemoized?: { fileId: string; mode: string };
+  // `uploadedAt` is a Unix timestamp (ms) — these handles expire server-side,
+  // so the ID is only reusable for a short window after upload.
+  filesApiMemoized?: { fileId: string; mode: string; uploadedAt: number };
 }
 
 interface ImageRef {
@@ -34,7 +36,9 @@ interface VideoContent {
   mediaType: string;
   memoized?: { data: string };
   // Cached file-upload ID from a provider-specific files API (e.g. Kimi ms://).
-  filesApiMemoized?: { fileId: string; mode: string };
+  // `uploadedAt` is a Unix timestamp (ms) — these handles expire server-side,
+  // so the ID is only reusable for a short window after upload.
+  filesApiMemoized?: { fileId: string; mode: string; uploadedAt: number };
 }
 
 interface VideoRef {
@@ -66,6 +70,33 @@ interface ToolResponseContent {
   id: string;
 }
 
+// Media smuggled back through a tool response. Providers that refuse video in
+// user messages (Kimi's coding endpoint) only accept it in a tool message, so
+// the engine fakes a tool call and parks the blocks in `output._media`. That
+// puts them one level below ordinary content parts — every pass that walks
+// media (encoding, uploading, persisting) has to look here too, or the blocks
+// silently skip it.
+function toolResponseMedia(content: unknown): Content[] | undefined {
+  if (
+    typeof content !== "object" ||
+    content === null ||
+    !("type" in content) ||
+    content.type !== "toolResponse" ||
+    !("output" in content)
+  ) {
+    return undefined;
+  }
+
+  const { output } = content;
+  if (typeof output !== "object" || output === null || !("_media" in output)) {
+    return undefined;
+  }
+
+  const media = output["_media"];
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return Array.isArray(media) ? (media as Content[]) : undefined;
+}
+
 interface ThinkingContent {
   type: "thinking";
   thinking: string;
@@ -91,7 +122,7 @@ type Content =
   | ThinkingContent
   | RedactedThinkingContent;
 
-export { isImageRef, isVideoRef, isVideoContent };
+export { isImageRef, isVideoRef, isVideoContent, toolResponseMedia };
 export type {
   TextContent,
   ImageContent,
