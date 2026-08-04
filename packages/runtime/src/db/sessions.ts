@@ -244,7 +244,10 @@ async function deserializeHistory(json: string, agentSlug: string): Promise<Mess
           output: {
             // oxlint-disable-next-line typescript/no-unsafe-type-assertion
             ...(msg.content.output as Record<string, unknown>),
-            _media: resolved.filter((it): it is UserContent => it !== undefined),
+            // Keep the ref when re-fetch fails — a transient error during load
+            // shouldn't lose the URL on the next save, otherwise it's gone for
+            // good until someone re-sends the video.
+            _media: media.map((ref, idx) => resolved[idx] ?? ref),
           },
         },
       });

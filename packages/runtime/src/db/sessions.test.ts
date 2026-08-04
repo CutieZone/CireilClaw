@@ -275,6 +275,64 @@ describe("session persistence", () => {
     vi.unstubAllGlobals();
   });
 
+  it("keeps the video ref when re-fetch fails on load", async () => {
+    const { slug } = initTestDb();
+    const refUrl = "https://cdn.example/clip.mp4";
+    const sessionId = insertSession(slug, {
+      history: [
+        {
+          content: [{ id: "recv-video-1", input: {}, name: "receive_video", type: "toolCall" }],
+          role: "assistant",
+        },
+        {
+          content: {
+            id: "recv-video-1",
+            name: "receive_video",
+            output: {
+              _media: [
+                {
+                  attachmentId: "42",
+                  mediaType: "video/mp4",
+                  type: "video_ref",
+                  url: refUrl,
+                },
+              ],
+            },
+            type: "toolResponse",
+          },
+          role: "toolResponse",
+        },
+      ],
+      id: "internal:kimi-video-load-fail",
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => await Promise.resolve(new Response("boom", { status: 503 }))),
+    );
+
+    const loaded = await loadSessions(slug);
+    const restored = loaded.get(sessionId)?.history[1];
+
+    // Transient failure must not lose the URL — a re-save through this state
+    // would otherwise collapse `_media` to nothing and the video would be
+    // gone for good.
+    expect(restored?.content).toMatchObject({
+      output: {
+        _media: [
+          {
+            attachmentId: "42",
+            mediaType: "video/mp4",
+            type: "video_ref",
+            url: refUrl,
+          },
+        ],
+      },
+    });
+
+    vi.unstubAllGlobals();
+  });
+
   it("canonicalizes legacy internal session IDs during load", async () => {
     const { slug } = initTestDb();
     insertSession(slug, {
