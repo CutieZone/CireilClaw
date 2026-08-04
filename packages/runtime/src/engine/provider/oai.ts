@@ -116,7 +116,11 @@ async function uploadMedia(
       continue;
     }
     const cached = part.filesApiMemoized;
-    if (cached?.mode === useFilesApi && now - cached.uploadedAt < FilesApiHandleTtl) {
+    if (
+      cached?.mode === useFilesApi &&
+      cached.uploadedAt <= now &&
+      now - cached.uploadedAt < FilesApiHandleTtl
+    ) {
       continue;
     }
 
