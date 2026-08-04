@@ -11,7 +11,7 @@ interface Summary {
   summary: string;
 }
 
-function truncateToTurns(messages: Message[], maxTurns: number): Message[] {
+function groupIntoTurns(messages: Message[]): Message[][] {
   const turns: Message[][] = [];
 
   for (const msg of messages) {
@@ -25,7 +25,11 @@ function truncateToTurns(messages: Message[], maxTurns: number): Message[] {
     }
   }
 
-  const truncated = turns.slice(-maxTurns);
+  return turns;
+}
+
+function truncateToTurns(messages: Message[], maxTurns: number): Message[] {
+  const truncated = groupIntoTurns(messages).slice(-maxTurns);
   return truncated.flat();
 }
 
@@ -195,19 +199,7 @@ function evictToolResponses(messages: Message[], budget: number): Message[] {
 }
 
 function truncateToBudget(messages: Message[], budget: number): Message[] {
-  const turns: Message[][] = [];
-
-  for (const msg of messages) {
-    if (msg.role === "user" || turns.length === 0) {
-      turns.push([msg]);
-    } else {
-      const currentTurn = turns.at(-1);
-      if (currentTurn !== undefined) {
-        currentTurn.push(msg);
-      }
-    }
-  }
-
+  const turns = groupIntoTurns(messages);
   while (turns.length > 1) {
     const flat = turns.flat();
     if (estimateTokens(flat) <= budget) {

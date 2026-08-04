@@ -3,6 +3,7 @@ import * as vb from "valibot";
 import { ToolError } from "#engine/errors.js";
 import { commitSummary } from "#engine/summarizer.js";
 import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
+import { toSlug } from "#util/string.js";
 
 const Schema = vb.strictObject({
   end: vb.pipe(
@@ -77,10 +78,7 @@ export const pruneBoundaries: ToolDef = {
       );
     }
 
-    const slug = data.identifier
-      .toLowerCase()
-      .replaceAll(/[^a-z0-9]+/gu, "-")
-      .replaceAll(/^-+|-+$/gu, "");
+    const slug = toSlug(data.identifier);
 
     if (slug.length === 0) {
       throw new ToolError(

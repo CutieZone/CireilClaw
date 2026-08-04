@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 // oxlint-disable id-length
 const VALID_JSON_ESCAPE_CHARS: Record<string, true> = {
   '"': true,
@@ -98,4 +100,12 @@ function parseRepairedJSON(json: string): unknown {
   }
 }
 
-export { parseRepairedJSON, repairJsonEscapes };
+/**
+ * Short SHA-256 fingerprint of a raw string, for including in error messages
+ * so a failed parse can be matched against the logged tool-call arguments.
+ */
+function fingerprintArguments(args: string): string {
+  return createHash("sha256").update(args).digest("hex").slice(0, 8);
+}
+
+export { fingerprintArguments, parseRepairedJSON, repairJsonEscapes };

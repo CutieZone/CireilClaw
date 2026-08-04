@@ -17,17 +17,10 @@ import { info, warning } from "#output/log.js";
 import type { BlockLabel } from "#util/load.js";
 import { blockLabels } from "#util/load.js";
 import { root } from "#util/paths.js";
+import { toSlug } from "#util/string.js";
 
 interface Flags {
   printStub?: string;
-}
-
-function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replaceAll(/[^a-z0-9]+/gu, "-")
-    .replaceAll(/^-+|-+$/gu, "");
 }
 
 async function renameOld(pth: string): Promise<void> {
@@ -348,7 +341,7 @@ async function run(flags: Flags): Promise<void> {
 
   // Resolve slug before asking anything else so we can catch conflicts early.
   const name = await input({ message: "Agent name:" });
-  const slug = slugify(name);
+  const slug = toSlug(name);
 
   if (slug.length === 0) {
     throw new Error("Agent name must contain at least one alphanumeric character.");

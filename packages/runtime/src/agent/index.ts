@@ -11,7 +11,12 @@ import type {
   HistoryMessage,
 } from "#harness/channel-handler.js";
 import type { Session } from "#harness/session.js";
-import { DiscordSession, NamedInternalSession, TuiSession } from "#harness/session.js";
+import {
+  DiscordSession,
+  discordSessionId,
+  NamedInternalSession,
+  TuiSession,
+} from "#harness/session.js";
 import { Scheduler } from "#scheduler/index.js";
 
 export class Agent {
@@ -98,7 +103,7 @@ export class Agent {
 
       try {
         const dmChannel = await this.discordClient.rest.users.createDM(this.ownerId);
-        const sessionId = `discord:${dmChannel.id}`;
+        const sessionId = discordSessionId(dmChannel.id);
         const prior = this.sessions.get(sessionId);
         if (prior !== undefined) {
           return prior;
@@ -217,6 +222,38 @@ export class Agent {
       fetchHistory,
       resolveChannel,
       handler.capabilities,
+      this.conditions,
+    );
+  }
+
+  /**
+   * Run a scheduled turn (heartbeat/cron) with a model/provider override.
+   * Unlike {@link runTurn}, no channel capabilities are passed — scheduled
+   * turns don't claim attachment/reaction support.
+   */
+  public async runScheduledTurn(
+    session: Session,
+    overrides: { model?: string; provider?: string },
+  ): Promise<void> {
+    // oxlint-disable-next-line require-await
+    const resolveChannel = async (spec: string): Promise<ChannelResolution> =>
+      this.resolveChannel(spec, session);
+
+    await runTurn(
+      session,
+      this.slug,
+      overrides,
+      async (content: string): Promise<void> => {
+        await this.send(session, content);
+      },
+      async (targetSession: Session, content: string): Promise<void> => {
+        await this.send(targetSession, content);
+      },
+      undefined,
+      undefined,
+      undefined,
+      resolveChannel,
+      undefined,
       this.conditions,
     );
   }

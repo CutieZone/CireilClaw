@@ -4,9 +4,6 @@ import type { Agent } from "#agent/index.js";
 import type { CronJobConfig } from "#config/cron.js";
 import { deleteCronJob, updateLastRun } from "#db/cron.js";
 import { saveSession } from "#db/sessions.js";
-import { runTurn } from "#engine/index.js";
-import type { ChannelResolution } from "#harness/channel-handler.js";
-import type { Session } from "#harness/session.js";
 import { InternalSession } from "#harness/session.js";
 import colors from "#output/colors.js";
 import { debug, warning } from "#output/log.js";
@@ -88,33 +85,11 @@ async function runMainSession(agent: Agent, job: CronJobConfig): Promise<void> {
     timestamp: Date.now(),
   });
 
-  async function resolveChannel(spec: string): Promise<ChannelResolution> {
-    // oxlint-disable-next-line typescript/no-non-null-assertion
-    const result = await agent.resolveChannel(spec, session!);
-    return result;
-  }
-
   try {
-    await runTurn(
-      session,
-      agent.slug,
-      {
-        model: job.model,
-        provider: job.provider,
-      },
-      async (content: string): Promise<void> => {
-        await agent.send(session, content);
-      },
-      async (targetSession: Session, content: string): Promise<void> => {
-        await agent.send(targetSession, content);
-      },
-      undefined,
-      undefined,
-      undefined,
-      resolveChannel,
-      undefined,
-      agent.conditions,
-    );
+    await agent.runScheduledTurn(session, {
+      model: job.model,
+      provider: job.provider,
+    });
     debug("Cron: main-session job", colors.keyword(job.id), "completed");
   } catch (error) {
     session.history.length = historyLengthBefore;
@@ -143,32 +118,11 @@ async function runIsolatedSession(agent: Agent, job: CronJobConfig): Promise<voi
     timestamp: Date.now(),
   });
 
-  async function resolveChannel(spec: string): Promise<ChannelResolution> {
-    const result = await agent.resolveChannel(spec, session);
-    return result;
-  }
-
   try {
-    await runTurn(
-      session,
-      agent.slug,
-      {
-        model: job.model,
-        provider: job.provider,
-      },
-      async (content: string): Promise<void> => {
-        await agent.send(session, content);
-      },
-      async (targetSession: Session, content: string): Promise<void> => {
-        await agent.send(targetSession, content);
-      },
-      undefined,
-      undefined,
-      undefined,
-      resolveChannel,
-      undefined,
-      agent.conditions,
-    );
+    await agent.runScheduledTurn(session, {
+      model: job.model,
+      provider: job.provider,
+    });
     debug("Cron: isolated job", colors.keyword(job.id), "completed");
   } catch (error) {
     const reason = sanitizeError(error, agent.slug);

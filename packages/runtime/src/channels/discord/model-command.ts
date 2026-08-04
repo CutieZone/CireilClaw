@@ -9,7 +9,7 @@ import type { HandlerCtx } from "#channels/discord/handler-ctx.js";
 import { loadEngine } from "#config/index.js";
 import { saveSession } from "#db/sessions.js";
 import { fetchModelMetadataFor } from "#engine/provider/model-metadata.js";
-import { DiscordSession } from "#harness/session.js";
+import { DiscordSession, discordSessionId } from "#harness/session.js";
 import colors from "#output/colors.js";
 import { debug, warning } from "#output/log.js";
 import { getDefaultProviderAndModel } from "#util/default-provider-and-model.js";
@@ -60,10 +60,7 @@ const definition: CreateApplicationCommandOptions = {
 };
 
 function getSession(interaction: CommandInteraction, ctx: HandlerCtx): DiscordSession | undefined {
-  const sessionId =
-    (interaction.guildID ?? undefined) === undefined
-      ? `discord:${interaction.channelID}`
-      : `discord:${interaction.channelID}|${interaction.guildID}`;
+  const sessionId = discordSessionId(interaction.channelID, interaction.guildID);
 
   const session = ctx.owner.agents.get(ctx.agentSlug)?.sessions.get(sessionId);
   if (session === undefined || !(session instanceof DiscordSession)) {

@@ -5,7 +5,7 @@ import { DefaultReasoningBudget } from "#config/schemas/engine.js";
 import type { ImageContent, TextContent, ToolResponseContent } from "#engine/content.js";
 import type { Context, UsageInfo } from "#engine/context.js";
 import { GenerationNoToolCallsError } from "#engine/errors.js";
-import type { AssistantMessage, Message } from "#engine/message.js";
+import type { AssistantMessage, Message, UserContent } from "#engine/message.js";
 import type { Tool } from "#engine/tool.js";
 import { debug, warning } from "#output/log.js";
 import { encode } from "#util/base64.js";
@@ -118,6 +118,30 @@ function translateToolResponse(content: ToolResponseContent): AnthropicToolResul
   };
 }
 
+async function translateUserBlocks(
+  content: UserContent | UserContent[],
+): Promise<AnthropicUserContentBlock[]> {
+  const userContent = Array.isArray(content) ? content : [content];
+  const blocks: AnthropicUserContentBlock[] = [];
+  for (const block of userContent) {
+    if (block.type === "image_ref") {
+      throw new Error("A block of type image_ref should not exist here.");
+    }
+    if (block.type === "video" || block.type === "video_ref") {
+      throw new Error(
+        "Anthropic provider does not support video content — set supportsVideo: false",
+      );
+    }
+
+    if (block.type === "text") {
+      blocks.push(translateText(block));
+    } else {
+      blocks.push(await translateImage(block));
+    }
+  }
+  return blocks;
+}
+
 // Translates internal messages to Anthropic API format.
 // Key differences from OAI: toolResponse messages must be merged into a single user message,
 // and any immediately following user message (typically pending images) is absorbed into that block.
@@ -155,23 +179,7 @@ async function translateMessages(
 
       const next = messages[idx];
       if (next?.role === "user") {
-        const userContent = Array.isArray(next.content) ? next.content : [next.content];
-        for (const block of userContent) {
-          if (block.type === "image_ref") {
-            throw new Error("A block of type image_ref should not exist here.");
-          }
-          if (block.type === "video" || block.type === "video_ref") {
-            throw new Error(
-              "Anthropic provider does not support video content — set supportsVideo: false",
-            );
-          }
-
-          if (block.type === "text") {
-            blocks.push(translateText(block));
-          } else {
-            blocks.push(await translateImage(block));
-          }
-        }
+        blocks.push(...(await translateUserBlocks(next.content)));
         idx++;
       }
 
@@ -187,24 +195,7 @@ async function translateMessages(
         }
       }
     } else if (msg.role === "user") {
-      const userContent = Array.isArray(msg.content) ? msg.content : [msg.content];
-      const blocks: AnthropicUserContentBlock[] = [];
-      for (const block of userContent) {
-        if (block.type === "image_ref") {
-          throw new Error("A block of type image_ref should not exist here.");
-        }
-        if (block.type === "video" || block.type === "video_ref") {
-          throw new Error(
-            "Anthropic provider does not support video content — set supportsVideo: false",
-          );
-        }
-
-        if (block.type === "text") {
-          blocks.push(translateText(block));
-        } else {
-          blocks.push(await translateImage(block));
-        }
-      }
+      const blocks: AnthropicUserContentBlock[] = await translateUserBlocks(msg.content);
       resultMsg = { content: blocks, role: "user" };
       result.push(resultMsg);
       shouldCache = cacheBreakpoints.has(idx);

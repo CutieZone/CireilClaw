@@ -2,6 +2,7 @@ import type { CommandInteraction, CreateApplicationCommandOptions } from "oceani
 import { ApplicationCommandTypes, MessageFlags } from "oceanic.js";
 
 import { initDb } from "#db/index.js";
+import { discordSessionId } from "#harness/session.js";
 import { sanitizeError } from "#util/paths.js";
 import { repairSession } from "#util/repair-session.js";
 
@@ -16,8 +17,7 @@ const definition: CreateApplicationCommandOptions = {
 async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise<void> {
   const channelId = interaction.channelID;
   const guildId = interaction.guildID ?? undefined;
-  const sessionId =
-    guildId === undefined ? `discord:${channelId}` : `discord:${channelId}|${guildId}`;
+  const sessionId = discordSessionId(channelId, guildId);
 
   initDb(ctx.agentSlug);
 

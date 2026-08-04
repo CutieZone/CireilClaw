@@ -6,6 +6,7 @@ import type {
 import { ApplicationCommandOptionTypes, ApplicationCommandTypes, MessageFlags } from "oceanic.js";
 
 import { saveSession } from "#db/sessions.js";
+import { discordSessionId } from "#harness/session.js";
 import { sanitizeError } from "#util/paths.js";
 
 import type { HandlerCtx } from "./handler-ctx.js";
@@ -31,8 +32,7 @@ async function handleAutocomplete(
 ): Promise<void> {
   const channelId = interaction.channelID;
   const guildId = interaction.guildID ?? undefined;
-  const sessionId =
-    guildId === undefined ? `discord:${channelId}` : `discord:${channelId}|${guildId}`;
+  const sessionId = discordSessionId(channelId, guildId);
 
   const agent = ctx.owner.agents.get(ctx.agentSlug);
   if (agent === undefined) {
@@ -69,8 +69,7 @@ async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): 
   try {
     const channelId = interaction.channelID;
     const guildId = interaction.guildID ?? undefined;
-    const sessionId =
-      guildId === undefined ? `discord:${channelId}` : `discord:${channelId}|${guildId}`;
+    const sessionId = discordSessionId(channelId, guildId);
 
     const agent = ctx.owner.agents.get(ctx.agentSlug);
     if (agent === undefined) {

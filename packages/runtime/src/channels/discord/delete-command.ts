@@ -8,7 +8,7 @@ import { ApplicationCommandTypes, MessageFlags } from "oceanic.js";
 import type { HandlerCtx } from "#channels/discord/handler-ctx.js";
 import { saveSession } from "#db/sessions.js";
 import { cascadeRemoveToolResponses, getToolCallIds } from "#engine/history-validate.js";
-import { DiscordSession } from "#harness/session.js";
+import { DiscordSession, discordSessionId } from "#harness/session.js";
 import colors from "#output/colors.js";
 import { warning } from "#output/log.js";
 import { sanitizeError } from "#util/paths.js";
@@ -43,9 +43,7 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
 
     const sessionId =
       // undefined semantics are better than null semantics
-      (interaction.guildID ?? undefined) === undefined
-        ? `discord:${interaction.channelID}`
-        : `discord:${interaction.channelID}|${interaction.guildID}`;
+      discordSessionId(interaction.channelID, interaction.guildID);
 
     if (!ctx.owner.agents.has(ctx.agentSlug)) {
       await interaction.createFollowup({

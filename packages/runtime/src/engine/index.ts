@@ -28,7 +28,11 @@ import { generate as generateAnthropic } from "#engine/provider/anthropic.js";
 import { resolveModelContextWindow } from "#engine/provider/model-metadata.js";
 import { generate as generateOai } from "#engine/provider/oai.js";
 import { generate as generateOpenAiCodex } from "#engine/provider/openai-codex.js";
-import { buildOpenedFilesBlock, buildSystemPrompt } from "#engine/system-prompt.js";
+import {
+  NO_CAPABILITIES,
+  buildOpenedFilesBlock,
+  buildSystemPrompt,
+} from "#engine/system-prompt.js";
 import { getToolRegistry } from "#engine/tools/index.js";
 import type { ToolContext } from "#engine/tools/tool-def.js";
 import type {
@@ -60,12 +64,6 @@ import {
   squashMessages,
 } from "./prune.js";
 import { buildTools } from "./tools.js";
-
-const NO_CAPABILITIES: ChannelCapabilities = {
-  supportsAttachments: false,
-  supportsDownloadAttachments: false,
-  supportsReactions: false,
-};
 
 function logUsage(
   agentSlug: string,

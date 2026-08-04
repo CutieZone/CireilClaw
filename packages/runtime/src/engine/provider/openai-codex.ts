@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto";
-
 import * as vb from "valibot";
 
 import type { ImageContent, RedactedThinkingContent, ToolCallContent } from "#engine/content.js";
@@ -10,7 +8,7 @@ import type { Tool } from "#engine/tool.js";
 import { debug, warning } from "#output/log.js";
 import { encode } from "#util/base64.js";
 import { toJpeg } from "#util/image.js";
-import { parseRepairedJSON } from "#util/json.js";
+import { fingerprintArguments, parseRepairedJSON } from "#util/json.js";
 import { toJsonSchemaSafe } from "#util/schema.js";
 
 import { getChatGptAccountId, getValidCodexAuth } from "./openai-codex-auth.js";
@@ -573,9 +571,8 @@ function translateCodexOutput(
         try {
           const result = parseRepairedJSON(argsJson);
           if (typeof result !== "object" || result === null || Array.isArray(result)) {
-            const hash = createHash("sha256").update(argsJson).digest("hex").slice(0, 8);
             throw new Error(
-              `Tool-call arguments parsed to non-object: length=${argsJson.length} hash=${hash}`,
+              `Tool-call arguments parsed to non-object: length=${argsJson.length} hash=${fingerprintArguments(argsJson)}`,
             );
           }
           toolCalls.push({
@@ -585,9 +582,8 @@ function translateCodexOutput(
             type: "toolCall",
           });
         } catch (error: unknown) {
-          const hash = createHash("sha256").update(argsJson).digest("hex").slice(0, 8);
           throw new Error(
-            `Failed to parse tool-call arguments: length=${argsJson.length} hash=${hash}`,
+            `Failed to parse tool-call arguments: length=${argsJson.length} hash=${fingerprintArguments(argsJson)}`,
             { cause: error },
           );
         }

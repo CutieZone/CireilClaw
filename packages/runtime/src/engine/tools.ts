@@ -1,9 +1,21 @@
 import { loadTools } from "#config/index.js";
-import type { ToolsConfig } from "#config/schemas/tools.js";
+import type { ExecToolConfig, ToolsConfig } from "#config/schemas/tools.js";
 import type { Tool } from "#engine/tool.js";
 import { getToolRegistry } from "#engine/tools/index.js";
 import type { Session } from "#harness/session.js";
 import colors from "#output/colors.js";
+
+type ToolSetting = boolean | ExecToolConfig;
+
+function isToolEnabled(setting: ToolSetting): boolean {
+  const enabledByValue = typeof setting === "boolean" && setting;
+  const enabledByKey =
+    typeof setting === "object" &&
+    "enabled" in setting &&
+    typeof setting.enabled === "boolean" &&
+    setting.enabled;
+  return enabledByValue || enabledByKey;
+}
 
 export async function buildTools(
   agentSlug: string,
@@ -14,17 +26,7 @@ export async function buildTools(
 
   // Determine which tools are enabled in this agent's config.
   const enabledTools = new Set(
-    cfg
-      .filter(([, setting]) => {
-        const enabledByValue = typeof setting === "boolean" && setting;
-        const enabledByKey =
-          typeof setting === "object" &&
-          "enabled" in setting &&
-          typeof setting.enabled === "boolean" &&
-          setting.enabled;
-        return enabledByValue || enabledByKey;
-      })
-      .map(([toolName]) => toolName),
+    cfg.filter(([, setting]) => isToolEnabled(setting)).map(([toolName]) => toolName),
   );
 
   const editEnabled = enabledTools.has("edit");
@@ -37,14 +39,7 @@ export async function buildTools(
       throw new Error(`Tried to enable invalid tool ${colors.keyword(tool)}: does not exist`);
     }
 
-    const enabledByValue = typeof setting === "boolean" && setting;
-    const enabledByKey =
-      typeof setting === "object" &&
-      "enabled" in setting &&
-      typeof setting.enabled === "boolean" &&
-      setting.enabled;
-
-    if (!(enabledByValue || enabledByKey)) {
+    if (!isToolEnabled(setting)) {
       continue;
     }
 

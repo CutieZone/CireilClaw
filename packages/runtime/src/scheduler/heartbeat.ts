@@ -5,9 +5,6 @@ import path from "node:path";
 import type { Agent } from "#agent/index.js";
 import type { HeartbeatConfig } from "#config/heartbeat.js";
 import { saveSession } from "#db/sessions.js";
-import { runTurn } from "#engine/index.js";
-import type { ChannelResolution } from "#harness/channel-handler.js";
-import type { Session } from "#harness/session.js";
 import colors from "#output/colors.js";
 import { debug, warning } from "#output/log.js";
 import { formatRelativeTime } from "#util/date.js";
@@ -137,33 +134,11 @@ async function runHeartbeat(agent: Agent, cfg: HeartbeatConfig): Promise<void> {
   });
   session.lastHeartbeatAt = now;
 
-  async function resolveChannel(spec: string): Promise<ChannelResolution> {
-    // oxlint-disable-next-line typescript/no-non-null-assertion
-    const result = await agent.resolveChannel(spec, session!);
-    return result;
-  }
-
   try {
-    await runTurn(
-      session,
-      agent.slug,
-      {
-        model: cfg.model,
-        provider: cfg.provider,
-      },
-      async (content: string): Promise<void> => {
-        await agent.send(session, content);
-      },
-      async (targetSession: Session, content: string): Promise<void> => {
-        await agent.send(targetSession, content);
-      },
-      undefined,
-      undefined,
-      undefined,
-      resolveChannel,
-      undefined,
-      agent.conditions,
-    );
+    await agent.runScheduledTurn(session, {
+      model: cfg.model,
+      provider: cfg.provider,
+    });
 
     const cc = capturedContent as string | undefined;
     debug(

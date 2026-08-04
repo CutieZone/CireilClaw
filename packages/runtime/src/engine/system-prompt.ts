@@ -7,6 +7,7 @@ import { InternalSession } from "#harness/session.js";
 import type { Session } from "#harness/session.js";
 import { loadBlocks, loadBaseInstructions, loadConditionalBlocks, loadSkills } from "#util/load.js";
 import { sandboxToReal } from "#util/paths.js";
+import { toSlug } from "#util/string.js";
 
 const NO_CAPABILITIES: ChannelCapabilities = {
   supportsAttachments: false,
@@ -27,10 +28,7 @@ function extractSectionContent(content: string, sectionId: string): string {
     if (headingMatch !== null) {
       const level = headingMatch[1]?.length ?? 1;
       const text = headingMatch[2] ?? "";
-      const id = text
-        .toLowerCase()
-        .replaceAll(/[^a-z0-9]+/gu, "-")
-        .replaceAll(/^-+|-+$/gu, "");
+      const id = toSlug(text);
 
       if (id === sectionId) {
         inSection = true;

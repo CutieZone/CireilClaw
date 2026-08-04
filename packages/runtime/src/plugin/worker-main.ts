@@ -16,6 +16,7 @@ import type {
 } from "@cireilclaw/sdk";
 
 import { toJsonSchemaSafe } from "#util/schema.js";
+import { matchesGlob } from "#util/string.js";
 
 import { RpcChannel } from "./rpc.js";
 
@@ -56,14 +57,6 @@ interface InvokeArgs {
 
 interface PluginModule {
   default?: PluginFactory;
-}
-
-function matchesGlob(filename: string, glob: string): boolean {
-  if (glob.startsWith("*.")) {
-    const ext = glob.slice(1);
-    return filename.endsWith(ext);
-  }
-  return filename === glob;
 }
 
 function isPluginModule(value: unknown): value is PluginModule {

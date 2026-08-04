@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import type { Section } from "@cireilclaw/sdk";
 
 import { sandboxToReal } from "#util/paths.js";
+import { matchesGlob, toSlug } from "#util/string.js";
 
 // Sections carry no content — they identify a named span within a file that
 // can be selectively loaded. The agent sees an outline and chooses which
@@ -40,6 +41,21 @@ function stripMarkdownLinks(text: string): string {
   return text.replaceAll(/\[([^\]]+)\]\([^)]+\)/gu, "$1").trim();
 }
 
+// Sorts sections by line and fills in each section's span (lines until the
+// next section or end of file). Shared by all extractors.
+function assignSectionLines(sections: Section[], totalLines: number): void {
+  sections.sort((lhs, rhs) => lhs.line - rhs.line);
+
+  for (let idx = 0; idx < sections.length; idx++) {
+    const section = sections[idx];
+    if (section === undefined) {
+      throw new TypeError("Unable to find section");
+    }
+    const nextLine = sections[idx + 1]?.line ?? totalLines + 1;
+    section.lines = nextLine - section.line;
+  }
+}
+
 function markdownExtractor(_filePath: string, content: string): Section[] {
   const sections: Section[] = [];
   const lines = content.split("\n");
@@ -51,10 +67,7 @@ function markdownExtractor(_filePath: string, content: string): Section[] {
     const level = match[1]?.length ?? 1;
     const text = stripMarkdownLinks(match[2] ?? "");
     const lineNum = content.slice(0, match.index).split("\n").length;
-    const id = text
-      .toLowerCase()
-      .replaceAll(/[^a-z0-9]+/gu, "-")
-      .replaceAll(/^-+|-+$/gu, "");
+    const id = toSlug(text);
 
     sections.push({
       id,
@@ -71,10 +84,7 @@ function markdownExtractor(_filePath: string, content: string): Section[] {
     const text = stripMarkdownLinks(match[1] ?? "");
     const lineNum = joined.slice(0, match.index).split("\n").length;
     sections.push({
-      id: text
-        .toLowerCase()
-        .replaceAll(/[^a-z0-9]+/gu, "-")
-        .replaceAll(/^-+|-+$/gu, ""),
+      id: toSlug(text),
       label: text,
       line: lineNum,
       lines: 0,
@@ -87,10 +97,7 @@ function markdownExtractor(_filePath: string, content: string): Section[] {
     const text = stripMarkdownLinks(match[1] ?? "");
     const lineNum = joined.slice(0, match.index).split("\n").length;
     sections.push({
-      id: text
-        .toLowerCase()
-        .replaceAll(/[^a-z0-9]+/gu, "-")
-        .replaceAll(/^-+|-+$/gu, ""),
+      id: toSlug(text),
       label: text,
       line: lineNum,
       lines: 0,
@@ -98,16 +105,7 @@ function markdownExtractor(_filePath: string, content: string): Section[] {
     });
   }
 
-  sections.sort((lhs, rhs) => lhs.line - rhs.line);
-
-  for (let idx = 0; idx < sections.length; idx++) {
-    const section = sections[idx];
-    if (section === undefined) {
-      throw new TypeError("Unable to find section");
-    }
-    const nextLine = sections[idx + 1]?.line ?? lines.length + 1;
-    section.lines = nextLine - section.line;
-  }
+  assignSectionLines(sections, lines.length);
 
   return sections;
 }
@@ -136,16 +134,7 @@ function xmlExtractor(_filePath: string, content: string): Section[] {
     });
   }
 
-  sections.sort((lhs, rhs) => lhs.line - rhs.line);
-
-  for (let idx = 0; idx < sections.length; idx++) {
-    const section = sections[idx];
-    if (section === undefined) {
-      throw new TypeError("Section was undefined");
-    }
-    const nextLine = sections[idx + 1]?.line ?? lines.length + 1;
-    section.lines = nextLine - section.line;
-  }
+  assignSectionLines(sections, lines.length);
 
   return sections;
 }
@@ -178,14 +167,6 @@ function getExtractors(): readonly Extractor[] {
 // ---------------------------------------------------------------------------
 
 const OUTLINE_TOKEN_THRESHOLD = DEFAULT_OUTLINE_THRESHOLD_TOKENS;
-
-function matchesGlob(filename: string, glob: string): boolean {
-  if (glob.startsWith("*.")) {
-    const ext = glob.slice(1);
-    return filename.endsWith(ext);
-  }
-  return filename === glob;
-}
 
 function estimateTokens(content: string): number {
   return Math.ceil(content.length / CHARS_PER_TOKEN);

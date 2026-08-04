@@ -3,7 +3,9 @@ import type { CommandInteraction, CreateApplicationCommandOptions } from "oceani
 
 import { saveSession } from "#db/sessions.js";
 import { SUMMARIZER_SYSTEM_PROMPT } from "#engine/summarizer.js";
+import { discordSessionId } from "#harness/session.js";
 import { sanitizeError } from "#util/paths.js";
+import { toSlug } from "#util/string.js";
 
 import type { HandlerCtx } from "./handler-ctx.js";
 
@@ -31,8 +33,7 @@ async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): 
   try {
     const channelId = interaction.channelID;
     const guildId = interaction.guildID ?? undefined;
-    const sessionId =
-      guildId === undefined ? `discord:${channelId}` : `discord:${channelId}|${guildId}`;
+    const sessionId = discordSessionId(channelId, guildId);
 
     const agent = ctx.owner.agents.get(ctx.agentSlug);
     if (agent === undefined) {
@@ -63,10 +64,7 @@ async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): 
       return;
     }
 
-    const slug = name
-      .toLowerCase()
-      .replaceAll(/[^a-z0-9]+/gu, "-")
-      .replaceAll(/^-+|-+$/gu, "");
+    const slug = toSlug(name);
 
     if (slug.length === 0) {
       await interaction.createFollowup({

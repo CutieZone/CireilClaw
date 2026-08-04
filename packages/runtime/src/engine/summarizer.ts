@@ -1,18 +1,7 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-
-import { parse } from "smol-toml";
-import * as vb from "valibot";
-
-import { loadEngine } from "#config/index.js";
-import type { SummarizationConfig } from "#config/schemas/summarization.js";
-import { SummarizationConfigSchema } from "#config/schemas/summarization.js";
 import { deleteSummary, saveSummary } from "#db/sessions.js";
-import type { Message } from "#engine/message.js";
 import type { Session } from "#harness/session.js";
 import colors from "#output/colors.js";
 import { debug } from "#output/log.js";
-import { agentRoot } from "#util/paths.js";
 
 const SUMMARIZER_SYSTEM_PROMPT = `You are a context compaction assistant for an AI agent system.
 The user wants to summarize a portion of the conversation to reduce context usage.
@@ -34,14 +23,6 @@ Rules:
 - When in doubt about whether something is in the range, err on the side of inclusion.
 - If the description matches no turns or too many, ask for clarification.`;
 
-interface SummarizeRequest {
-  session: Session;
-  agentSlug: string;
-  identifier: string;
-  description: string;
-  history: Message[];
-}
-
 interface SummarizeResult {
   slug: string;
   displayName: string;
@@ -49,57 +30,6 @@ interface SummarizeResult {
   endMessageId: string;
   preserve: string[];
   summary: string;
-}
-
-async function loadSummarizationConfig(agentSlug: string): Promise<SummarizationConfig> {
-  const file = path.join(agentRoot(agentSlug), "config", "summarization.toml");
-  try {
-    const content = await readFile(file, "utf8");
-    const parsed = parse(content);
-    const cfg = vb.parse(SummarizationConfigSchema, parsed);
-    return cfg;
-  } catch {
-    debug("No summarization config — using defaults", colors.keyword(agentSlug));
-    return {};
-  }
-}
-
-async function runSummarizer(
-  request: SummarizeRequest,
-): Promise<SummarizeResult | { error: string }> {
-  const providers = await loadEngine(request.agentSlug);
-
-  const sumCfg = await loadSummarizationConfig(request.agentSlug);
-
-  const providerName = sumCfg.provider;
-  const selectedProvider = providerName === undefined ? undefined : providers[providerName];
-
-  if (selectedProvider === undefined && providerName !== undefined) {
-    return {
-      error: `Summarization provider '${providerName}' not found in engine config. Set provider in config/summarization.toml or remove to use the default.`,
-    };
-  }
-
-  // For now, the summarizer is an internal engine invocation. The actual LLM
-  // call happens via the engine's provider, but we need to set up the tools
-  // so the summarizer can call prune-boundaries. The `buildTools` path and
-  // engine integration will provide this context. For the initial implementation,
-  // we return the request data so the engine loop can handle the invocation.
-  //
-  // The engine/index.ts runTurn function will detect when we're in summarizer
-  // mode and use a dedicated tool set (just read-session + prune-boundaries).
-
-  return {
-    displayName: request.identifier,
-    endMessageId: "",
-    preserve: [],
-    slug: request.identifier
-      .toLowerCase()
-      .replaceAll(/[^a-z0-9]+/gu, "-")
-      .replaceAll(/^-+|-+$/gu, ""),
-    startMessageId: "",
-    summary: "",
-  };
 }
 
 function commitSummary(agentSlug: string, session: Session, result: SummarizeResult): void {
@@ -167,11 +97,4 @@ function removeSummary(agentSlug: string, session: Session, slug: string): boole
   return true;
 }
 
-export type { SummarizeRequest, SummarizeResult };
-export {
-  SUMMARIZER_SYSTEM_PROMPT,
-  runSummarizer,
-  commitSummary,
-  removeSummary,
-  loadSummarizationConfig,
-};
+export { SUMMARIZER_SYSTEM_PROMPT, commitSummary, removeSummary };

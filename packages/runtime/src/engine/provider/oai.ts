@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto";
-
 import type { KeyPool } from "@cireilclaw/sdk";
 import { OpenAI } from "openai/client.js";
 import { APIError } from "openai/error.js";
@@ -22,7 +20,7 @@ import type { Tool } from "#engine/tool.js";
 import { debug, warning } from "#output/log.js";
 import { encode } from "#util/base64.js";
 import { toJpeg } from "#util/image.js";
-import { parseRepairedJSON } from "#util/json.js";
+import { fingerprintArguments, parseRepairedJSON } from "#util/json.js";
 import { toJsonSchemaSafe } from "#util/schema.js";
 
 // Per-apiBase JPEG requirement flag. Set on first WebP rejection so subsequent
@@ -607,10 +605,7 @@ async function generate(
               type: "toolCall",
             };
           } catch (error: unknown) {
-            const hash = createHash("sha256")
-              .update(it.function.arguments)
-              .digest("hex")
-              .slice(0, 8);
+            const hash = fingerprintArguments(it.function.arguments);
             throw new Error(
               `Failed to parse tool-call arguments: length=${it.function.arguments.length} hash=${hash}`,
               { cause: error },

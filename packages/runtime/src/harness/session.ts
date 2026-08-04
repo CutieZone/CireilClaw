@@ -16,6 +16,14 @@ interface Summary {
 const channelTypes = ["discord", "matrix", "internal", "tui"] as const;
 type ChannelType = (typeof channelTypes)[number];
 
+// Canonical session ID for a Discord channel. Must match the format parsed by
+// Agent.resolveTarget ("discord:{channelId}|{guildId}"). Normalizes null so
+// DM messages (guildID: null) don't produce a bogus "|null" suffix.
+function discordSessionId(channelId: string, guildId?: string | null): string {
+  const gid = guildId ?? undefined;
+  return gid === undefined ? `discord:${channelId}` : `discord:${channelId}|${gid}`;
+}
+
 abstract class BaseSession {
   public abstract readonly channel: ChannelType;
   public readonly ephemeral: boolean = false;
@@ -97,10 +105,7 @@ class DiscordSession extends BaseSession {
   }
 
   public override id(): string {
-    if (this.guildId !== undefined) {
-      return `discord:${this.channelId}|${this.guildId}`;
-    }
-    return `discord:${this.channelId}`;
+    return discordSessionId(this.channelId, this.guildId);
   }
 }
 
@@ -175,5 +180,6 @@ export {
   NamedInternalSession,
   TuiSession,
   channelTypes as channelTypeList,
+  discordSessionId,
 };
 export type { Session, ChannelType, Summary };

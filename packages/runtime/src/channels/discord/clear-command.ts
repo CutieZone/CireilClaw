@@ -3,6 +3,7 @@ import type { CommandInteraction, CreateApplicationCommandOptions } from "oceani
 
 import type { HandlerCtx } from "#channels/discord/handler-ctx.js";
 import { resetSession } from "#db/sessions.js";
+import { discordSessionId } from "#harness/session.js";
 import { sanitizeError } from "#util/paths.js";
 
 const definition: CreateApplicationCommandOptions = {
@@ -23,8 +24,7 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
   try {
     const channelId = interaction.channelID;
     const guildId = interaction.guildID ?? undefined;
-    const sessionId =
-      guildId === undefined ? `discord:${channelId}` : `discord:${channelId}|${guildId}`;
+    const sessionId = discordSessionId(channelId, guildId);
 
     const agent = ctx.owner.agents.get(ctx.agentSlug);
     if (agent === undefined) {

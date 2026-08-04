@@ -48,7 +48,7 @@ import { cascadeRemoveToolResponses, getToolCallIds } from "#engine/history-vali
 import type { Message } from "#engine/message.js";
 import type { ChannelHandler } from "#harness/channel-handler.js";
 import type { Harness } from "#harness/index.js";
-import { DiscordSession } from "#harness/session.js";
+import { DiscordSession, discordSessionId } from "#harness/session.js";
 import colors from "#output/colors.js";
 import { debug, error as logError, info, warning } from "#output/log.js";
 import { SUPPORTED_IMAGE_TYPES, SUPPORTED_VIDEO_TYPES, VIDEO_SIZE_CAP } from "#supports.js";
@@ -155,6 +155,36 @@ async function resolveDisplayName(msg: DiscordMessage): Promise<string> {
   return member?.nick ?? author.globalName ?? author.username;
 }
 
+// Appends `<attachment>` tags so the model knows what files are present.
+function appendAttachmentMetadata(innerContent: string, msg: DiscordMessage): string {
+  const attachments = [...msg.attachments.values()];
+  if (attachments.length === 0) {
+    return innerContent;
+  }
+  const attachmentInfo = attachments
+    .map(
+      (att) =>
+        `<attachment id="${att.id}" filename="${att.filename}" contentType="${att.contentType ?? "unknown"}" size="${att.size}" description="${att.description ?? ""}">`,
+    )
+    .join("\n");
+  return `${innerContent}\n${attachmentInfo}`;
+}
+
+// Appends `<sticker>` tags so the model knows what stickers are present.
+function appendStickerMetadata(innerContent: string, msg: DiscordMessage): string {
+  if (msg.stickerItems === undefined || msg.stickerItems.length === 0) {
+    return innerContent;
+  }
+  const stickerInfo = msg.stickerItems
+    .map((sticker) => {
+      const hint =
+        sticker.format_type === StickerFormatTypes.LOTTIE ? ' hint="cannot be displayed"' : "";
+      return `<sticker name="${sticker.name}"${hint}>`;
+    })
+    .join("\n");
+  return `${innerContent}\n${stickerInfo}`;
+}
+
 // Wraps an incoming Discord message's content with sender metadata so the
 // agent has full context about who sent what and when, without needing to
 // parse it out of the message history separately. Includes attachment metadata
@@ -169,30 +199,8 @@ async function formatUserMessage(
   const timestamp = await formatDate(msg.createdAt);
 
   let innerContent = msg.content;
-
-  // Append attachment metadata so the model knows what files are present
-  const attachments = [...msg.attachments.values()];
-  if (attachments.length > 0) {
-    const attachmentInfo = attachments
-      .map(
-        (att) =>
-          `<attachment id="${att.id}" filename="${att.filename}" contentType="${att.contentType ?? "unknown"}" size="${att.size}" description="${att.description ?? ""}">`,
-      )
-      .join("\n");
-    innerContent += `\n${attachmentInfo}`;
-  }
-
-  // Append sticker metadata so the model knows what stickers are present
-  if (msg.stickerItems && msg.stickerItems.length > 0) {
-    const stickerInfo = msg.stickerItems
-      .map((sticker) => {
-        const hint =
-          sticker.format_type === StickerFormatTypes.LOTTIE ? ' hint="cannot be displayed"' : "";
-        return `<sticker name="${sticker.name}"${hint}>`;
-      })
-      .join("\n");
-    innerContent += `\n${stickerInfo}`;
-  }
+  innerContent = appendAttachmentMetadata(innerContent, msg);
+  innerContent = appendStickerMetadata(innerContent, msg);
 
   // Build optional attributes for reply/mention context
   let replyAttr = "";
@@ -222,30 +230,8 @@ async function formatHistoryContext(msg: DiscordMessage): Promise<TextContent> {
   const timestamp = await formatDate(msg.createdAt);
 
   let innerContent = msg.content;
-
-  // Append attachment metadata so the model knows what files are present
-  const attachments = [...msg.attachments.values()];
-  if (attachments.length > 0) {
-    const attachmentInfo = attachments
-      .map(
-        (att) =>
-          `<attachment id="${att.id}" filename="${att.filename}" contentType="${att.contentType ?? "unknown"}" size="${att.size}" description="${att.description ?? ""}">`,
-      )
-      .join("\n");
-    innerContent += `\n${attachmentInfo}`;
-  }
-
-  // Append sticker metadata so the model knows what stickers are present
-  if (msg.stickerItems && msg.stickerItems.length > 0) {
-    const stickerInfo = msg.stickerItems
-      .map((sticker) => {
-        const hint =
-          sticker.format_type === StickerFormatTypes.LOTTIE ? ' hint="cannot be displayed"' : "";
-        return `<sticker name="${sticker.name}"${hint}>`;
-      })
-      .join("\n");
-    innerContent += `\n${stickerInfo}`;
-  }
+  innerContent = appendAttachmentMetadata(innerContent, msg);
+  innerContent = appendStickerMetadata(innerContent, msg);
 
   return {
     content: `<history-context msgId="${msg.id}" from="${username} <${authorId}>" displayName="${displayName}" timestamp="${timestamp}">${innerContent}</history-context>`,
@@ -805,8 +791,7 @@ async function handleMessageCreate(
 
   const guildId = msg.guildID ?? undefined;
 
-  const sessionId =
-    guildId === undefined ? `discord:${msg.channelID}` : `discord:${msg.channelID}|${msg.guildID}`;
+  const sessionId = discordSessionId(msg.channelID, guildId);
 
   let session = agent.sessions.get(sessionId);
   if (session !== undefined && !(session instanceof DiscordSession)) {
@@ -1068,10 +1053,7 @@ async function handleMessageUpdate(
       return;
     }
 
-    const sessionId =
-      msg.guildID === undefined
-        ? `discord:${msg.channelID}`
-        : `discord:${msg.channelID}|${msg.guildID}`;
+    const sessionId = discordSessionId(msg.channelID, msg.guildID);
 
     const session = agent.sessions.get(sessionId);
     if (session === undefined || !(session instanceof DiscordSession)) {
@@ -1130,7 +1112,7 @@ async function handleMessageUpdate(
   }
 }
 
-async function handleMessageDelete(ctx: HandlerCtx, msg: PossiblyUncachedMessage): Promise<void> {
+function handleMessageDelete(ctx: HandlerCtx, msg: PossiblyUncachedMessage): void {
   try {
     const { agentSlug, owner } = ctx;
     const agent = owner.agents.get(agentSlug);
@@ -1138,10 +1120,7 @@ async function handleMessageDelete(ctx: HandlerCtx, msg: PossiblyUncachedMessage
       return;
     }
 
-    const sessionId =
-      msg.guildID === undefined
-        ? `discord:${msg.channelID}`
-        : `discord:${msg.channelID}|${msg.guildID}`;
+    const sessionId = discordSessionId(msg.channelID, msg.guildID);
 
     const session = agent.sessions.get(sessionId);
     if (session === undefined || !(session instanceof DiscordSession)) {
@@ -1179,8 +1158,6 @@ async function handleMessageDelete(ctx: HandlerCtx, msg: PossiblyUncachedMessage
       session.lastMessageId = lastUserMsg?.id;
     }
 
-    // Dummy await to satisfy require-await lint rule
-    await Promise.resolve();
     saveSession(agentSlug, session);
   } catch (error: unknown) {
     warning("Error in messageDelete handler:", error instanceof Error ? error.message : error);
@@ -1381,7 +1358,7 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
 
         try {
           const dmChannel = await client.rest.users.createDM(ownerUserId);
-          const existing = sessions.get(`discord:${dmChannel.id}`);
+          const existing = sessions.get(discordSessionId(dmChannel.id));
           if (existing !== undefined) {
             return existing;
           }
@@ -1513,10 +1490,9 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
     }
   });
 
-  // oxlint-disable-next-line typescript/no-misused-promises
-  client.on("messageDelete", async (msg) => {
+  client.on("messageDelete", (msg) => {
     try {
-      await handleMessageDelete(ctx, msg);
+      handleMessageDelete(ctx, msg);
     } catch (error: unknown) {
       logError("Unhandled error in messageDelete handler:", error);
     }
