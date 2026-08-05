@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -33,7 +34,7 @@ function buildPreview(
   text: string,
   head: number,
   tail: number,
-  totalLabel: string,
+  totalBytes: number,
   pathKey: string,
 ): string | undefined {
   const lines = text.split("\n");
@@ -42,7 +43,11 @@ function buildPreview(
   }
   const headLines = lines.slice(0, head).join("\n");
   const tailLines = lines.slice(-tail).join("\n");
-  return `${headLines}\n... [truncated, ${lines.length} lines (${totalLabel}) — see ${pathKey}] ...\n${tailLines}`;
+  return `${headLines}\n... [truncated, ${lines.length} lines (${totalBytes} bytes) — see ${pathKey}] ...\n${tailLines}`;
+}
+
+function utf8ByteLength(text: string): number {
+  return Buffer.byteLength(text, "utf8");
 }
 
 function sanitizeForFilename(command: string): string {
@@ -102,8 +107,8 @@ export const exec: ToolDef = {
       throw new ToolError(result.error);
     }
 
-    const stdoutLength = result.stdout.length;
-    const stderrLength = result.stderr.length;
+    const stdoutLength = utf8ByteLength(result.stdout);
+    const stderrLength = utf8ByteLength(result.stderr);
     const combinedBytes = stdoutLength + stderrLength;
 
     const baseResponse: Record<string, unknown> = {
@@ -176,7 +181,7 @@ export const exec: ToolDef = {
         result.stdout,
         execConfig.previewHead,
         execConfig.previewTail,
-        `${stdoutLength} bytes`,
+        stdoutLength,
         "stdoutPath",
       );
       if (preview !== undefined) {
@@ -207,7 +212,7 @@ export const exec: ToolDef = {
         result.stderr,
         execConfig.previewHead,
         execConfig.previewTail,
-        `${stderrLength} bytes`,
+        stderrLength,
         "stderrPath",
       );
       if (preview !== undefined) {

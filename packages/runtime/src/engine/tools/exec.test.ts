@@ -316,6 +316,33 @@ describe("exec tool output spilling", () => {
     await expect(exec.execute({ command: "grep; rm" }, ctx)).rejects.toThrow();
     expect(mockSandboxExec).not.toHaveBeenCalled();
   });
+
+  it("handles a single massive line with no preview emitted", async () => {
+    const hugeLine = "x".repeat(100_000);
+    setSandboxResult(hugeLine, "");
+
+    const ctx = makeToolContext({ previewHead: 20, previewTail: 20 });
+    const result = await runExec("grep", ctx);
+
+    expect(result["stdoutLength"]).toBe(100_000);
+    expect(result["stdoutPath"]).toBeDefined();
+    expect(result["stdoutPreview"]).toBeUndefined();
+    expect(mockFsPromises.writeFile).toHaveBeenCalledWith(
+      expect.stringMatching(/\.out$/u),
+      hugeLine,
+      "utf8",
+    );
+  });
+
+  it("reports UTF-8 byte length, not UTF-16 code units", async () => {
+    setSandboxResult("héllo wörld 🎉", "");
+
+    const ctx = makeToolContext();
+    const result = await runExec("grep", ctx);
+
+    // "héllo wörld 🎉" is 14 UTF-16 code units but 18 UTF-8 bytes
+    expect(result["stdoutLength"]).toBe(18);
+  });
 });
 
 describe("exec tool bash hint", () => {
