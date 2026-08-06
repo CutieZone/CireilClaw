@@ -98,6 +98,10 @@ async function resolveChannelUnsupported(_spec: string): Promise<ChannelResoluti
   return { error: "channel resolution not supported" };
 }
 
+function builtinPluginStateError(): never {
+  throw new Error("pluginState is only available to plugins, not to builtin tools");
+}
+
 export async function runTurn(
   session: Session,
   agentSlug: string,
@@ -286,6 +290,11 @@ export async function runTurn(
       // oxlint-disable-next-line typescript/require-await
       resolve: async (sandboxPath: string): Promise<string> =>
         sandboxToReal(sandboxPath, agentSlug, sandboxConfig.mounts),
+    },
+    pluginState: {
+      readText: builtinPluginStateError,
+      remove: builtinPluginStateError,
+      writeText: builtinPluginStateError,
     },
     reply: {
       react,

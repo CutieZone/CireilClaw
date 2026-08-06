@@ -8,6 +8,7 @@ export type {
   FsDirent,
   FsStat,
   Mount,
+  PluginStateApi,
   PluginToolContext,
   Tool,
   ToolDef,

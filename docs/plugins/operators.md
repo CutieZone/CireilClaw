@@ -53,11 +53,28 @@ The runtime enforces: if a plugin ships only TypeScript (no `dist/`), it won't r
 [[plugins]]
 package = "@cireilclaw/plugin-replacement-respond"
 allowOverride = true
+stateQuotaBytes = 16777216  # 16 MiB; default if omitted
 ```
 
 `allowOverride` permits this plugin's tools to shadow built-in tools of the same name. Without it, a name collision against a builtin fails loudly at startup. Two plugins with the same tool name always fail regardless.
 
 Treat overrides as security-sensitive: replacing a built-in tool changes part of the boundary CireilClaw presents to the agent.
+
+`stateQuotaBytes` caps the total size of `ctx.pluginState` files per agent for this plugin. Defaults to `16 MiB`. The plugin never sees the host path or the quota value; on overflow its `writeText` call rejects with an error.
+
+## Plugin State
+
+`ctx.pluginState` is private, persistent per-`(agent, plugin)` storage. Files live under:
+
+```
+~/.cireilclaw/agents/<agent-slug>/state/<plugin-slug>/
+```
+
+The plugin only supplies a relative name; the runtime derives the agent and plugin namespaces. A `.id` file inside that folder records the plugin id (used for collision detection and reverse mapping when an operator needs to identify a state folder manually). Plugins cannot read, write, or remove `.id`.
+
+State survives restarts. The folder itself is deleted only when an operator removes it manually or when the agent is uninstalled; `ctx.pluginState.remove` deletes contents, never the folder.
+
+State is not reachable from `ctx.fs` (the sandbox) and is not bind-mounted into the bubblewrap exec sandbox.
 
 ## Plugin Configuration
 

@@ -24,6 +24,12 @@ import { info, warning } from "#output/log.js";
 import { checkConditionalAccess, checkMountWriteAccess, root, sandboxToReal } from "#util/paths.js";
 
 import { RpcChannel } from "./rpc.js";
+import {
+  DEFAULT_PLUGIN_STATE_QUOTA_BYTES,
+  readPluginStateFile,
+  removePluginStateFile,
+  writePluginStateFile,
+} from "./state.js";
 import type { CtxData, InvokeArgs, ManifestPayload } from "./worker-main.js";
 
 // Safety net for wedged plugins: a single tool invocation cannot hang the engine turn forever.
@@ -147,16 +153,23 @@ class PluginProcess {
   private readonly worker: Worker;
   private readonly rpc: RpcChannel;
   private readonly pending = new Map<string, ToolContext>();
+  private readonly stateQuotaBytes: number;
   private nextInvocation = 1;
   // Buffer for addToolMessage RPCs that arrive after the invocation
   // context has already been cleaned up (fire-and-forget from async
   // plugin callbacks). Drained into the next invocation's ctx.
   private readonly orphanedAddToolMessages: string[] = [];
 
-  public constructor(id: string, worker: Worker, rpc: RpcChannel) {
+  public constructor(
+    id: string,
+    worker: Worker,
+    rpc: RpcChannel,
+    stateQuotaBytes: number = DEFAULT_PLUGIN_STATE_QUOTA_BYTES,
+  ) {
     this.id = id;
     this.worker = worker;
     this.rpc = rpc;
+    this.stateQuotaBytes = stateQuotaBytes;
 
     this.ready = new Promise<ManifestPayload>((resolve, reject) => {
       this.rpc.handle("manifest", (args) => {
@@ -432,6 +445,29 @@ class PluginProcess {
         format: "spki",
       };
     });
+    this.rpc.handle("pluginState.readText", async (args) => {
+      const [invocationId, name] = args;
+      const ctx = this.requireCtx(invocationId);
+      return await readPluginStateFile(ctx.agentSlug, this.id, name as string);
+    });
+    this.rpc.handle("pluginState.writeText", async (args) => {
+      const [invocationId, name, content] = args;
+      const ctx = this.requireCtx(invocationId);
+      await writePluginStateFile(
+        ctx.agentSlug,
+        this.id,
+        name as string,
+        content as string,
+        this.stateQuotaBytes,
+      );
+      return undefined;
+    });
+    this.rpc.handle("pluginState.remove", async (args) => {
+      const [invocationId, name] = args;
+      const ctx = this.requireCtx(invocationId);
+      await removePluginStateFile(ctx.agentSlug, this.id, name as string);
+      return undefined;
+    });
   }
 }
 
@@ -445,7 +481,12 @@ async function spawnPluginProcess(entry: PluginEntry): Promise<PluginProcess> {
     workerData: { entryUrl: url.href, pluginId: id },
   });
   const rpc = new RpcChannel(worker);
-  return new PluginProcess(id, worker, rpc);
+  return new PluginProcess(
+    id,
+    worker,
+    rpc,
+    entry.stateQuotaBytes ?? DEFAULT_PLUGIN_STATE_QUOTA_BYTES,
+  );
 }
 
 async function loadPlugins(): Promise<PluginLoadResult[]> {

@@ -68,6 +68,26 @@ interface FsApi {
   listDir(this: void, sandboxPath: string): Promise<FsDirent[]>;
 }
 
+/**
+ * Private, persistent runtime data scoped to `(agent, plugin)`.
+ *
+ * The runtime derives the on-disk path as
+ * `~/.cireilclaw/agents/<agentSlug>/state/<plugin-slug>/<name>`; the
+ * plugin supplies only `name` (a relative path). State is not
+ * reachable from the sandboxed `ctx.fs` surface and is not visible to
+ * exec'd commands. Files are written atomically with mode 0o600;
+ * total usage per plugin is capped by a per-entry quota (default 16
+ * MiB). Reads of missing files return `undefined`; `remove` is a
+ * no-op for missing files. Paths may nest, but absolute paths,
+ * traversal, and symlink escape are rejected, and the top-level name
+ * `.id` is reserved as a runtime sentinel.
+ */
+interface PluginStateApi {
+  readText(this: void, name: string): Promise<string | undefined>;
+  writeText(this: void, name: string, content: string): Promise<void>;
+  remove(this: void, name: string): Promise<void>;
+}
+
 interface PluginToolContext {
   session: BasicSession;
   agentSlug: string;
@@ -111,6 +131,7 @@ interface PluginToolContext {
   addVideo(this: void, data: Uint8Array, mediaType: string): void;
   addToolMessage(this: void, content: string): void;
   fs: FsApi;
+  pluginState: PluginStateApi;
   paths: {
     resolve(this: void, sandboxPath: string): Promise<string>;
     checkWriteAccess(this: void, sandboxPath: string): Promise<void>;
@@ -129,6 +150,7 @@ export type {
   FsDirent,
   FsStat,
   Mount,
+  PluginStateApi,
   PluginToolContext,
   Tool,
   ToolDef,

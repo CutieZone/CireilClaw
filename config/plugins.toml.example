@@ -13,4 +13,5 @@
 # name = "my-plugin"
 
 # --- Optional flags ---
-# allowOverride = true  # Permit this plugin's tools to shadow built-ins
+# allowOverride = true          # Permit this plugin's tools to shadow built-ins
+# stateQuotaBytes = 16777216    # Per-agent ctx.pluginState quota (default 16 MiB)

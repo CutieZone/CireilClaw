@@ -87,6 +87,7 @@ config/          # engine.toml, tools.toml, heartbeat.toml, cron.toml, condition
   plugins/       # Per-agent plugin configs
 core.md          # Base system instructions
 skills/          # Reusable skill documents (markdown with TOML frontmatter)
+state/           # Per-plugin private state (one subdir per plugin; managed via ctx.pluginState)
 tasks/           # Scheduled task checklists (HEARTBEAT.md) and related data
 workspace/       # Sandboxed workspace for agent operations
 memories/        # Session-specific memory (persisted across turns)

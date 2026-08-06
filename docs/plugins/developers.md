@@ -204,6 +204,11 @@ interface PluginToolContext {
     checkWriteAccess(sandboxPath: string): Promise<void>;
     checkConditionalAccess(sandboxPath: string): Promise<void>;
   };
+  pluginState: {
+    readText(name: string): Promise<string | undefined>;
+    writeText(name: string, content: string): Promise<void>;
+    remove(name: string): Promise<void>;
+  };
 }
 ```
 
@@ -216,6 +221,7 @@ Notes:
 - `paths.checkWriteAccess` validates whether a sandbox path is writable under the current mount configuration. Throws if the path is read-only or outside allowed mounts.
 - `paths.checkConditionalAccess` validates whether a sandbox path is accessible in the current session context according to `conditions.toml` rules. Throws if access is denied. No-op when no conditions are configured.
 - `crypto.loadNormalizedKey` normalizes a key (PEM or DER, given as inline data or a sandbox path) to a Web-Crypto-compatible PKCS#8 private key or SPKI public key. It auto-detects PKCS#1, SEC1, and other legacy formats. Useful before calling `crypto.subtle.importKey` in plugins that need JWT signing or cryptographic operations.
+- `pluginState` is private, persistent per-`(agent, plugin)` storage. Use it for identity keys, cursors, dedupe records, and other runtime-private data. Paths are relative (nested paths allowed). Reads of missing files return `undefined`; `remove` is a no-op for missing files. Files are written atomically (mode `0o600`), the folder is `0o700`, and total usage is capped by a per-plugin quota (default 16 MiB, overridable via `stateQuotaBytes` in `plugins.toml`). The plugin never sees the host path; the runtime derives both the agent namespace and the plugin namespace. Absolute paths, traversal, symlinks, and the reserved top-level name `.id` are rejected. State is not reachable from `ctx.fs` and not visible to exec'd commands.
 
 ## SDK Exports
 

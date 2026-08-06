@@ -14,6 +14,18 @@ const PluginEntrySchema = vb.pipe(
       vb.exactOptional(vb.pipe(vb.string(), vb.nonEmpty())),
       vb.description("npm package name, resolved from ~/.cireilclaw/node_modules/"),
     ),
+    stateQuotaBytes: vb.pipe(
+      vb.exactOptional(
+        vb.pipe(
+          vb.number(),
+          vb.integer(),
+          vb.minValue(1),
+          vb.description(
+            "Per-agent quota for ctx.pluginState, in bytes. Defaults to 16 MiB when unset.",
+          ),
+        ),
+      ),
+    ),
   }),
   vb.check(
     (entry) => (entry.name === undefined) !== (entry.package === undefined),

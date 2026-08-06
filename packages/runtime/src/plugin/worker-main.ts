@@ -181,6 +181,16 @@ function buildCtx(rpc: RpcChannel, invocationId: string, data: CtxData): PluginT
       resolve: async (sandboxPath: string): Promise<string> =>
         rpc.call<string>("paths.resolve", [invocationId, sandboxPath]),
     },
+    pluginState: {
+      readText: async (name: string): Promise<string | undefined> =>
+        await rpc.call<string | undefined>("pluginState.readText", [invocationId, name]),
+      remove: async (name: string): Promise<void> => {
+        await rpc.call("pluginState.remove", [invocationId, name]);
+      },
+      writeText: async (name: string, content: string): Promise<void> => {
+        await rpc.call("pluginState.writeText", [invocationId, name, content]);
+      },
+    },
     reply: {
       react: async (emoji, messageId) => {
         await rpc.call("reply.react", [invocationId, emoji, messageId]);
