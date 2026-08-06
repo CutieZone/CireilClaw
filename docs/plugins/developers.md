@@ -37,9 +37,9 @@ Or start from scratch with the minimal `package.json`:
       ".": { "types": "./dist/index.d.mts", "default": "./dist/index.mjs" }
     }
   },
-  "peerDependencies": { "@cireilclaw/sdk": "^0.2.0" },
+  "peerDependencies": { "@cireilclaw/sdk": "^0.6.0" },
   "devDependencies": {
-    "@cireilclaw/sdk": "^0.2.0",
+    "@cireilclaw/sdk": "^0.6.0",
     "tsdown": "^0.21.7",
     "typescript": "^6.0.2"
   }
