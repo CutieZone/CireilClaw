@@ -218,6 +218,7 @@ async function formatUserMessage(
     format: "message",
     inReplyTo,
     mentionsYou: opts?.isMentioned,
+    messageId: msg.id,
     timestamp,
   };
 
@@ -237,7 +238,7 @@ async function formatAssistantContext(msg: DiscordMessage): Promise<TextContent>
 
   return {
     content: msg.content,
-    discord: { format: "assistant", timestamp },
+    discord: { format: "assistant", messageId: msg.id, timestamp },
     type: "text",
   };
 }

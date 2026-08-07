@@ -6,6 +6,7 @@ interface TextContent {
 
 interface DiscordTextMetadata {
   format: "message" | "assistant";
+  messageId?: string;
   timestamp: string;
   author?: { id: string; username: string; displayName: string };
   inReplyTo?: string;
@@ -18,7 +19,8 @@ function renderTextContent(content: TextContent): string {
     return content.content;
   }
   if (metadata.format === "assistant") {
-    return `<assistant-context timestamp="${metadata.timestamp}">${content.content}</assistant-context>`;
+    const messageId = metadata.messageId === undefined ? "" : ` id="${metadata.messageId}"`;
+    return `<assistant-context timestamp="${metadata.timestamp}"${messageId}>${content.content}</assistant-context>`;
   }
   const { author } = metadata;
   if (author === undefined) {
@@ -26,7 +28,8 @@ function renderTextContent(content: TextContent): string {
   }
   const reply = metadata.inReplyTo === undefined ? "" : ` in-reply-to="${metadata.inReplyTo}"`;
   const mention = metadata.mentionsYou === true ? ' mentions="YOU"' : "";
-  return `<msg from="${author.username} <${author.id}>" displayName="${author.displayName}" timestamp="${metadata.timestamp}"${reply}${mention}>${content.content}</msg>`;
+  const messageId = metadata.messageId === undefined ? "" : ` id="${metadata.messageId}"`;
+  return `<msg from="${author.username} <${author.id}>" displayName="${author.displayName}" timestamp="${metadata.timestamp}"${messageId}${reply}${mention}>${content.content}</msg>`;
 }
 
 interface ImageContent {

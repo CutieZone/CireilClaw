@@ -34,9 +34,9 @@ const Schema = vb.strictObject({
   ),
   target: vb.pipe(
     vb.optional(vb.nullable(vb.pipe(vb.string(), vb.nonEmpty()))),
-    vb.transform((val): string => val ?? "last"),
+    vb.transform((val): string => val ?? "current"),
     vb.description(
-      'Which session to announce results to. Defaults to "last" (most recently active session). You can get the current session id in the correct format by using the session-info tool.',
+      'Where to announce results. "current" (default) binds delivery to this session when the job is created; "last" uses whichever session is most recently active when the job fires; "owner" sends a DM to the bot owner; or use an explicit session ID from session-info.',
     ),
   ),
 });
@@ -46,6 +46,7 @@ const schedule: ToolDef = {
   // oxlint-disable-next-line typescript/require-await
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     const data = vb.parse(Schema, input);
+    const target = data.target ?? "current";
 
     const at = new Date(data.at);
     if (Number.isNaN(at.getTime())) {
@@ -64,7 +65,9 @@ const schedule: ToolDef = {
       id: data.id,
       prompt: data.prompt,
       schedule: { at: data.at },
-      target: data.target ?? "last",
+      // Resolve "current" now. A one-shot may fire long after another session
+      // becomes active, so persisting "last" would reroute its delivery.
+      target: target === "current" ? ctx.session.id() : target,
     };
 
     // Persist the job so it survives a restart.
