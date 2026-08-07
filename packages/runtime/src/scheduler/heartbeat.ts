@@ -43,7 +43,11 @@ function isWithinActiveHours(current: string, start: string, end: string): boole
     endIsMidnightBoundary && current === "00:00" ? MINUTES_PER_DAY : parseClockMinutes(current);
   const endMinutes = parseClockMinutes(end, endIsMidnightBoundary);
 
-  return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
+  if (startMinutes <= endMinutes) {
+    return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
+  }
+
+  return currentMinutes >= startMinutes || currentMinutes <= endMinutes;
 }
 
 function isInActiveHours(activeHours: NonNullable<HeartbeatConfig["activeHours"]>): boolean {
@@ -51,7 +55,7 @@ function isInActiveHours(activeHours: NonNullable<HeartbeatConfig["activeHours"]
     const now = new Date();
     const fmt = new Intl.DateTimeFormat("en-US", {
       hour: "2-digit",
-      hour12: false,
+      hourCycle: "h23",
       minute: "2-digit",
       timeZone: activeHours.timezone,
     });

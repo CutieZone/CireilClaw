@@ -5,6 +5,28 @@ type ShutdownHook = () => void;
 const hooks: ShutdownHook[] = [];
 let registered = false;
 
+function forceExit(): void {
+  warning("Forced exit.");
+  // oxlint-disable-next-line unicorn/no-process-exit -- the second signal must terminate immediately.
+  process.exit(1);
+}
+
+function shutdown(): void {
+  process.once("SIGINT", forceExit);
+  process.once("SIGTERM", forceExit);
+
+  for (const hook of hooks) {
+    try {
+      hook();
+    } catch {
+      // Best-effort — don't let a bad hook block the others.
+    }
+  }
+
+  // oxlint-disable-next-line unicorn/no-process-exit -- shutdown hooks are synchronous and complete before exit.
+  process.exit(0);
+}
+
 function onShutdown(hook: ShutdownHook): void {
   hooks.push(hook);
 }
@@ -15,22 +37,8 @@ function registerSigint(): void {
   }
   registered = true;
 
-  process.on("SIGINT", () => {
-    process.on("SIGINT", () => {
-      warning("Forced exit.");
-      process.exit(1);
-    });
-
-    for (const hook of hooks) {
-      try {
-        hook();
-      } catch {
-        // Best-effort — don't let a bad hook block the others.
-      }
-    }
-
-    process.exit(0);
-  });
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
 }
 
 export { onShutdown, registerSigint };

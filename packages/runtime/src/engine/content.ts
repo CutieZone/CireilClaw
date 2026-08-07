@@ -1,6 +1,32 @@
 interface TextContent {
   type: "text";
   content: string;
+  discord?: DiscordTextMetadata;
+}
+
+interface DiscordTextMetadata {
+  format: "message" | "assistant";
+  timestamp: string;
+  author?: { id: string; username: string; displayName: string };
+  inReplyTo?: string;
+  mentionsYou?: boolean;
+}
+
+function renderTextContent(content: TextContent): string {
+  const metadata = content.discord;
+  if (metadata === undefined) {
+    return content.content;
+  }
+  if (metadata.format === "assistant") {
+    return `<assistant-context timestamp="${metadata.timestamp}">${content.content}</assistant-context>`;
+  }
+  const { author } = metadata;
+  if (author === undefined) {
+    return content.content;
+  }
+  const reply = metadata.inReplyTo === undefined ? "" : ` in-reply-to="${metadata.inReplyTo}"`;
+  const mention = metadata.mentionsYou === true ? ' mentions="YOU"' : "";
+  return `<msg from="${author.username} <${author.id}>" displayName="${author.displayName}" timestamp="${metadata.timestamp}"${reply}${mention}>${content.content}</msg>`;
 }
 
 interface ImageContent {
@@ -122,9 +148,10 @@ type Content =
   | ThinkingContent
   | RedactedThinkingContent;
 
-export { isImageRef, isVideoRef, isVideoContent, toolResponseMedia };
+export { isImageRef, isVideoRef, isVideoContent, renderTextContent, toolResponseMedia };
 export type {
   TextContent,
+  DiscordTextMetadata,
   ImageContent,
   ImageRef,
   VideoContent,

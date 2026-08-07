@@ -1,5 +1,6 @@
 import * as vb from "valibot";
 
+import { renderTextContent } from "#engine/content.js";
 import type { ImageContent, RedactedThinkingContent, ToolCallContent } from "#engine/content.js";
 import type { Context, UsageInfo } from "#engine/context.js";
 import { GenerationNoToolCallsError } from "#engine/errors.js";
@@ -200,7 +201,7 @@ async function translateUserContent(
 ): Promise<Record<string, unknown>> {
   switch (content.type) {
     case "text":
-      return { text: content.content, type: "input_text" };
+      return { text: renderTextContent(content), type: "input_text" };
     case "image":
       return {
         detail: "auto",
@@ -252,7 +253,7 @@ async function translateMessagesForCodex(
     switch (message.role) {
       case "system":
         input.push({
-          content: [{ text: message.content.content, type: "input_text" }],
+          content: [{ text: renderTextContent(message.content), type: "input_text" }],
           role: "system",
           type: "message",
         });
@@ -289,7 +290,7 @@ async function translateMessagesForCodex(
           } else if (part.type === "redacted_thinking") {
             input.push({ encrypted_content: part.data, summary: [], type: "reasoning" });
           } else if (part.type === "text") {
-            textParts.push(part.content);
+            textParts.push(renderTextContent(part));
           } else if (part.type === "thinking") {
             textParts.push(part.thinking);
           }

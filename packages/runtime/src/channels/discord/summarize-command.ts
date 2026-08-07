@@ -91,6 +91,7 @@ async function handleCommand(interaction: CommandInteraction, ctx: HandlerCtx): 
           content: SUMMARIZER_SYSTEM_PROMPT,
           type: "text",
         },
+        persist: false,
         role: "system",
       },
       {

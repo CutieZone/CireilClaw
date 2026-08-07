@@ -223,6 +223,7 @@ export class Agent {
       resolveChannel,
       handler.capabilities,
       this.conditions,
+      this.scheduler,
     );
   }
 
@@ -255,6 +256,7 @@ export class Agent {
       resolveChannel,
       undefined,
       this.conditions,
+      this.scheduler,
     );
   }
 }

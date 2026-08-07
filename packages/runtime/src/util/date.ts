@@ -41,7 +41,11 @@ function formatRelativeTime(ms: number): string {
   return `in ${absSec} second${absSec === 1 ? "" : "s"}`;
 }
 
-async function formatDate(date: Date = new Date(), now: Date = new Date()): Promise<string> {
+async function formatDate(
+  date: Date = new Date(),
+  now: Date = new Date(),
+  includeRelative = true,
+): Promise<string> {
   const systemCfg = await loadSystem();
   const { timezone } = systemCfg;
 
@@ -75,7 +79,7 @@ async function formatDate(date: Date = new Date(), now: Date = new Date()): Prom
     const formatted = new Intl.DateTimeFormat("en-CA", {
       day: "2-digit",
       hour: "2-digit",
-      hour12: false,
+      hourCycle: "h23",
       minute: "2-digit",
       month: "2-digit",
       second: "2-digit",
@@ -110,9 +114,11 @@ async function formatDate(date: Date = new Date(), now: Date = new Date()): Prom
     absolute = `${formatted.replace(", ", "T")}${tzOffset} (${weekday}, ${tzAbbr})`;
   }
 
-  const relative = formatRelativeTime(now.getTime() - date.getTime());
+  if (!includeRelative) {
+    return absolute;
+  }
 
-  return `${absolute} [${relative}]`;
+  return `${absolute} [${formatRelativeTime(now.getTime() - date.getTime())}]`;
 }
 
 export { formatDate, formatRelativeTime };

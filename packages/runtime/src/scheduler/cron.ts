@@ -60,11 +60,11 @@ async function deliverOutput(
   }
 }
 
-async function runMainSession(agent: Agent, job: CronJobConfig): Promise<void> {
+async function runMainSession(agent: Agent, job: CronJobConfig): Promise<boolean> {
   const session = await agent.resolveTarget(job.target);
   if (session === undefined) {
     debug("Cron: no target session for job", colors.keyword(job.id), "— skipping");
-    return;
+    return false;
   }
 
   if (session.busy) {
@@ -74,7 +74,7 @@ async function runMainSession(agent: Agent, job: CronJobConfig): Promise<void> {
       "busy — skipping job",
       colors.keyword(job.id),
     );
-    return;
+    return false;
   }
 
   session.busy = true;
@@ -91,18 +91,20 @@ async function runMainSession(agent: Agent, job: CronJobConfig): Promise<void> {
       provider: job.provider,
     });
     debug("Cron: main-session job", colors.keyword(job.id), "completed");
+    return true;
   } catch (error) {
     session.history.length = historyLengthBefore;
     const reason = sanitizeError(error, agent.slug);
     warning("Cron: error in main-session job", colors.keyword(job.id), reason);
     await deliverOutput(agent, job, `⚠️ Engine error: ${reason}`, MessageFlags.EPHEMERAL);
+    return false;
   } finally {
     session.busy = false;
     saveSession(agent.slug, session);
   }
 }
 
-async function runIsolatedSession(agent: Agent, job: CronJobConfig): Promise<void> {
+async function runIsolatedSession(agent: Agent, job: CronJobConfig): Promise<boolean> {
   const session = new InternalSession(`${agent.slug}:${job.id}`);
 
   // Capture all respond output rather than forwarding it immediately.
@@ -128,34 +130,36 @@ async function runIsolatedSession(agent: Agent, job: CronJobConfig): Promise<voi
     const reason = sanitizeError(error, agent.slug);
     warning("Cron: error in isolated job", colors.keyword(job.id), reason);
     await deliverOutput(agent, job, `⚠️ Engine error: ${reason}`, MessageFlags.EPHEMERAL);
-    return;
+    return false;
   }
 
   const cc = capturedContent as string | undefined;
 
   if (cc === undefined || cc.trim().length === 0) {
-    return;
+    return true;
   }
 
   await deliverOutput(agent, job, cc);
+  return true;
 }
 
-async function runCronJob(agent: Agent, job: CronJobConfig): Promise<void> {
+async function runCronJob(agent: Agent, job: CronJobConfig): Promise<boolean> {
   debug("Cron: firing job", colors.keyword(job.id), "for agent", colors.keyword(agent.slug));
 
   const isOneShot = "at" in job.schedule;
 
-  if (job.execution === "main") {
-    await runMainSession(agent, job);
-  } else {
-    await runIsolatedSession(agent, job);
-  }
+  const ran =
+    job.execution === "main"
+      ? await runMainSession(agent, job)
+      : await runIsolatedSession(agent, job);
 
-  if (isOneShot) {
+  if (isOneShot && ran) {
     deleteCronJob(agent.slug, job.id);
-  } else {
+  } else if (!isOneShot) {
     updateLastRun(agent.slug, job.id, new Date().toISOString());
   }
+
+  return ran;
 }
 
 export { runCronJob };

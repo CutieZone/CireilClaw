@@ -11,6 +11,8 @@ import type {
 } from "openai/resources";
 import * as vb from "valibot";
 
+// oxlint-disable-next-line import/no-duplicates -- value/type imports preserve verbatim module syntax.
+import { renderTextContent } from "#engine/content.js";
 import type { Content, ThinkingContent, ToolCallContent } from "#engine/content.js";
 import { toolResponseMedia } from "#engine/content.js";
 import type { Context, UsageInfo } from "#engine/context.js";
@@ -142,7 +144,7 @@ function translateContent(
   switch (content.type) {
     case "text":
       return {
-        text: content.content,
+        text: renderTextContent(content),
         type: "text",
       };
     case "image": {
@@ -275,7 +277,9 @@ function translateMsg(message: Message): ChatCompletionMessageParam {
         }
 
         if (textBlocks.length > 0) {
-          msg["content"] = textBlocks.map((it) => ({ text: it.content, type: "text" }) as const);
+          msg["content"] = textBlocks.map(
+            (it) => ({ text: renderTextContent(it), type: "text" }) as const,
+          );
         }
 
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion
@@ -283,7 +287,7 @@ function translateMsg(message: Message): ChatCompletionMessageParam {
       }
       if (message.content.type === "text") {
         return {
-          content: message.content.content,
+          content: renderTextContent(message.content),
           role: "assistant",
         };
       }
@@ -328,7 +332,7 @@ function translateMsg(message: Message): ChatCompletionMessageParam {
 
     case "system":
       return {
-        content: message.content.content,
+        content: renderTextContent(message.content),
         role: "system",
       };
 

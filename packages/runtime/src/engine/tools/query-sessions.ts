@@ -4,6 +4,7 @@ import * as vb from "valibot";
 import { sessions } from "#db/schema.js";
 import { isMessage } from "#engine/message.js";
 import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
+import { formatDate } from "#util/date.js";
 
 const Schema = vb.strictObject({
   limit: vb.optional(
@@ -66,7 +67,6 @@ export const querySessions: ToolDef = {
     "Search message contents across multiple sessions.\n\n" +
     "Use this to find specific information or past discussions by keyword.\n" +
     "Returns matched messages with their session ID and timestamp.",
-  // oxlint-disable-next-line require-await
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     const data = vb.parse(Schema, input);
 
@@ -138,8 +138,21 @@ export const querySessions: ToolDef = {
     const { offset, limit } = data;
     const paginated = results.slice(offset, offset + limit);
 
+    const matches = await Promise.all(
+      paginated.map(async (match) => ({
+        channel: match.channel,
+        content: match.content,
+        role: match.role,
+        sessionId: match.sessionId,
+        timestamp:
+          match.timestamp === undefined
+            ? undefined
+            : await formatDate(new Date(match.timestamp), undefined, false),
+      })),
+    );
+
     return {
-      matches: paginated,
+      matches,
       success: true,
       totalMatches: results.length,
     };

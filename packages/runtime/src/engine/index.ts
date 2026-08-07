@@ -495,25 +495,6 @@ export async function runTurn(
       }
     }
 
-    // Extract the latest user message so context metadata can sit right
-    // before it (after opened files), preventing the agent from confusing
-    // a system status ping with the user's actual input.
-    const lastUserIdx = filteredMessages.findLastIndex((msg) => msg.role === "user");
-    let latestUserMessage: Message | undefined = undefined;
-    // Only relocate the user message when there's no model activity after
-    // it — i.e. on the first iteration of the agentic loop. On subsequent
-    // iterations the user's request is followed by assistant tool calls
-    // and tool responses; splicing it to the end would invert causality,
-    // making the model see its own work before the request that produced it.
-    const hasActivityAfterUser =
-      lastUserIdx !== -1 &&
-      filteredMessages
-        .slice(lastUserIdx + 1)
-        .some((msg) => msg.role === "assistant" || msg.role === "toolResponse");
-    if (lastUserIdx !== -1 && !hasActivityAfterUser) {
-      [latestUserMessage] = filteredMessages.splice(lastUserIdx, 1);
-    }
-
     // Inject opened files before the context usage snapshot so token
     // estimates and pruning warnings account for opened-file content.
     if (openedFilesBlock.length > 0) {
@@ -543,16 +524,12 @@ export async function runTurn(
       session.lastContextWarningCursor = session.historyCursor;
     }
 
-    // Inject context metadata after opened files but before the user's
-    // latest message, so the agent sees usage info before the latest
-    // instruction rather than after it.
+    // Keep volatile metadata at the request tail. Moving a persisted user
+    // message around it would invalidate the cached prefix between iterations.
     filteredMessages.push({
       content: { content: promptMetadata, type: "text" },
       role: "user",
     });
-    if (latestUserMessage !== undefined) {
-      filteredMessages.push(latestUserMessage);
-    }
 
     const activeTools = tools.filter((tool) => !disabledTools.has(tool.name));
 
@@ -686,9 +663,12 @@ export async function runTurn(
 
       session.stopRequested = false;
       session.pendingToolMessages.length = 0;
-      session.history = session.history.filter((msg) => {
-        if (msg.role === "user" || msg.role === "assistant") {
-          return msg.persist !== false;
+      session.history = session.history.filter((msg, idx) => {
+        if (msg.role !== "toolResponse" && msg.persist === false) {
+          if (idx < session.historyCursor) {
+            session.historyCursor--;
+          }
+          return false;
         }
         return true;
       });
@@ -714,7 +694,12 @@ export async function runTurn(
 
         debug("Tool call", colors.keyword(call.name), call);
         let result: Record<string, unknown> = {};
-        if (def === undefined) {
+        if (disabledTools.has(call.name) || !tools.some((tool) => tool.name === call.name)) {
+          result = {
+            error: `Tool is disabled: ${call.name}`,
+            success: false,
+          };
+        } else if (def === undefined) {
           result = {
             error: `Unknown tool: ${call.name}`,
             success: false,
@@ -835,9 +820,12 @@ export async function runTurn(
 
         // Prune ephemeral context (historical/reply-tree backfills) that we no
         // longer need to send now that the turn is complete.
-        session.history = session.history.filter((msg) => {
-          if (msg.role === "user" || msg.role === "assistant") {
-            return msg.persist !== false;
+        session.history = session.history.filter((msg, idx) => {
+          if (msg.role !== "toolResponse" && msg.persist === false) {
+            if (idx < session.historyCursor) {
+              session.historyCursor--;
+            }
+            return false;
           }
           return true;
         });

@@ -39,14 +39,22 @@ async function handle(interaction: CommandInteraction, ctx: HandlerCtx): Promise
       await interaction.createFollowup({ content: "No active session to clear." });
       return;
     }
+    if (session.busy) {
+      await interaction.createFollowup({
+        content: "This session is currently processing a turn. Try clearing it again shortly.",
+        flags: MessageFlags.EPHEMERAL,
+      });
+      return;
+    }
 
     const isSuper = interaction.data.options.getBoolean("super") ?? false;
-    if (isSuper) {
-      session.historyBarrier = Date.now();
+    const historyBarrier = isSuper ? Date.now() : undefined;
+    if (historyBarrier !== undefined) {
+      session.historyBarrier = historyBarrier;
     }
 
     session.reset();
-    resetSession(ctx.agentSlug, sessionId);
+    resetSession(ctx.agentSlug, sessionId, historyBarrier);
 
     await interaction.createFollowup({
       content: isSuper ? "Session super-cleared." : "Session cleared.",

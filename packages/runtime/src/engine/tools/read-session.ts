@@ -5,6 +5,7 @@ import { sessions } from "#db/schema.js";
 import { ToolError } from "#engine/errors.js";
 import { isMessage } from "#engine/message.js";
 import type { ToolContext, ToolDef } from "#engine/tools/tool-def.js";
+import { formatDate } from "#util/date.js";
 
 const Schema = vb.strictObject({
   id: vb.pipe(vb.string(), vb.nonEmpty(), vb.description("The session ID to read.")),
@@ -38,7 +39,6 @@ export const readSession: ToolDef = {
     "Read the full message history of a specific session.\n\n" +
     "Use this to get detailed context on a past conversation found via `list-sessions` or `query-sessions`.\n" +
     "Returns only user and assistant messages.",
-  // oxlint-disable-next-line require-await
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     const data = vb.parse(Schema, input);
 
@@ -56,7 +56,7 @@ export const readSession: ToolDef = {
       const sinceTs = Date.parse(data.since);
       if (!Number.isNaN(sinceTs)) {
         chatMessages = chatMessages.filter(
-          (msg) => msg.timestamp === undefined || msg.timestamp >= sinceTs,
+          (msg) => msg.timestamp !== undefined && msg.timestamp >= sinceTs,
         );
       }
     }
@@ -68,48 +68,53 @@ export const readSession: ToolDef = {
     const { offset, limit } = data;
     const paginated = chatMessages.slice(offset, offset + limit);
 
-    const results = paginated.map((msg) => {
-      const content = Array.isArray(msg.content) ? msg.content : [msg.content];
-      const text = content
-        .map((part) => {
-          // Cast through unknown — ContentBlock is a discriminated union on 'type'.
-          switch (part.type) {
-            case "text":
-              return part.content;
-            case "toolCall": {
-              const { name } = part;
-              if (name === "respond") {
-                // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-                const toolInput = part.input as Record<string, unknown> | undefined;
-                const responseContent =
-                  typeof toolInput?.["content"] === "string" ? toolInput["content"] : "";
-                return responseContent;
+    const results = await Promise.all(
+      paginated.map(async (msg) => {
+        const content = Array.isArray(msg.content) ? msg.content : [msg.content];
+        const text = content
+          .map((part) => {
+            // Cast through unknown — ContentBlock is a discriminated union on 'type'.
+            switch (part.type) {
+              case "text":
+                return part.content;
+              case "toolCall": {
+                const { name } = part;
+                if (name === "respond") {
+                  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+                  const toolInput = part.input as Record<string, unknown> | undefined;
+                  const responseContent =
+                    typeof toolInput?.["content"] === "string" ? toolInput["content"] : "";
+                  return responseContent;
+                }
+                return `[toolCall: ${name} ${JSON.stringify(part.input)}]`;
               }
-              return `[toolCall: ${name} ${JSON.stringify(part.input)}]`;
-            }
 
-            case "thinking":
-              return `[thinking: ${part.thinking.slice(0, 200)}]`;
-            case "redacted_thinking":
-              return "[redacted_thinking]";
-            case "image":
-            case "image_ref":
-              return "[image]";
-            case "video":
-            case "video_ref":
-              return "[video]";
-            default:
-              return "[unknown]";
-          }
-        })
-        .filter((txt) => txt.length > 0)
-        .join("\n");
-      return {
-        content: text,
-        role: msg.role,
-        timestamp: msg.timestamp,
-      };
-    });
+              case "thinking":
+                return `[thinking: ${part.thinking.slice(0, 200)}]`;
+              case "redacted_thinking":
+                return "[redacted_thinking]";
+              case "image":
+              case "image_ref":
+                return "[image]";
+              case "video":
+              case "video_ref":
+                return "[video]";
+              default:
+                return "[unknown]";
+            }
+          })
+          .filter((txt) => txt.length > 0)
+          .join("\n");
+        return {
+          content: text,
+          role: msg.role,
+          timestamp:
+            msg.timestamp === undefined
+              ? undefined
+              : await formatDate(new Date(msg.timestamp), undefined, false),
+        };
+      }),
+    );
 
     return {
       id: row.id,

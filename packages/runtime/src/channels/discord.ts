@@ -43,7 +43,12 @@ import * as unsummarizeCommand from "#channels/discord/unsummarize-command.js";
 import { sendDiscordWarningMessage } from "#channels/discord/warning-message.js";
 import { loadChannel, loadEngine } from "#config/index.js";
 import { saveSession } from "#db/sessions.js";
-import type { ImageContent, TextContent, VideoContent } from "#engine/content.js";
+import type {
+  DiscordTextMetadata,
+  ImageContent,
+  TextContent,
+  VideoContent,
+} from "#engine/content.js";
 import { cascadeRemoveToolResponses, getToolCallIds } from "#engine/history-validate.js";
 import type { Message } from "#engine/message.js";
 import type { ChannelHandler } from "#harness/channel-handler.js";
@@ -196,54 +201,43 @@ async function formatUserMessage(
   const { username } = msg.author;
   const authorId = msg.author.id;
   const displayName = await resolveDisplayName(msg);
-  const timestamp = await formatDate(msg.createdAt);
+  const timestamp = await formatDate(msg.createdAt, undefined, false);
 
-  let innerContent = msg.content;
-  innerContent = appendAttachmentMetadata(innerContent, msg);
-  innerContent = appendStickerMetadata(innerContent, msg);
-
-  // Build optional attributes for reply/mention context
-  let replyAttr = "";
+  let inReplyTo: string | undefined = undefined;
   if (opts?.directReply !== undefined) {
     const isReplyingToBot = opts.directReply.author.id === msg.client.application.id;
     if (isReplyingToBot) {
-      replyAttr = ` in-reply-to="YOU"`;
+      inReplyTo = "YOU";
     } else {
-      const replyDisplayName = await resolveDisplayName(opts.directReply);
-      replyAttr = ` in-reply-to="${replyDisplayName}"`;
+      inReplyTo = await resolveDisplayName(opts.directReply);
     }
   }
 
-  const mentionAttr = (opts?.isMentioned ?? false) ? ` mentions="YOU"` : "";
+  const discord: DiscordTextMetadata = {
+    author: { displayName, id: authorId, username },
+    format: "message",
+    inReplyTo,
+    mentionsYou: opts?.isMentioned,
+    timestamp,
+  };
 
   return {
-    content: `<msg msgId="${msg.id}" from="${username} <${authorId}>" displayName="${displayName}" timestamp="${timestamp}"${replyAttr}${mentionAttr}>${innerContent}</msg>`,
+    content: `${msg.content}${appendAttachmentMetadata("", msg)}${appendStickerMetadata("", msg)}`,
+    discord,
     type: "text",
   };
 }
 
-// Includes attachment metadata so the model knows what files/images are present.
 async function formatHistoryContext(msg: DiscordMessage): Promise<TextContent> {
-  const { username } = msg.author;
-  const authorId = msg.author.id;
-  const displayName = await resolveDisplayName(msg);
-  const timestamp = await formatDate(msg.createdAt);
-
-  let innerContent = msg.content;
-  innerContent = appendAttachmentMetadata(innerContent, msg);
-  innerContent = appendStickerMetadata(innerContent, msg);
-
-  return {
-    content: `<history-context msgId="${msg.id}" from="${username} <${authorId}>" displayName="${displayName}" timestamp="${timestamp}">${innerContent}</history-context>`,
-    type: "text",
-  };
+  return await formatUserMessage(msg);
 }
 
 async function formatAssistantContext(msg: DiscordMessage): Promise<TextContent> {
-  const timestamp = await formatDate(msg.createdAt);
+  const timestamp = await formatDate(msg.createdAt, undefined, false);
 
   return {
-    content: `<assistant-context msgId="${msg.id}" timestamp="${timestamp}">${msg.content}</assistant-context>`,
+    content: msg.content,
+    discord: { format: "assistant", timestamp },
     type: "text",
   };
 }
@@ -473,11 +467,11 @@ function isSuppressNotifications(msg: DiscordMessage): boolean {
  * Once past all loop boundaries, a binary search places the entry in
  * chronological order within the remaining user/assistant sequence.
  */
-function historyInsertById(history: Message[], entry: Message): void {
+function historyInsertById(history: Message[], entry: Message): number {
   const entryId = entry.id;
   if (entryId === undefined) {
     history.push(entry);
-    return;
+    return history.length - 1;
   }
   const entryBig = BigInt(entryId);
 
@@ -543,6 +537,7 @@ function historyInsertById(history: Message[], entry: Message): void {
   }
 
   history.splice(lo, 0, entry);
+  return lo;
 }
 
 async function populateHistoryFromDiscord(
@@ -596,13 +591,16 @@ async function populateHistoryFromDiscord(
       : await formatHistoryContext(msg);
     const images = await fetchAllImages(msg);
 
-    historyInsertById(session.history, {
+    const insertIndex = historyInsertById(session.history, {
       content: images.length > 0 ? [textContent, ...images] : textContent,
       id: msg.id,
       persist: false, // Historical context, don't persist to DB
       role,
       timestamp: msg.createdAt.getTime(),
     });
+    if (insertIndex < session.historyCursor) {
+      session.historyCursor++;
+    }
   }
 }
 
@@ -888,7 +886,7 @@ async function handleMessageCreate(
           ? await formatAssistantContext(ancestor)
           : await formatHistoryContext(ancestor);
         const ancestorImages = await fetchAllImages(ancestor);
-        historyInsertById(ds.history, {
+        const insertIndex = historyInsertById(ds.history, {
           content:
             ancestorImages.length > 0 ? [ancestorContent, ...ancestorImages] : ancestorContent,
           id: ancestor.id,
@@ -896,6 +894,9 @@ async function handleMessageCreate(
           role: isFromBot ? "assistant" : "user",
           timestamp: ancestor.createdAt.getTime(),
         });
+        if (insertIndex < ds.historyCursor) {
+          ds.historyCursor++;
+        }
       }
 
       if (!isMessageInHistory(ds.history, directReply.id)) {
@@ -910,13 +911,16 @@ async function handleMessageCreate(
             ? await formatAssistantContext(directReply)
             : await formatHistoryContext(directReply);
           const replyImages = await fetchAllImages(directReply);
-          historyInsertById(ds.history, {
+          const insertIndex = historyInsertById(ds.history, {
             content: replyImages.length > 0 ? [replyContent, ...replyImages] : replyContent,
             id: directReply.id,
             persist: true,
             role: isFromBot ? "assistant" : "user",
             timestamp: directReply.createdAt.getTime(),
           });
+          if (insertIndex < ds.historyCursor) {
+            ds.historyCursor++;
+          }
         }
       }
     }

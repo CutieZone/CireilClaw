@@ -20,4 +20,12 @@ describe("isWithinActiveHours", () => {
     expect(isWithinActiveHours("22:00", "08:00", "22:00")).toBe(true);
     expect(isWithinActiveHours("22:01", "08:00", "22:00")).toBe(false);
   });
+
+  it("supports active windows that cross midnight", () => {
+    expect(isWithinActiveHours("21:59", "22:00", "06:00")).toBe(false);
+    expect(isWithinActiveHours("22:00", "22:00", "06:00")).toBe(true);
+    expect(isWithinActiveHours("03:00", "22:00", "06:00")).toBe(true);
+    expect(isWithinActiveHours("06:00", "22:00", "06:00")).toBe(true);
+    expect(isWithinActiveHours("06:01", "22:00", "06:00")).toBe(false);
+  });
 });

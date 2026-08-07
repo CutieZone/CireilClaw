@@ -11,7 +11,10 @@ const CronExpressionScheduleSchema = vb.strictObject({
 });
 
 const AtScheduleSchema = vb.strictObject({
-  at: nonEmptyString,
+  at: vb.pipe(
+    nonEmptyString,
+    vb.check((value) => !Number.isNaN(new Date(value).getTime()), "at must be a valid date"),
+  ),
 });
 
 const ScheduleSchema = vb.union([

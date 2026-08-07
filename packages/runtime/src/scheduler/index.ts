@@ -15,6 +15,8 @@ interface StopHandle {
   stop(): void;
 }
 
+const MAX_TIMEOUT_MS = 2_147_483_647;
+
 function fromTimeout(timer: NodeJS.Timeout): StopHandle {
   return {
     stop() {
@@ -23,7 +25,37 @@ function fromTimeout(timer: NodeJS.Timeout): StopHandle {
   };
 }
 
-export class Scheduler {
+/** Schedules toward a deadline without letting Node truncate a long timeout. */
+function scheduleAt(target: number, callback: () => void): StopHandle {
+  let stopped = false;
+  let timer: NodeJS.Timeout | undefined = undefined;
+
+  function wake(): void {
+    if (stopped) {
+      return;
+    }
+
+    const remaining = target - Date.now();
+    if (remaining <= 0) {
+      callback();
+      return;
+    }
+
+    timer = setTimeout(wake, Math.min(remaining, MAX_TIMEOUT_MS));
+  }
+
+  wake();
+  return {
+    stop() {
+      stopped = true;
+      if (timer !== undefined) {
+        clearTimeout(timer);
+      }
+    },
+  };
+}
+
+class Scheduler {
   private readonly agent: Agent;
   private readonly signal: AbortSignal;
   private heartbeatHandle: StopHandle | undefined = undefined;
@@ -61,7 +93,7 @@ export class Scheduler {
       }
       try {
         const cfg = vb.parse(CronJobConfigSchema, JSON.parse(row.config));
-        this.scheduleCronJob(cfg);
+        this.scheduleCronJob(cfg, true);
       } catch (error) {
         warning(
           "Scheduler: failed to parse persisted cron job",
@@ -137,10 +169,13 @@ export class Scheduler {
     );
   }
 
-  private scheduleCronJob(job: CronJobConfig): void {
+  private scheduleCronJob(job: CronJobConfig, runPastDue = false): void {
     if (this.signal.aborted) {
       return;
     }
+
+    this.cronHandles.get(job.id)?.stop();
+    this.cronHandles.delete(job.id);
 
     const { schedule } = job;
 
@@ -149,31 +184,39 @@ export class Scheduler {
       return;
     }
 
-    let delayMs = 0;
-    const recurring = "every" in schedule;
+    const intervalMs = "every" in schedule ? schedule.every * 1000 : undefined;
+    let target = 0;
 
     if ("every" in schedule) {
-      delayMs = schedule.every * 1000;
+      target = Date.now() + schedule.every * 1000;
     } else {
-      const target = new Date(schedule.at).getTime();
-      delayMs = target - Date.now();
+      target = new Date(schedule.at).getTime();
+      const delayMs = target - Date.now();
 
       if (delayMs <= 0) {
-        debug("Scheduler: one-shot job", colors.keyword(job.id), "is in the past — skipping");
-        return;
+        if (!runPastDue) {
+          debug("Scheduler: one-shot job", colors.keyword(job.id), "is in the past — skipping");
+          return;
+        }
+        target = Date.now();
+        debug(
+          "Scheduler: one-shot job",
+          colors.keyword(job.id),
+          "is in the past — running promptly",
+        );
       }
     }
 
     const { agent, signal } = this;
+    let handle: StopHandle | undefined = undefined;
 
-    const fire = (): void => {
-      if (signal.aborted) {
-        return;
-      }
-
+    function fire(this: Scheduler): void {
       // cron.ts imports harness/index.ts which imports scheduler/index.ts — must stay dynamic.
       // oxlint-disable-next-line typescript/no-floating-promises
       (async (): Promise<void> => {
+        if (signal.aborted || this.cronHandles.get(job.id) !== handle) {
+          return;
+        }
         try {
           const { runCronJob } = await import("#scheduler/cron.js");
           await runCronJob(agent, job);
@@ -183,21 +226,34 @@ export class Scheduler {
             colors.keyword(job.id),
             error instanceof Error ? error.message : String(error),
           );
+        } finally {
+          if (this.cronHandles.get(job.id) === handle) {
+            if (intervalMs !== undefined && !this.signal.aborted) {
+              target = Date.now() + intervalMs;
+              handle = scheduleAt(target, fire.bind(this));
+              this.cronHandles.set(job.id, handle);
+              debug(
+                "Scheduler: cron job",
+                colors.keyword(job.id),
+                "scheduled in",
+                `${target - Date.now()}ms`,
+              );
+            } else {
+              this.cronHandles.delete(job.id);
+            }
+          }
         }
       })();
+    }
 
-      // oxlint-disable-next-line typescript/no-unnecessary-condition
-      if (recurring && !signal.aborted) {
-        const timer = setTimeout(fire, delayMs);
-        this.cronHandles.set(job.id, fromTimeout(timer));
-      } else {
-        this.cronHandles.delete(job.id);
-      }
-    };
-
-    const timer = setTimeout(fire, delayMs);
-    this.cronHandles.set(job.id, fromTimeout(timer));
-    debug("Scheduler: cron job", colors.keyword(job.id), "scheduled in", `${delayMs}ms`);
+    handle = scheduleAt(target, fire.bind(this));
+    this.cronHandles.set(job.id, handle);
+    debug(
+      "Scheduler: cron job",
+      colors.keyword(job.id),
+      "scheduled in",
+      `${target - Date.now()}ms`,
+    );
   }
 
   private scheduleCronExpression(job: CronJobConfig, expression: string): void {
@@ -223,7 +279,10 @@ export class Scheduler {
       }
     });
 
+    this.cronHandles.get(job.id)?.stop();
     this.cronHandles.set(job.id, cronJob);
     debug("Scheduler: cron expression job", colors.keyword(job.id), "scheduled:", expression);
   }
 }
+
+export { MAX_TIMEOUT_MS, Scheduler, scheduleAt };

@@ -380,22 +380,6 @@ function applyTopicSubstitution(messages: Message[], summaries: Summary[]): Mess
     }
   }
 
-  const compactedIds = new Set<string>();
-  for (const summary of summaries) {
-    let inRange = false;
-    for (const msg of messages) {
-      if (msg.id === summary.startMessageId) {
-        inRange = true;
-      }
-      if (inRange && msg.id !== undefined && !preservedIds.has(msg.id)) {
-        compactedIds.add(msg.id);
-      }
-      if (msg.id === summary.endMessageId) {
-        inRange = false;
-      }
-    }
-  }
-
   const result: Message[] = [];
   let idx = 0;
 
@@ -413,9 +397,19 @@ function applyTopicSubstitution(messages: Message[], summaries: Summary[]): Mess
       continue;
     }
 
+    let endIdx = idx;
+    while (endIdx < messages.length && messages[endIdx]?.id !== summary.endMessageId) {
+      endIdx++;
+    }
+    if (endIdx === messages.length) {
+      result.push(msg);
+      idx++;
+      continue;
+    }
+
     const preserved: Message[] = [];
     let secondaryIdx = idx;
-    while (secondaryIdx < messages.length) {
+    while (secondaryIdx <= endIdx) {
       const rangeMsg = messages[secondaryIdx];
       if (rangeMsg === undefined) {
         secondaryIdx++;

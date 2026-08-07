@@ -12,6 +12,7 @@ import type {
   Content,
   ImageContent,
   ImageRef,
+  TextContent,
   ToolResponseContent,
   VideoContent,
   VideoRef,
@@ -65,8 +66,9 @@ function isImageContent(ct: unknown): ct is ImageContent {
 
 function serializeHistory(
   history: Message[],
+  historyCursor: number,
   agentSlug: string,
-): { json: string; pendingImages: PendingImage[] } {
+): { historyCursor: number; json: string; pendingImages: PendingImage[] } {
   const pendingImages: PendingImage[] = [];
 
   function serializeContent(ct: unknown): unknown {
@@ -105,7 +107,10 @@ function serializeHistory(
     return ct;
   }
 
-  const persistable = history.filter((msg) => !("persist" in msg && msg.persist === false));
+  const persistable = history.filter((msg) => msg.role === "toolResponse" || msg.persist !== false);
+  const persistedCursor = history
+    .slice(0, Math.min(historyCursor, history.length))
+    .filter((msg) => msg.role === "toolResponse" || msg.persist !== false).length;
   const validated = validateHistory(persistable);
 
   // oxlint-disable-next-line oxc/no-map-spread -- must NOT mutate session.history (Object.assign is the bug)
@@ -116,7 +121,42 @@ function serializeHistory(
     return { ...msg, content };
   });
 
-  return { json: JSON.stringify(serialized), pendingImages };
+  return { historyCursor: persistedCursor, json: JSON.stringify(serialized), pendingImages };
+}
+
+function convertLegacyText(content: TextContent): TextContent {
+  if (content.discord !== undefined) {
+    return content;
+  }
+  const match =
+    /^<msg[^>]* from="([^<]+) <([^>]+)>" displayName="([^"]*)" timestamp="([^"]+?)(?: \[[^\]]+\])?"([^>]*)>([\s\S]*)<\/msg>$/u.exec(
+      content.content,
+    );
+  if (match === null) {
+    return content;
+  }
+  const [, username, id, displayName, timestamp, attributes, body] = match;
+  if (
+    username === undefined ||
+    id === undefined ||
+    displayName === undefined ||
+    timestamp === undefined ||
+    body === undefined
+  ) {
+    return content;
+  }
+  const reply = / in-reply-to="([^"]*)"/u.exec(attributes ?? "")?.[1];
+  return {
+    content: body,
+    discord: {
+      author: { displayName, id, username },
+      format: "message",
+      inReplyTo: reply,
+      mentionsYou: (attributes ?? "").includes(' mentions="YOU"'),
+      timestamp,
+    },
+    type: "text",
+  };
 }
 
 async function deserializeHistory(json: string, agentSlug: string): Promise<Message[]> {
@@ -200,7 +240,9 @@ async function deserializeHistory(json: string, agentSlug: string): Promise<Mess
     if (msg.role === "user") {
       if (Array.isArray(msg.content)) {
         const resolved = await Promise.all(msg.content.map(deserializeUserContent));
-        const content = resolved.filter((it): it is UserContent => it !== undefined);
+        const content = resolved
+          .filter((it): it is UserContent => it !== undefined)
+          .map((it) => (it.type === "text" ? convertLegacyText(it) : it));
         messages.push({
           ...msg,
           content: content.length > 0 ? content : { content: "", type: "text" },
@@ -209,21 +251,28 @@ async function deserializeHistory(json: string, agentSlug: string): Promise<Mess
         const resolved = await deserializeUserContent(msg.content);
         // If the sole content was media that failed to restore, use an empty
         // text block to avoid a malformed message.
-        const content = resolved ?? ({ content: "", type: "text" } as const);
+        let content: UserContent = { content: "", type: "text" };
+        if (resolved !== undefined) {
+          content = resolved.type === "text" ? convertLegacyText(resolved) : resolved;
+        }
         messages.push({ ...msg, content });
       }
     } else if (msg.role === "assistant") {
       if (Array.isArray(msg.content)) {
         const content = msg.content
           .map((it) => deserializeAssistantContent(it))
-          .filter((it): it is AssistantContent => it !== undefined);
+          .filter((it): it is AssistantContent => it !== undefined)
+          .map((it) => (it.type === "text" ? convertLegacyText(it) : it));
         messages.push({
           ...msg,
           content: content.length > 0 ? content : { content: "", type: "text" },
         });
       } else {
-        const content =
-          deserializeAssistantContent(msg.content) ?? ({ content: "", type: "text" } as const);
+        const resolved = deserializeAssistantContent(msg.content);
+        let content: AssistantContent = { content: "", type: "text" };
+        if (resolved !== undefined) {
+          content = resolved.type === "text" ? convertLegacyText(resolved) : resolved;
+        }
         messages.push({ ...msg, content });
       }
     } else {
@@ -293,7 +342,11 @@ const pending = new Map<string, { timer: NodeJS.Timeout; flush(this: void): void
 function flushAllSessions(): void {
   for (const { timer, flush } of pending.values()) {
     clearTimeout(timer);
-    flush();
+    try {
+      flush();
+    } catch (error) {
+      warning("Failed to flush session during shutdown:", error);
+    }
   }
 }
 
@@ -306,7 +359,11 @@ function flushSession(agentSlug: string, session: Session): void {
   const db = getDb(agentSlug);
   const sessionId = session.id();
 
-  const { json: historyJson, pendingImages } = serializeHistory(session.history, agentSlug);
+  const {
+    historyCursor,
+    json: historyJson,
+    pendingImages,
+  } = serializeHistory(session.history, session.historyCursor, agentSlug);
 
   let meta: object | undefined = undefined;
   if (session.channel === "discord") {
@@ -351,7 +408,7 @@ function flushSession(agentSlug: string, session: Session): void {
       activeFileSections: JSON.stringify(activeFileSections),
       channel: session.channel,
       history: historyJson,
-      historyCursor: session.historyCursor,
+      historyCursor,
       id: sessionId,
       lastActivity,
       meta: JSON.stringify(meta),
@@ -361,7 +418,7 @@ function flushSession(agentSlug: string, session: Session): void {
       set: {
         activeFileSections: JSON.stringify(activeFileSections),
         history: historyJson,
-        historyCursor: session.historyCursor,
+        historyCursor,
         lastActivity,
         meta: JSON.stringify(meta),
         openedFiles: JSON.stringify([...session.openedFiles]),
@@ -392,109 +449,113 @@ async function loadSessions(agentSlug: string): Promise<Map<string, Session>> {
   const map = new Map<string, Session>();
 
   for (const row of rows) {
-    let rowId = row.id;
-    const history = await deserializeHistory(row.history, agentSlug);
-    const openedFiles = new Set(vb.parse(vb.array(vb.string()), JSON.parse(row.openedFiles)));
+    try {
+      let rowId = row.id;
+      const history = await deserializeHistory(row.history, agentSlug);
+      const openedFiles = new Set(vb.parse(vb.array(vb.string()), JSON.parse(row.openedFiles)));
 
-    const activeFileSectionsRaw = vb.safeParse(
-      vb.record(vb.string(), vb.array(vb.string())),
-      JSON.parse(row.activeFileSections),
-    );
-    const activeFileSections = new Map<string, Set<string>>();
-    if (activeFileSectionsRaw.success) {
-      for (const [pth, sections] of Object.entries(activeFileSectionsRaw.output)) {
-        activeFileSections.set(pth, new Set(sections));
-      }
-    }
-
-    const metaJson: unknown = JSON.parse(row.meta);
-
-    let session: Session | undefined = undefined;
-    if (row.channel === "discord") {
-      const meta = vb.parse(DiscordMetaSchema, metaJson);
-      session = new DiscordSession({
-        channelId: meta.channelId,
-        guildId: meta.guildId,
-        isNsfw: meta.isNsfw,
-        parentChannelId: meta.parentChannelId,
-        selectedModel: meta.selectedModel,
-        selectedProvider: meta.selectedProvider,
-      });
-    } else if (row.channel === "matrix") {
-      const meta = vb.parse(MatrixMetaSchema, metaJson);
-      session = new MatrixSession(meta.roomId);
-      session.selectedModel = meta.selectedModel;
-      session.selectedProvider = meta.selectedProvider;
-    } else if (row.channel === "internal") {
-      const legacyInternalId = !row.id.startsWith("internal:");
-      const name = legacyInternalId ? row.id : row.id.slice("internal:".length);
-      session = new NamedInternalSession(name);
-      if (legacyInternalId) {
-        const newId = session.id();
-        const existing = db
-          .select({ id: sessions.id })
-          .from(sessions)
-          .where(eq(sessions.id, newId))
-          .get();
-        if (existing !== undefined) {
-          warning(
-            "Skipping legacy internal session because a canonical row already exists:",
-            row.id,
-            newId,
-          );
-          continue;
+      const activeFileSectionsRaw = vb.safeParse(
+        vb.record(vb.string(), vb.array(vb.string())),
+        JSON.parse(row.activeFileSections),
+      );
+      const activeFileSections = new Map<string, Set<string>>();
+      if (activeFileSectionsRaw.success) {
+        for (const [pth, sections] of Object.entries(activeFileSectionsRaw.output)) {
+          activeFileSections.set(pth, new Set(sections));
         }
-        db.insert(sessions)
-          .values({
-            activeFileSections: row.activeFileSections,
-            channel: row.channel,
-            history: row.history,
-            historyCursor: row.historyCursor,
-            id: newId,
-            lastActivity: row.lastActivity,
-            meta: row.meta,
-            openedFiles: row.openedFiles,
-          })
-          .run();
-        db.update(images).set({ sessionId: newId }).where(eq(images.sessionId, row.id)).run();
-        db.update(summariesTable)
-          .set({ sessionId: newId })
-          .where(eq(summariesTable.sessionId, row.id))
-          .run();
-        db.delete(sessions).where(eq(sessions.id, row.id)).run();
-        rowId = newId;
       }
-    } else if (row.channel === "tui") {
-      // TUI session in DB is primarily for history inspection.
-      // We don't have the bridge here, it will be injected by the TUI app if needed.
-      session = new TuiSession();
-    } else {
-      // Unknown or legacy channel type — skip.
-      continue;
-    }
 
-    const common = vb.safeParse(
-      vb.looseObject({
-        historyBarrier: vb.exactOptional(vb.number()),
-        lastContextWarningCursor: vb.exactOptional(LastContextWarningCursorSchema),
-        selectedModel: vb.exactOptional(nonEmptyString),
-        selectedProvider: vb.exactOptional(nonEmptyString),
-      }),
-      metaJson,
-    );
-    if (common.success) {
-      session.historyBarrier = common.output.historyBarrier;
-      session.lastContextWarningCursor = common.output.lastContextWarningCursor;
-      session.selectedModel ??= common.output.selectedModel;
-      session.selectedProvider ??= common.output.selectedProvider;
-    }
-    session.history = history;
-    session.historyCursor = row.historyCursor;
-    session.openedFiles = openedFiles;
-    session.activeFileSections = activeFileSections;
+      const metaJson: unknown = JSON.parse(row.meta);
 
-    session.lastActivity = row.lastActivity === null ? 0 : Date.parse(row.lastActivity);
-    map.set(rowId, session);
+      let session: Session | undefined = undefined;
+      if (row.channel === "discord") {
+        const meta = vb.parse(DiscordMetaSchema, metaJson);
+        session = new DiscordSession({
+          channelId: meta.channelId,
+          guildId: meta.guildId,
+          isNsfw: meta.isNsfw,
+          parentChannelId: meta.parentChannelId,
+          selectedModel: meta.selectedModel,
+          selectedProvider: meta.selectedProvider,
+        });
+      } else if (row.channel === "matrix") {
+        const meta = vb.parse(MatrixMetaSchema, metaJson);
+        session = new MatrixSession(meta.roomId);
+        session.selectedModel = meta.selectedModel;
+        session.selectedProvider = meta.selectedProvider;
+      } else if (row.channel === "internal") {
+        const legacyInternalId = !row.id.startsWith("internal:");
+        const name = legacyInternalId ? row.id : row.id.slice("internal:".length);
+        session = new NamedInternalSession(name);
+        if (legacyInternalId) {
+          const newId = session.id();
+          const existing = db
+            .select({ id: sessions.id })
+            .from(sessions)
+            .where(eq(sessions.id, newId))
+            .get();
+          if (existing !== undefined) {
+            warning(
+              "Skipping legacy internal session because a canonical row already exists:",
+              row.id,
+              newId,
+            );
+            continue;
+          }
+          db.insert(sessions)
+            .values({
+              activeFileSections: row.activeFileSections,
+              channel: row.channel,
+              history: row.history,
+              historyCursor: row.historyCursor,
+              id: newId,
+              lastActivity: row.lastActivity,
+              meta: row.meta,
+              openedFiles: row.openedFiles,
+            })
+            .run();
+          db.update(images).set({ sessionId: newId }).where(eq(images.sessionId, row.id)).run();
+          db.update(summariesTable)
+            .set({ sessionId: newId })
+            .where(eq(summariesTable.sessionId, row.id))
+            .run();
+          db.delete(sessions).where(eq(sessions.id, row.id)).run();
+          rowId = newId;
+        }
+      } else if (row.channel === "tui") {
+        // TUI session in DB is primarily for history inspection.
+        // We don't have the bridge here, it will be injected by the TUI app if needed.
+        session = new TuiSession();
+      } else {
+        // Unknown or legacy channel type — skip.
+        continue;
+      }
+
+      const common = vb.safeParse(
+        vb.looseObject({
+          historyBarrier: vb.exactOptional(vb.number()),
+          lastContextWarningCursor: vb.exactOptional(LastContextWarningCursorSchema),
+          selectedModel: vb.exactOptional(nonEmptyString),
+          selectedProvider: vb.exactOptional(nonEmptyString),
+        }),
+        metaJson,
+      );
+      if (common.success) {
+        session.historyBarrier = common.output.historyBarrier;
+        session.lastContextWarningCursor = common.output.lastContextWarningCursor;
+        session.selectedModel ??= common.output.selectedModel;
+        session.selectedProvider ??= common.output.selectedProvider;
+      }
+      session.history = history;
+      session.historyCursor = Math.min(row.historyCursor, history.length);
+      session.openedFiles = openedFiles;
+      session.activeFileSections = activeFileSections;
+
+      session.lastActivity = row.lastActivity === null ? 0 : Date.parse(row.lastActivity);
+      map.set(rowId, session);
+    } catch (error) {
+      warning("Skipping unreadable session:", row.id, error);
+    }
   }
 
   // Load all summaries and attach them to their sessions.
@@ -560,7 +621,7 @@ function deleteSession(agentSlug: string, sessionId: string): void {
   db.delete(sessions).where(eq(sessions.id, sessionId)).run();
 }
 
-function resetSession(agentSlug: string, sessionId: string): void {
+function resetSession(agentSlug: string, sessionId: string, historyBarrier?: number): void {
   const db = getDb(agentSlug);
 
   // Prune image files that are no longer referenced by any other session.
@@ -597,8 +658,27 @@ function resetSession(agentSlug: string, sessionId: string): void {
 
   db.delete(images).where(eq(images.sessionId, sessionId)).run();
   db.delete(summariesTable).where(eq(summariesTable.sessionId, sessionId)).run();
+  const row = db
+    .select({ meta: sessions.meta })
+    .from(sessions)
+    .where(eq(sessions.id, sessionId))
+    .get();
+  const meta =
+    historyBarrier === undefined || row === undefined
+      ? undefined
+      : JSON.stringify({
+          ...vb.parse(vb.record(vb.string(), vb.unknown()), JSON.parse(row.meta)),
+          historyBarrier,
+        });
+
   db.update(sessions)
-    .set({ activeFileSections: "{}", history: "[]", historyCursor: 0, openedFiles: "[]" })
+    .set({
+      activeFileSections: "{}",
+      history: "[]",
+      historyCursor: 0,
+      ...(meta === undefined ? {} : { meta }),
+      openedFiles: "[]",
+    })
     .where(eq(sessions.id, sessionId))
     .run();
 }
@@ -614,7 +694,11 @@ function saveSession(agentSlug: string, session: Session): void {
 
   function flush(): void {
     pending.delete(key);
-    flushSession(agentSlug, session);
+    try {
+      flushSession(agentSlug, session);
+    } catch (error) {
+      warning("Failed to persist session:", session.id(), error);
+    }
   }
 
   pending.set(key, { flush, timer: setTimeout(flush, DEBOUNCE_MS) });
@@ -766,8 +850,12 @@ function updateSessionVideoRefs(
     return;
   }
 
-  const raw = vb.parse(vb.record(vb.string(), vb.unknown()), JSON.parse(row.history));
-  const entries = Object.values(raw).filter((it) => isMessage(it));
+  const raw: unknown = JSON.parse(row.history);
+  const entries = Array.isArray(raw)
+    ? raw.filter((it) => isMessage(it))
+    : Object.values(vb.parse(vb.record(vb.string(), vb.unknown()), raw)).filter((it) =>
+        isMessage(it),
+      );
 
   for (const msg of entries) {
     const contentArr = Array.isArray(msg.content) ? msg.content : [msg.content];

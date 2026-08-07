@@ -2,6 +2,7 @@ import type { KeyPool } from "@cireilclaw/sdk";
 import * as vb from "valibot";
 
 import { DefaultReasoningBudget } from "#config/schemas/engine.js";
+import { renderTextContent } from "#engine/content.js";
 import type { ImageContent, TextContent, ToolResponseContent } from "#engine/content.js";
 import type { Context, UsageInfo } from "#engine/context.js";
 import { GenerationNoToolCallsError } from "#engine/errors.js";
@@ -74,7 +75,7 @@ interface AnthropicAssistantMessage {
 type AnthropicMessage = AnthropicUserMessage | AnthropicAssistantMessage;
 
 function translateText(content: TextContent): AnthropicTextBlock {
-  return { text: content.content, type: "text" };
+  return { text: renderTextContent(content), type: "text" };
 }
 
 async function translateImage(content: ImageContent): Promise<AnthropicImageBlock> {
@@ -214,7 +215,7 @@ async function translateMessages(
           });
           lastToolUseIds.add(block.id);
         } else if (block.type === "text") {
-          blocks.push({ text: block.content, type: "text" });
+          blocks.push({ text: renderTextContent(block), type: "text" });
         } else if (block.type === "thinking" && block.signature !== undefined) {
           // Signature is required to re-send Anthropic thinking blocks.
           blocks.push({
