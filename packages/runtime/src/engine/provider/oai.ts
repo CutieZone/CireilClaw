@@ -422,6 +422,7 @@ async function generate(
       ...context.messages.map(translateMsg),
     ],
     model,
+    prompt_cache_key: context.sessionId,
     tool_choice: "required",
     tools: context.tools.map(translateTool),
   };

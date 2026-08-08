@@ -2,9 +2,10 @@ import { KeyPool } from "@cireilclaw/sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ToolResponseContent, VideoContent } from "#engine/content.js";
+import type { Context } from "#engine/context.js";
 import type { Message } from "#engine/message.js";
 
-import { flattenContentParts, translateMsg, uploadMedia } from "./oai.js";
+import { flattenContentParts, generate, translateMsg, uploadMedia } from "./oai.js";
 
 function video(): VideoContent {
   return {
@@ -166,5 +167,47 @@ describe("translateMsg", () => {
       role: "tool",
       tool_call_id: "t1",
     });
+  });
+});
+
+describe("generate", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("uses the canonical session ID as the prompt cache key", async () => {
+    let requestBody: string | undefined = undefined;
+    const fetchMock = vi.fn((_url: string | URL, init?: RequestInit) => {
+      requestBody = typeof init?.body === "string" ? init.body : undefined;
+      return Response.json({
+        choices: [
+          {
+            finish_reason: "tool_calls",
+            message: {
+              tool_calls: [
+                {
+                  function: { arguments: "{}", name: "respond" },
+                  id: "call-1",
+                  type: "function",
+                },
+              ],
+            },
+          },
+        ],
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const context: Context = {
+      messages: [],
+      sessionId: "discord:channel-1|guild-1",
+      systemPrompt: "Use tools.",
+      tools: [],
+    };
+
+    await generate(context, "https://api.example/v1", new KeyPool("test-key"), "test-model", {});
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(requestBody).toContain('"prompt_cache_key":"discord:channel-1|guild-1"');
   });
 });
