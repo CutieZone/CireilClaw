@@ -20,6 +20,7 @@
             nodejs_latest
             pnpm
             bubblewrap
+            incus
             vips # required by sharp for building from source on NixOS
           ];
         };

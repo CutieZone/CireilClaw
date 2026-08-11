@@ -4,10 +4,11 @@ CireilClaw exists so agents can act freely without making their mistakes catastr
 
 ## Prerequisites
 
-- **Linux** — CireilClaw relies on Linux kernel namespaces via [bubblewrap](https://github.com/containers/bubblewrap) for sandboxing. macOS/Windows users need a Linux VM or WSL2.
+- **Linux** — CireilClaw relies on Linux kernel namespaces via [bubblewrap](https://github.com/containers/bubblewrap) or [Incus](https://linuxcontainers.org/incus/) for sandboxing. macOS/Windows users need a Linux VM or WSL2.
 - **Node.js** — v22+ recommended.
 - **pnpm** — Package manager.
 - **bubblewrap** (`bwrap`) — Must be available on `PATH`.
+- **Incus** (`incus`) — Required only when `backend = "incus"`. Initialize its daemon and restrict Unix-socket access to the trusted runtime user.
 
 <details>
 <summary>NixOS (recommended)</summary>
@@ -25,7 +26,7 @@ Or manually:
 nix develop
 ```
 
-This gives you `node`, `pnpm`, `bwrap`, and `vips` (needed by sharp).
+This gives you `node`, `pnpm`, `bwrap`, `incus`, and `vips` (needed by sharp).
 
 </details>
 
@@ -92,10 +93,10 @@ You will be prompted for:
 
 1. **Agent name** — Slugified to a filesystem-safe identifier (e.g. "My Bot" becomes `my-bot`).
 2. **Short description** — Optional. Seeded into the identity block.
-3. **Tool preset** — Writes the initial `tools.toml` allowlist:
+3. **Tool preset** — Writes the initial `tools.toml` tool configuration:
    - `minimal` — Core file/context tools plus `respond`/`no-response`.
    - `standard` — Enables the core tools plus non-exec built-ins such as write/edit, session/history lookup, attachment download, scheduling, and reactions.
-   - `full` — Standard plus sandboxed command execution (prompts for an allowed binaries whitelist).
+   - `full` — Standard plus sandboxed command execution (prompts for the Bubblewrap binary allowlist in `sandbox.toml`).
 
    Core tools start enabled in generated configs, but they are not immutable. You can explicitly set any core tool to `false` in `tools.toml` if you accept the consequences; disabling `respond`/`no-response` prevents normal turns from completing.
 
@@ -203,7 +204,6 @@ prune-boundaries     = true
 
 [exec]
 enabled  = true
-binaries = ["git", "python3"]    # Allowed commands whitelist
 inline   = true                  # Inline small output; default: true
 inlineThresholdBytes = 16384     # Combined stdout/stderr threshold
 timeout  = 60000                 # ms, minimum 1000
@@ -277,14 +277,31 @@ schedule = { every = 86400 }
 <details>
 <summary><code>config/sandbox.toml</code> (per-agent, optional)</summary>
 
-Defines custom bind mounts that appear under `/workspace/` in the sandbox.
+Defines the command-execution backend and custom bind mounts that appear under `/workspace/` in the sandbox.
 
 ```toml
+[bwrap]
+binaries = ["git", "python3"]
+
 [[mounts]]
 source = "/home/user/projects/my-app"
 target = "project"
 mode = "rw"
 ```
+
+`backend` defaults to `"bwrap"`. To give an agent a persistent Incus system container, select `"incus"` and supply an image reference:
+
+```toml
+backend = "incus"
+
+[incus]
+image = "images:fedora/42"
+profiles = []
+```
+
+The first command creates an instance named `cireilclaw-<agent slug>` and sets its runtime hostname to the agent slug before each agent command; later commands execute in the same instance. The runtime adds read-write disk devices for `/workspace`, `/memories`, `/skills`, and `/tasks`, and a read-only device for `/blocks`. It maps the caller's host UID/GID to the same IDs in the container, preserving two-way access to those host-owned directories. Incus executes whatever is installed in the selected image; the `[bwrap]` binary list applies only to Bubblewrap. Custom mount sources must be allowed by the selected Incus project.
+
+Omit `project` to use the caller's Incus project (normally the restricted `user-<uid>` project for an `incus` group member). That project must allow `raw.idmap` and permit the runtime user's UID/GID with `restricted.idmap.uid` and `restricted.idmap.gid`; this remains limited to that one user identity. Set `project` only when the runtime has access to a specific operator-managed project. Incus's local Unix socket and `incus-admin` membership grant broad host authority. They are runtime-only integration points: never expose them, the client configuration, or an `incus` binary to the agent container.
 
 </details>
 

@@ -33,12 +33,12 @@ prune-boundaries = true
 
 # --- Exec tool (sandboxed command execution) ---
 # To disable, use `exec = false`.
-# To enable, uncomment the section below and list allowed binaries.
+# Binary access is configured by the selected sandbox backend. Bubblewrap uses
+# [bwrap].binaries in sandbox.toml; Incus uses packages installed in its image.
 exec = false
 
 # [exec]
 # enabled = true
-# binaries = ["curl", "jq", "grep"]     # (required) Whitelisted binaries (best-effort)
 # timeout = 60000                        # Kill timeout in ms. Default: 60000
 # hostEnvPassthrough = []                # Host env vars to pass through. Default: []
 #

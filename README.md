@@ -6,7 +6,7 @@ CireilClaw exists so agents can act freely without making their mistakes catastr
 
 ## Core Tenets
 
-- Safety: Principle of Least Privilege, Separation of Concerns, and [`bubblewrap`](https://github.com/containers/bubblewrap). The system should enforce boundaries, not merely ask the model to behave.
+- Safety: Principle of Least Privilege, Separation of Concerns, and Linux sandbox backends ([`bubblewrap`](https://github.com/containers/bubblewrap) by default, optional persistent [Incus](https://linuxcontainers.org/incus/) containers). The system should enforce boundaries, not merely ask the model to behave.
 - Sanity: Debuggable, non-obtuse code, with useful comments. Comments are generally meant to explain _why_, not _what_ or _how_; the latter two are the code's job.
 - Speedy: Should run well even in a limited environment
 - Composability: Should be completely configurable without editing code; disabling components, enabling features. Hot-reload possibility.
@@ -21,7 +21,7 @@ The sandbox is part of that ethos. It is not just a restriction mechanism; it is
 
 See [INSTALLATION.md](INSTALLATION.md) for setup instructions, configuration reference, and agent creation.
 
-The `init` wizard writes each agent's `config/tools.toml` allowlist. Core tools such as `respond`, `no-response`, `read`, `open-file`, `list-dir`, `read-skill`, and `session-info` start enabled in generated configs, but they are still just config entries: set one to `false` to disable it. Disabling `respond`/`no-response` prevents normal turns from completing.
+The `init` wizard writes each agent's `config/tools.toml` and, for the Bubblewrap backend, its command allowlist in `config/sandbox.toml`. Core tools such as `respond`, `no-response`, `read`, `open-file`, `list-dir`, `read-skill`, and `session-info` start enabled in generated configs, but they are still just config entries: set one to `false` to disable it. Disabling `respond`/`no-response` prevents normal turns from completing.
 
 ## Project State
 
@@ -43,7 +43,7 @@ See [docs/plugins.md](docs/plugins.md) for the full guide: writing, publishing, 
 
 ## Platform Requirements
 
-**Linux-native.** The sandbox relies on Linux kernel features (namespaces, cgroups) via `bubblewrap`. There is no cross-platform sandbox implementation.
+**Linux-native.** The sandbox relies on Linux kernel features (namespaces, cgroups) via `bubblewrap` or Incus. There is no cross-platform sandbox implementation.
 
 | Platform    | Status                                                                         |
 | ----------- | ------------------------------------------------------------------------------ |

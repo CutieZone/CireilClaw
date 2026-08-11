@@ -7,11 +7,6 @@ const DefaultExecInlineThresholdBytes = 16_384;
 const DefaultExecPreviewLines = 20;
 
 const ExecToolConfigSchema = vb.strictObject({
-  binaries: vb.pipe(
-    vb.array(nonEmptyString),
-    vb.minLength(1),
-    vb.description("Allowed binaries within the exec tool. This is a best-effort allowlist."),
-  ),
   enabled: vb.pipe(
     vb.exactOptional(vb.boolean(), false),
     vb.description("Whether the exec tool is enabled"),

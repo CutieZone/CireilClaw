@@ -9,21 +9,21 @@ describe("SandboxConfigSchema", () => {
       const input = {
         mounts: [{ mode: "rw", source: "/home/user/project", target: "project" }],
       };
-      expect(vb.parse(SandboxConfigSchema, input)).toEqual(input);
+      expect(vb.parse(SandboxConfigSchema, input)).toEqual({ ...input, backend: "bwrap" });
     });
 
     it("accepts a valid mount with ~/ source", () => {
       const input = {
         mounts: [{ mode: "ro", source: "~/projects/my-app", target: "app" }],
       };
-      expect(vb.parse(SandboxConfigSchema, input)).toEqual(input);
+      expect(vb.parse(SandboxConfigSchema, input)).toEqual({ ...input, backend: "bwrap" });
     });
 
     it("accepts nested target paths", () => {
       const input = {
         mounts: [{ mode: "rw", source: "/data/lib", target: "libs/data" }],
       };
-      expect(vb.parse(SandboxConfigSchema, input)).toEqual(input);
+      expect(vb.parse(SandboxConfigSchema, input)).toEqual({ ...input, backend: "bwrap" });
     });
 
     it("rejects source that is neither absolute nor ~/ ", () => {
@@ -70,8 +70,32 @@ describe("SandboxConfigSchema", () => {
   });
 
   describe("SandboxConfigSchema", () => {
+    it("defaults to the Bubblewrap backend", () => {
+      expect(vb.parse(SandboxConfigSchema, { mounts: [] })).toEqual({
+        backend: "bwrap",
+        mounts: [],
+      });
+    });
+
+    it("accepts an Incus backend", () => {
+      expect(
+        vb.parse(SandboxConfigSchema, {
+          backend: "incus",
+          incus: { image: "images:fedora/42" },
+          mounts: [],
+        }),
+      ).toEqual({
+        backend: "incus",
+        incus: { image: "images:fedora/42", profiles: [] },
+        mounts: [],
+      });
+    });
+
     it("accepts empty mounts array", () => {
-      expect(vb.parse(SandboxConfigSchema, { mounts: [] })).toEqual({ mounts: [] });
+      expect(vb.parse(SandboxConfigSchema, { mounts: [] })).toEqual({
+        backend: "bwrap",
+        mounts: [],
+      });
     });
 
     it("accepts multiple mounts", () => {
@@ -81,14 +105,14 @@ describe("SandboxConfigSchema", () => {
           { mode: "ro" as const, source: "/home/user/b", target: "b" },
         ],
       };
-      expect(vb.parse(SandboxConfigSchema, input)).toEqual(input);
+      expect(vb.parse(SandboxConfigSchema, input)).toEqual({ ...input, backend: "bwrap" });
     });
     it("accepts devices with usb enabled", () => {
       const input = {
         devices: { usb: true },
         mounts: [],
       };
-      expect(vb.parse(SandboxConfigSchema, input)).toEqual(input);
+      expect(vb.parse(SandboxConfigSchema, input)).toEqual({ ...input, backend: "bwrap" });
     });
 
     it("accepts devices with usb disabled", () => {
@@ -96,11 +120,14 @@ describe("SandboxConfigSchema", () => {
         devices: { usb: false },
         mounts: [],
       };
-      expect(vb.parse(SandboxConfigSchema, input)).toEqual(input);
+      expect(vb.parse(SandboxConfigSchema, input)).toEqual({ ...input, backend: "bwrap" });
     });
 
     it("accepts missing devices field", () => {
-      expect(vb.parse(SandboxConfigSchema, { mounts: [] })).toEqual({ mounts: [] });
+      expect(vb.parse(SandboxConfigSchema, { mounts: [] })).toEqual({
+        backend: "bwrap",
+        mounts: [],
+      });
     });
 
     it("accepts devices without usb key", () => {
@@ -109,6 +136,7 @@ describe("SandboxConfigSchema", () => {
         mounts: [],
       };
       expect(vb.parse(SandboxConfigSchema, input)).toEqual({
+        backend: "bwrap",
         devices: {},
         mounts: [],
       });
@@ -119,7 +147,7 @@ describe("SandboxConfigSchema", () => {
         devices: { all: true },
         mounts: [],
       };
-      expect(vb.parse(SandboxConfigSchema, input)).toEqual(input);
+      expect(vb.parse(SandboxConfigSchema, input)).toEqual({ ...input, backend: "bwrap" });
     });
 
     it("rejects non-boolean all value", () => {

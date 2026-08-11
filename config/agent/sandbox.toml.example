@@ -7,6 +7,33 @@
 
 mounts = []
 
+# [bwrap]
+# # Required when backend = "bwrap". Only these host binaries are made
+# # available to Bubblewrap exec commands.
+# binaries = ["git", "rg", "python3"]
+
+# `backend` defaults to "bwrap". Set it to "incus" to run commands in a
+# persistent Incus system container instead.
+#
+# backend = "incus"
+#
+# [incus]
+# # The image can be any Incus image reference. This example creates Fedora.
+# image = "images:fedora/42"
+# # Optional: use a dedicated project and a profile that supplies network and
+# # root-disk policy for CireilClaw instances.
+# # Omit project to use the caller's Incus project (for a regular `incus`
+# # group member, this is normally the restricted user-<uid> project).
+# # Set it only when the runtime has access to a specific operator-managed
+# # project, for example: project = "cireilclaw"
+# profiles = []
+#
+# Incus automatically bind-mounts the agent's workspace, memories, skills,
+# blocks (read-only), and tasks directories. Custom mounts below still appear
+# under /workspace/. It maps the runtime's host UID/GID to the same IDs in the
+# container, preserving two-way access. In a restricted project, allow only
+# that UID/GID with restricted.idmap.uid/gid and allow raw.idmap before use.
+
 # --- Mount entries ---
 # Each mount maps a host directory into the sandbox.
 # source: Absolute path on the host, or ~/ for home-relative paths.
