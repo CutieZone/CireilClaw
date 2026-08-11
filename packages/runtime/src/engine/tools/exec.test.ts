@@ -48,7 +48,6 @@ function makeToolContext(overrides: ExecOverrides = {}): ToolContext {
     agentSlug: overrides.agentSlug ?? "testagent",
     cfg: {
       exec: {
-        binaries: ["grep", "ls"],
         enabled: true,
         hostEnvPassthrough: [],
         inline: overrides.inline ?? false,
@@ -58,7 +57,7 @@ function makeToolContext(overrides: ExecOverrides = {}): ToolContext {
         previewTail: overrides.previewTail ?? 20,
         timeout: 60_000,
       },
-      sandbox: { devices: {}, mounts: [] },
+      sandbox: { backend: "bwrap", bwrap: { binaries: ["grep", "ls"] }, devices: {}, mounts: [] },
     },
     paths: { resolve: resolveMock },
     session: {
@@ -303,10 +302,10 @@ describe("exec tool output spilling", () => {
     expect(mockFsPromises.writeFile).not.toHaveBeenCalled();
   });
 
-  it("rejects commands not in the allowed binaries list", async () => {
+  it("rejects commands outside the Bubblewrap binary list", async () => {
     const ctx = makeToolContext();
     await expect(exec.execute({ command: "rm" }, ctx)).rejects.toThrow(
-      "not in the allowed binaries list",
+      "sandbox.toml [bwrap] binaries",
     );
     expect(mockSandboxExec).not.toHaveBeenCalled();
   });
@@ -354,10 +353,7 @@ describe("exec tool bash hint", () => {
 
   it("suggests bash -c when an unknown command is used and bash is in the allowlist", async () => {
     const ctx = makeToolContext();
-    if (ctx.cfg.exec === false) {
-      throw new Error("exec should be enabled");
-    }
-    ctx.cfg.exec.binaries = ["grep", "bash"];
+    ctx.cfg.sandbox.bwrap = { binaries: ["grep", "bash"] };
 
     // oxlint-disable-next-line init-declarations
     let captured: { hint?: string; message: string } | undefined;
@@ -369,7 +365,7 @@ describe("exec tool bash hint", () => {
     }
 
     expect(captured).toBeDefined();
-    expect(captured?.message).toMatch(/not in the allowed binaries list/u);
+    expect(captured?.message).toMatch(/sandbox\.toml \[bwrap\] binaries/u);
     expect(captured?.hint).toMatch(/bash -c/u);
   });
 });

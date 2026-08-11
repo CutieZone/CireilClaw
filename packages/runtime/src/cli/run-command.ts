@@ -32,6 +32,13 @@ interface ConfigChangeEvent {
   basePath: string;
 }
 
+function isAbortError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.name === "AbortError" || ("code" in error && error.code === "ABORT_ERR"))
+  );
+}
+
 async function handleConfigChange(event: ConfigChangeEvent): Promise<void> {
   const { agents } = Harness.get();
 
@@ -125,8 +132,11 @@ async function run(flags: Flags): Promise<void> {
     const sessions = await loadSessions(slug);
     agents.set(slug, new Agent(slug, sessions, sc.signal, conditions));
 
-    // oxlint-disable-next-line promise/prefer-await-to-then
+    // oxlint-disable-next-line promise/prefer-await-to-then -- The watcher runs for the process lifetime.
     runWatcher(slug, sc.signal).catch((error: unknown) => {
+      if (sc.signal.aborted && isAbortError(error)) {
+        return;
+      }
       warning("Failed to watch changes", error);
     });
 

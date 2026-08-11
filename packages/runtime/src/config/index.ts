@@ -197,12 +197,16 @@ async function loadSandboxConfig(agentSlug: string): Promise<SandboxConfig> {
   const file = path.join(root(), "agents", agentSlug, "config", "sandbox.toml");
 
   if (!existsSync(file)) {
-    return { mounts: [] };
+    return { backend: "bwrap", bwrap: { binaries: [] }, mounts: [] };
   }
 
   const data = await readFile(file, { encoding: "utf8" });
   const obj = parse(data);
   const config = vb.parse(SandboxConfigSchema, obj);
+
+  if (config.backend === "incus" && config.incus === undefined) {
+    throw new Error(`sandbox.toml for agent '${agentSlug}' selects Incus without an [incus] table`);
+  }
 
   const targets = new Set<string>();
   for (const mount of config.mounts) {

@@ -25,14 +25,28 @@ const DevicesConfigSchema = vb.object({
   usb: vb.optional(vb.boolean()),
 });
 
+const BwrapConfigSchema = vb.strictObject({
+  binaries: vb.array(vb.pipe(vb.string(), vb.minLength(1))),
+});
+
+const IncusConfigSchema = vb.strictObject({
+  image: vb.pipe(vb.string(), vb.minLength(1)),
+  profiles: vb.pipe(vb.exactOptional(vb.array(vb.pipe(vb.string(), vb.minLength(1))), [])),
+  project: vb.optional(vb.pipe(vb.string(), vb.minLength(1))),
+});
+
 type Mount = vb.InferOutput<typeof MountSchema>;
 
 const SandboxConfigSchema = vb.object({
+  backend: vb.pipe(vb.exactOptional(vb.picklist(["bwrap", "incus"]), "bwrap")),
+  bwrap: vb.optional(BwrapConfigSchema),
   devices: vb.optional(DevicesConfigSchema),
+  incus: vb.optional(IncusConfigSchema),
   mounts: vb.array(MountSchema),
 });
 
 type SandboxConfig = vb.InferOutput<typeof SandboxConfigSchema>;
+type IncusConfig = vb.InferOutput<typeof IncusConfigSchema>;
 
-export { SandboxConfigSchema, MountSchema };
-export type { SandboxConfig, Mount };
+export { BwrapConfigSchema, IncusConfigSchema, SandboxConfigSchema, MountSchema };
+export type { IncusConfig, SandboxConfig, Mount };

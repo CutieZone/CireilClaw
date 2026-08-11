@@ -12,7 +12,7 @@ const Schema = vb.strictObject({
     vb.string(),
     vb.nonEmpty(),
     vb.description(
-      "Directory path to list. Sandbox paths (e.g. /workspace/) or exec-visible system paths (e.g. /usr, /nix). Use /bin to list available exec binaries.",
+      "Directory path to list. Sandbox paths (e.g. /workspace/) or exec-visible system paths (e.g. /usr, /nix). With Bubblewrap, use /bin to list configured binaries.",
     ),
   ),
 });
@@ -22,20 +22,30 @@ export const listDir: ToolDef = {
     "List the files and subdirectories at the given path. Returns each entry's name and type (file, directory, or symlink).\n\n" +
     "Allowed path roots: /workspace/, /memories/, /blocks/, /skills/, /usr/, /lib/, /lib64/, /nix/.\n" +
     "Note that paths used here *must* be absolute.\n\n" +
-    "Use /bin to list the binaries available in the exec sandbox (derived from tools config, not the host filesystem).\n\n" +
+    "With Bubblewrap, use /bin to list configured sandbox binaries. Incus containers use their installed image binaries; use exec with ls /bin to inspect them.\n\n" +
     "Use this to explore directory structure before reading or writing specific files.",
   async execute(input: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
     const data = vb.parse(Schema, input);
 
-    // /bin is synthetic in the exec sandbox, so just return configured binaries directly
+    // /bin is synthetic only in the Bubblewrap sandbox.
     if (data.path === "/bin") {
-      const execConfig = ctx.cfg.exec;
+      if (ctx.cfg.sandbox.backend === "incus") {
+        return {
+          entries: [],
+          error: "Use exec with ls /bin to inspect binaries installed in the Incus image.",
+          path: data.path,
+          success: false,
+        };
+      }
 
-      if (execConfig === false || !execConfig.enabled) {
+      if (ctx.cfg.exec === false || !ctx.cfg.exec.enabled) {
         return { entries: [], path: data.path, success: true };
       }
 
-      const items = execConfig.binaries.map((name) => ({ name, type: "symlink" as const }));
+      const items = (ctx.cfg.sandbox.bwrap?.binaries ?? []).map((name) => ({
+        name,
+        type: "symlink" as const,
+      }));
       return { entries: items, path: data.path, success: true };
     }
 

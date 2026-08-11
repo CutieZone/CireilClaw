@@ -6,6 +6,7 @@ import path from "node:path";
 import type { Mount, SandboxConfig } from "#config/schemas/sandbox.js";
 import { debug, warning } from "#output/log.js";
 
+import { execIncus } from "./incus.js";
 import { root } from "./paths.js";
 
 function locate(command: string, pathEnvOverride?: string[]): string | undefined {
@@ -46,7 +47,9 @@ interface ExecConfig {
   hostEnvPassthrough: string[];
   timeout: number;
   agentSlug: string;
+  backend?: SandboxConfig["backend"];
   devices?: SandboxConfig["devices"];
+  incus?: SandboxConfig["incus"];
   mounts?: readonly Mount[];
 }
 
@@ -667,7 +670,17 @@ async function runRaw(
 const SHELL_METACHAR_PATTERN = /[\s"'|&;$`\\]/u;
 
 async function exec(cfg: ExecConfig): Promise<ExecResult> {
-  const { binaries, command, args, hostEnvPassthrough, timeout, agentSlug, devices, mounts } = cfg;
+  const {
+    binaries,
+    command,
+    args,
+    hostEnvPassthrough,
+    timeout,
+    agentSlug,
+    devices,
+    incus,
+    mounts,
+  } = cfg;
 
   // Reject any command with shell metacharacters or spaces
   if (SHELL_METACHAR_PATTERN.test(command)) {
@@ -677,11 +690,48 @@ async function exec(cfg: ExecConfig): Promise<ExecResult> {
     };
   }
 
-  if (!binaries.includes(command)) {
+  if (cfg.backend !== "incus" && !binaries.includes(command)) {
     return {
       error: `Command '${command}' is not in the allowed binaries list.`,
       type: "error",
     };
+  }
+
+  if (cfg.backend === "incus") {
+    if (incus === undefined) {
+      return {
+        error: "Incus sandbox selected without an [incus] configuration table",
+        type: "error",
+      };
+    }
+    const envPath = path.join(root(), "agents", agentSlug, "workspace", ".env");
+    const envResult = parseEnvFile(envPath);
+    if (!Array.isArray(envResult)) {
+      return {
+        error:
+          envResult.hint !== undefined && envResult.hint.length > 0
+            ? `${envResult.message}\n\nHint: ${envResult.hint}`
+            : envResult.message,
+        type: "error",
+      };
+    }
+    const envVars: EnvVar[] = [];
+    for (const key of hostEnvPassthrough) {
+      const value = process.env[key];
+      if (value !== undefined) {
+        envVars.push({ key, value });
+      }
+    }
+    envVars.push(...envResult);
+    return await execIncus({
+      agentSlug,
+      args: args ?? [],
+      command,
+      envVars,
+      incus,
+      mounts: mounts ?? [],
+      timeout,
+    });
   }
 
   const bypassValue =

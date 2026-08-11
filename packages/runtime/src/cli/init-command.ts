@@ -267,17 +267,12 @@ const CORE_TOOLS = new Set([
   "session-info",
 ]);
 
-function buildToolsConfig(
-  preset: ToolPreset,
-  execBinaries: string[] = [],
-): Record<string, unknown> {
+function buildToolsConfig(preset: ToolPreset): Record<string, unknown> {
   const obj: Record<string, unknown> = {};
 
   for (const tool of Object.keys(getToolRegistry())) {
     if (tool === "exec") {
-      // exec needs its own config object; binaries defaults to empty (no commands whitelisted) until configured.
-      obj[tool] =
-        preset === "full" ? { binaries: execBinaries, enabled: true, timeout: 60_000 } : false;
+      obj[tool] = preset === "full" ? { enabled: true, timeout: 60_000 } : false;
     } else if (CORE_TOOLS.has(tool)) {
       obj[tool] = true;
     } else {
@@ -380,7 +375,7 @@ async function run(flags: Flags): Promise<void> {
       },
       {
         description:
-          "Everything in Standard plus sandboxed exec (configure allowed binaries in tools.toml)",
+          "Everything in Standard plus sandboxed exec (configure Bubblewrap binaries in sandbox.toml)",
         name: "Full",
         value: "full",
       },
@@ -397,7 +392,7 @@ async function run(flags: Flags): Promise<void> {
   if (preset === "full") {
     const raw = await input({
       default: "",
-      message: "Exec binaries whitelist (comma-separated, leave blank for none):",
+      message: "Bubblewrap binaries whitelist (comma-separated, leave blank for none):",
     });
     execBinaries = raw
       .split(",")
@@ -528,7 +523,12 @@ async function run(flags: Flags): Promise<void> {
   );
   await writeFile(
     path.join(agentRoot, "config", "tools.toml"),
-    stringify(buildToolsConfig(preset, execBinaries)),
+    stringify(buildToolsConfig(preset)),
+    "utf8",
+  );
+  await writeFile(
+    path.join(agentRoot, "config", "sandbox.toml"),
+    stringify({ backend: "bwrap", bwrap: { binaries: execBinaries }, mounts: [] }),
     "utf8",
   );
 

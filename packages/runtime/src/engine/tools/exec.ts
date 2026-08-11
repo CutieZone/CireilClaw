@@ -24,9 +24,7 @@ const Schema = vb.strictObject({
       (value) => typeof value === "string" && !SHELL_METACHAR_PATTERN.test(value),
       "Command must be a single binary name without spaces or shell metacharacters. Use 'args' for arguments.",
     ),
-    vb.description(
-      "Binary name to run — must be listed in tools.toml [exec] binaries. No spaces or shell metacharacters.",
-    ),
+    vb.description("Binary name to run. No spaces or shell metacharacters."),
   ),
 });
 
@@ -62,15 +60,15 @@ const perTurnSeq = new Map<string, number>();
 
 export const exec: ToolDef = {
   description:
-    "Run a binary inside a bubblewrap sandbox. The working directory is /workspace.\n\n" +
-    "Only binaries explicitly listed in the agent's tools.toml [exec] config are available — all other commands will fail. Returns the exit code, output lengths, and paths to the captured output.\n\n" +
+    "Run a binary inside the configured sandbox backend. The working directory is /workspace.\n\n" +
+    "The Bubblewrap backend exposes only binaries listed in sandbox.toml [bwrap]; Incus executes binaries installed in the container image. Returns the exit code, output lengths, and paths to the captured output.\n\n" +
     "Output capture: stdout and stderr are written to files under the configured outputDir (default /workspace/.exec-output) and the tool result returns the paths, byte counts, and short head/tail previews. Read the files with `read`/`open-file` (large files automatically return an outline) or filter them with `exec grep …` when you need more context. Set `[exec] inline = true` to opt back into raw inline output (only effective when combined stdout+stderr ≤ inlineThresholdBytes, default 16384).\n\n" +
     "When to use:\n" +
     "- Running build tools, linters, formatters, scripts, or other CLI programs.\n" +
     "- Performing operations that cannot be expressed with the other file tools (e.g., grep, git, compilation).\n\n" +
     "Constraints:\n" +
     "- Filesystem access outside the sandbox is restricted.\n" +
-    "- `/blocks` explicitly CANNOT be accessed using `exec`\n" +
+    "- With the default Bubblewrap backend, `/blocks` cannot be accessed using `exec`; the Incus backend mounts it read-only.\n" +
     "- Commands that exceed the configured timeout are killed automatically.\n\n" +
     "Tip: Use list-dir with path /bin to see which binaries are available in the sandbox.\n" +
     "Tip: The `/workspace/.env` file *is* sourced and can affect your $PATH and other environment variables.",
@@ -82,10 +80,11 @@ export const exec: ToolDef = {
       throw new ToolError("Exec tool is disabled in configuration.");
     }
 
-    if (!execConfig.binaries.includes(data.command)) {
-      const bashAvailable = execConfig.binaries.includes("bash");
+    const bwrapBinaries = ctx.cfg.sandbox.bwrap?.binaries ?? [];
+    if (ctx.cfg.sandbox.backend === "bwrap" && !bwrapBinaries.includes(data.command)) {
+      const bashAvailable = bwrapBinaries.includes("bash");
       throw new ToolError(
-        `Command '${data.command}' is not in the allowed binaries list.`,
+        `Command '${data.command}' is not in sandbox.toml [bwrap] binaries.`,
         bashAvailable
           ? "Use `bash -c 'command'` if you think the binary is in your $PATH (e.g., from .env)."
           : undefined,
@@ -95,10 +94,12 @@ export const exec: ToolDef = {
     const result = await sandboxExec({
       agentSlug: ctx.agentSlug,
       args: data.args,
-      binaries: execConfig.binaries,
+      backend: ctx.cfg.sandbox.backend,
+      binaries: bwrapBinaries,
       command: data.command,
       devices: ctx.cfg.sandbox.devices,
       hostEnvPassthrough: execConfig.hostEnvPassthrough,
+      incus: ctx.cfg.sandbox.incus,
       mounts: ctx.cfg.sandbox.mounts,
       timeout: execConfig.timeout,
     });
