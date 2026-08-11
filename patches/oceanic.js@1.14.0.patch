@@ -1,0 +1,13 @@
+diff --git a/dist/lib/gateway/Shard.js b/dist/lib/gateway/Shard.js
+index 15d27c6000ff38c8aedaf221a1708de1db62593c..857b4e1b9b1b856b90f5cf44276323f5408438a0 100644
+--- a/dist/lib/gateway/Shard.js
++++ b/dist/lib/gateway/Shard.js
+@@ -505,6 +505,8 @@ class Shard extends TypedEmitter_1.default {
+         }
+         if (this.ws.readyState !== ws_1.default.CLOSED) {
+             this.ws.removeAllListeners();
++            // ws emits asynchronously when close() is called while connecting.
++            this.ws.on("error", () => { });
+             try {
+                 if (reconnect && this.sessionID) {
+                     if (this.ws.readyState === ws_1.default.OPEN) {

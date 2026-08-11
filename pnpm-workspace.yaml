@@ -8,3 +8,5 @@ onlyBuiltDependencies:
   - better-sqlite3
   - esbuild
   - sharp
+patchedDependencies:
+  oceanic.js@1.14.0: patches/oceanic.js@1.14.0.patch
