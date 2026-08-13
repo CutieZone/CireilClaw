@@ -279,6 +279,8 @@ schedule = { every = 86400 }
 
 Defines the command-execution backend and custom bind mounts that appear under `/workspace/` in the sandbox.
 
+See the backend references for the complete behavior and security model: [Bubblewrap](docs/sandbox/bwrap.md) and [Incus](docs/sandbox/incus.md).
+
 ```toml
 [bwrap]
 binaries = ["git", "python3"]

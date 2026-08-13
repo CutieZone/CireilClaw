@@ -1,5 +1,7 @@
 # Sandbox configuration
 # Copy to ~/.cireilclaw/agents/{slug}/config/sandbox.toml
+# Backend references:
+# docs/sandbox/bwrap.md and docs/sandbox/incus.md
 #
 # Defines custom bind mounts that appear under /workspace/ in the sandbox.
 # Mounts override the default workspace directory for their target path.
