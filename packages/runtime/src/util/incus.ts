@@ -45,6 +45,17 @@ interface DiskDevice {
   target: string;
 }
 
+interface IncusDevice {
+  path?: unknown;
+  readonly?: unknown;
+  source?: unknown;
+  type?: unknown;
+}
+
+function deviceIsReadonly(value: unknown): boolean {
+  return value === true || value === "true";
+}
+
 interface HostIdentity {
   gid: number;
   uid: number;
@@ -52,6 +63,10 @@ interface HostIdentity {
 
 function hasStatus(value: unknown): value is { status: unknown } {
   return typeof value === "object" && value !== null && "status" in value;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 // oxlint-disable promise/no-multiple-resolved
@@ -187,6 +202,78 @@ async function addDiskDevices(
       throw new Error(`Failed to add Incus device '${device.name}': ${result.stderr}`);
     }
   }
+}
+
+async function reconcileMounts(
+  incus: IncusConfig,
+  name: string,
+  mounts: readonly Mount[],
+): Promise<void> {
+  const result = await capture(
+    [...projectArgs(incus), "config", "device", "show", name, "--format", "json"],
+    30_000,
+  );
+  if (result.exitCode !== 0) {
+    throw new Error(`Failed to query Incus devices for '${name}': ${result.stderr}`);
+  }
+
+  const parsed: unknown = JSON.parse(result.stdout);
+  if (!isRecord(parsed)) {
+    throw new Error("Incus returned an invalid device response");
+  }
+  const devices = parsed;
+  const desired = new Map(
+    diskDevices("", mounts)
+      .slice(5)
+      .map((device) => [device.name, device]),
+  );
+
+  for (const [deviceName, value] of Object.entries(devices)) {
+    if (!deviceName.startsWith("workspace-") || typeof value !== "object" || value === null) {
+      continue;
+    }
+    const device = value as IncusDevice;
+    const expected = desired.get(deviceName);
+    if (expected === undefined) {
+      const remove = await capture(
+        [...projectArgs(incus), "config", "device", "remove", name, deviceName],
+        30_000,
+      );
+      if (remove.exitCode !== 0) {
+        throw new Error(`Failed to remove stale Incus device '${deviceName}': ${remove.stderr}`);
+      }
+      continue;
+    }
+
+    const readonly = expected.mode === "ro";
+    if (
+      device.type !== "disk" ||
+      device.source !== expected.source ||
+      device.path !== expected.target ||
+      deviceIsReadonly(device.readonly) !== readonly
+    ) {
+      const update = await capture(
+        [
+          ...projectArgs(incus),
+          "config",
+          "device",
+          "set",
+          name,
+          deviceName,
+          `source=${expected.source}`,
+          `path=${expected.target}`,
+          `readonly=${String(readonly)}`,
+        ],
+        30_000,
+      );
+      if (update.exitCode !== 0) {
+        throw new Error(`Failed to update Incus device '${deviceName}': ${update.stderr}`);
+      }
+    }
+    desired.delete(deviceName);
+  }
+
+  await addDiskDevices(incus, name, [...desired.values()]);
 }
 
 async function disableShiftOnExistingDevices(
@@ -351,6 +438,9 @@ async function ensureRunning(
         deviceName.startsWith("cireilclaw-"),
       ),
     );
+  }
+  if (state !== "missing") {
+    await reconcileMounts(incus, name, mounts);
   }
   if (state !== "running") {
     const start = await capture([...projectArgs(incus), "start", name], 30_000);

@@ -173,6 +173,9 @@ describe("execIncus", (): void => {
       if (argsList.includes("list")) {
         return fakeChildProcess('[{"status":"Running"}]');
       }
+      if (argsList.includes("show")) {
+        return fakeChildProcess("{}");
+      }
       if (argsList.includes("exec")) {
         return fakeChildProcess("hello\n");
       }
@@ -191,7 +194,70 @@ describe("execIncus", (): void => {
 
     expect(result).toEqual({ exitCode: 0, stderr: "", stdout: "hello\n", type: "output" });
     const calls = mockedSpawn.mock.calls.map(([, args]) => args);
-    expect(calls.some((args) => Array.isArray(args) && args.includes("config"))).toBe(false);
+    expect(
+      calls.some(
+        (args) =>
+          Array.isArray(args) &&
+          args.includes("config") &&
+          (args.includes("set") || args.includes("add") || args.includes("remove")),
+      ),
+    ).toBe(false);
     expect(calls.some((args) => Array.isArray(args) && args.includes("start"))).toBe(false);
+  });
+
+  it("reconciles configured mounts on an existing instance", async () => {
+    mockedSpawn.mockImplementation((_command, args) => {
+      const argsList = Array.isArray(args) ? args : [];
+      if (argsList.includes("list")) {
+        return fakeChildProcess('[{"status":"Running"}]');
+      }
+      if (argsList.includes("show")) {
+        return fakeChildProcess(
+          JSON.stringify({
+            "workspace-stale": {
+              path: "/workspace/stale",
+              source: "/host/stale",
+              type: "disk",
+            },
+          }),
+        );
+      }
+      if (argsList.includes("exec")) {
+        return fakeChildProcess("hello\n");
+      }
+      return fakeChildProcess();
+    });
+
+    const result = await execIncus({
+      agentSlug: "test-agent",
+      args: [],
+      command: "hostname",
+      envVars: [],
+      incus: { image: "images:fedora/43", profiles: [] },
+      mounts: [{ mode: "ro", source: "/host/reference", target: "reference" }],
+      timeout: 5000,
+    });
+
+    expect(result.type).toBe("output");
+    const calls = mockedSpawn.mock.calls.map(([, args]) => args);
+    expect(calls).toContainEqual([
+      "config",
+      "device",
+      "remove",
+      "cireilclaw-test-agent",
+      "workspace-stale",
+    ]);
+    expect(
+      calls.some(
+        (args) =>
+          Array.isArray(args) &&
+          args.includes("config") &&
+          args.includes("device") &&
+          args.includes("add") &&
+          args.includes("source=/host/reference") &&
+          args.includes("path=/workspace/reference") &&
+          args.includes("readonly=true"),
+      ),
+    ).toBe(true);
   });
 });
