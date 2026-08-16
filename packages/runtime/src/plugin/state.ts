@@ -49,6 +49,9 @@ async function ensureStateRoot(agentSlug: string, pluginId: string): Promise<str
   await chmod(root, 0o700);
   const realRoot = realpathSync(root);
   const sentinelPath = path.join(realRoot, STATE_SENTINEL);
+  if (verifiedRoots.has(realRoot)) {
+    return realRoot;
+  }
   if (existsSync(sentinelPath)) {
     // oxlint-disable-next-line eslint/init-declarations -- assigned in try, error path throws
     let existing: string;
@@ -151,13 +154,18 @@ async function directoryByteUsage(rootDir: string): Promise<number> {
       continue;
     }
     for (const entry of entries) {
+      const entryPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(entryPath);
+        continue;
+      }
       if (!entry.isFile() || entry.isSymbolicLink()) {
         continue;
       }
       if (entry.name === STATE_SENTINEL) {
         continue;
       }
-      const stats = await stat(path.join(current, entry.name));
+      const stats = await stat(entryPath);
       total += stats.size;
     }
   }
