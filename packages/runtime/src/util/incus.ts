@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 
+import { parse as parseYaml } from "yaml";
+
 import type { IncusConfig, Mount } from "#config/schemas/sandbox.js";
 import { onShutdown } from "#util/shutdown.js";
 
@@ -209,15 +211,12 @@ async function reconcileMounts(
   name: string,
   mounts: readonly Mount[],
 ): Promise<void> {
-  const result = await capture(
-    [...projectArgs(incus), "config", "device", "show", name, "--format", "json"],
-    30_000,
-  );
+  const result = await capture([...projectArgs(incus), "config", "device", "show", name], 30_000);
   if (result.exitCode !== 0) {
     throw new Error(`Failed to query Incus devices for '${name}': ${result.stderr}`);
   }
 
-  const parsed: unknown = JSON.parse(result.stdout);
+  const parsed: unknown = parseYaml(result.stdout);
   if (!isRecord(parsed)) {
     throw new Error("Incus returned an invalid device response");
   }

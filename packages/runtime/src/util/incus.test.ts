@@ -213,13 +213,7 @@ describe("execIncus", (): void => {
       }
       if (argsList.includes("show")) {
         return fakeChildProcess(
-          JSON.stringify({
-            "workspace-stale": {
-              path: "/workspace/stale",
-              source: "/host/stale",
-              type: "disk",
-            },
-          }),
+          "workspace-stale:\n  path: /workspace/stale\n  source: /host/stale\n  type: disk\n",
         );
       }
       if (argsList.includes("exec")) {
@@ -240,6 +234,7 @@ describe("execIncus", (): void => {
 
     expect(result.type).toBe("output");
     const calls = mockedSpawn.mock.calls.map(([, args]) => args);
+    expect(calls).toContainEqual(["config", "device", "show", "cireilclaw-test-agent"]);
     expect(calls).toContainEqual([
       "config",
       "device",
