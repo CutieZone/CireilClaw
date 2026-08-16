@@ -204,6 +204,8 @@ prune-boundaries     = true
 [exec]
 enabled  = true
 binaries = ["git", "python3"]    # Allowed commands whitelist
+inline   = true                  # Inline small output; default: true
+inlineThresholdBytes = 16384     # Combined stdout/stderr threshold
 timeout  = 60000                 # ms, minimum 1000
 hostEnvPassthrough = []          # Host env vars to pass through
 ```

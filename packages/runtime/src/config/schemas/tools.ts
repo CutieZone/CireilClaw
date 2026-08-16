@@ -21,10 +21,10 @@ const ExecToolConfigSchema = vb.strictObject({
     vb.description("Which host environment variables to passthrough to the sandbox"),
   ),
   inline: vb.pipe(
-    vb.exactOptional(vb.boolean(), false),
+    vb.exactOptional(vb.boolean(), true),
     vb.description(
       "Return stdout/stderr inline in the tool result instead of spilling to a workspace file. " +
-        "Only effective when combined output is ≤ inlineThresholdBytes. Off by default.",
+        "Only effective when combined output is ≤ inlineThresholdBytes. On by default.",
     ),
   ),
   inlineThresholdBytes: vb.pipe(

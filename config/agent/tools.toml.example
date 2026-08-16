@@ -42,11 +42,10 @@ exec = false
 # timeout = 60000                        # Kill timeout in ms. Default: 60000
 # hostEnvPassthrough = []                # Host env vars to pass through. Default: []
 #
-# Output capture: by default stdout/stderr are written to files under outputDir
-# and the tool result only returns paths, byte counts, and short previews — read
-# them with `read`/`open-file`, or filter with `exec grep …`. Set `inline = true`
-# to opt back into raw inline output for short commands.
-# inline = false                                  # Default: false (spill to file)
+# Output capture: short stdout/stderr is returned inline by default. Larger output
+# is written to files under outputDir, and the tool result returns paths, byte counts,
+# and short previews — read them with `read`/`open-file`, or filter with `exec grep …`.
+# inline = true                                   # Default: true
 # inlineThresholdBytes = 16384                    # Combined stdout+stderr limit for inline. Default: 16384
 # outputDir = "/workspace/.exec-output"           # Sandbox-relative output directory. Default: /workspace/.exec-output
 # previewHead = 20                                # Leading preview lines. Default: 20
