@@ -215,6 +215,13 @@ describe("writePluginStateFile — quota", () => {
     expect(await readPluginStateFile("bot", "github", "a.txt")).toBe("BB");
   });
 
+  it("counts files in nested directories", async () => {
+    await writePluginStateFile("bot", "github", "nested/a.txt", "AAAA", 4);
+    await expect(writePluginStateFile("bot", "github", "b.txt", "B", 4)).rejects.toThrow(
+      "exceed the plugin quota",
+    );
+  });
+
   it("excludes the .id sentinel from quota accounting", async () => {
     // Pre-create the state root with a valid sentinel, then grow a counted
     // file until it fills the quota. A subsequent write must fail; a write
