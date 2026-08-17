@@ -5,7 +5,9 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  oceanic.js@1.14.0: eca8292716f394fb157582d772dca411d6c9a79549d94334e2f32feec4cdf08b
+  oceanic.js@1.14.0:
+    hash: eca8292716f394fb157582d772dca411d6c9a79549d94334e2f32feec4cdf08b
+    path: patches/oceanic.js@1.14.0.patch
 
 importers:
 
