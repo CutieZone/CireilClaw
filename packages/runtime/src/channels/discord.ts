@@ -127,6 +127,7 @@ function readCommandsHash(agentSlug: string): string | undefined {
   try {
     return readFileSync(commandsHashFile(agentSlug), "utf8").trim();
   } catch {
+    // File missing or unreadable — treat as no stored hash
     return undefined;
   }
 }

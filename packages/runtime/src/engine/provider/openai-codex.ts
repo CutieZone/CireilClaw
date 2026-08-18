@@ -394,6 +394,7 @@ function parseSseEventData(line: string): unknown {
   try {
     return JSON.parse(data);
   } catch {
+    // Malformed SSE data — ignore this line
     return undefined;
   }
 }

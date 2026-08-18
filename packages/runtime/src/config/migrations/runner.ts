@@ -33,6 +33,7 @@ async function getMigrationState(): Promise<MigrationState> {
     const parsed = vb.parse(vb.partial(MigrationStateSchema), JSON.parse(data));
     return { applied: parsed.applied ?? [] };
   } catch {
+    // Corrupt or unexpected state file — start fresh
     return { applied: [] };
   }
 }

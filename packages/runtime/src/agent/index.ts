@@ -115,6 +115,7 @@ export class Agent {
         this.sessions.set(sessionId, session);
         return session;
       } catch {
+        // DM creation or session setup failed — return undefined rather than crash
         return undefined;
       }
     }
