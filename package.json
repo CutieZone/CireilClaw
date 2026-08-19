@@ -6,6 +6,7 @@
   "scripts": {
     "start": "pnpm --filter cireilclaw-runtime start",
     "test": "pnpm --filter cireilclaw-runtime test",
+    "test:incus": "CIREILCLAW_RUN_INCUS_INTEGRATION=1 pnpm --filter cireilclaw-runtime test:incus",
     "test:watch": "pnpm --filter cireilclaw-runtime test:watch",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",

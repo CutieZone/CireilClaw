@@ -74,6 +74,8 @@ describe("execIncus", (): void => {
       "images:fedora/42",
       "cireilclaw-test-agent",
     ]);
+    const uid = process.getuid?.() ?? 1000;
+    const gid = process.getgid?.() ?? 1000;
     expect(calls).toContainEqual([
       "--project",
       "cireilclaw",
@@ -81,7 +83,7 @@ describe("execIncus", (): void => {
       "set",
       "cireilclaw-test-agent",
       "raw.idmap",
-      "uid 1000 1000\ngid 1000 1000",
+      `uid ${uid} ${uid}\ngid ${gid} ${gid}`,
     ]);
     expect(calls).toContainEqual([
       "--project",
@@ -117,7 +119,7 @@ describe("execIncus", (): void => {
         "--",
         "groupadd",
         "--gid",
-        "1000",
+        String(gid),
         "test-agent",
       ]),
     );
@@ -130,7 +132,7 @@ describe("execIncus", (): void => {
         "--",
         "useradd",
         "--uid",
-        "1000",
+        String(uid),
         "--home-dir",
         "/workspace",
         "test-agent",
@@ -155,9 +157,9 @@ describe("execIncus", (): void => {
         "--cwd",
         "/workspace",
         "--user",
-        "1000",
+        String(uid),
         "--group",
-        "1000",
+        String(gid),
         "--env",
         "TOKEN=secret",
         "--",
@@ -175,6 +177,11 @@ describe("execIncus", (): void => {
       }
       if (argsList.includes("show")) {
         return fakeChildProcess("{}");
+      }
+      if (argsList.includes("get")) {
+        const uid = process.getuid?.() ?? 1000;
+        const gid = process.getgid?.() ?? 1000;
+        return fakeChildProcess(`uid ${uid} ${uid}\ngid ${gid} ${gid}`);
       }
       if (argsList.includes("exec")) {
         return fakeChildProcess("hello\n");
@@ -205,11 +212,93 @@ describe("execIncus", (): void => {
     expect(calls.some((args) => Array.isArray(args) && args.includes("start"))).toBe(false);
   });
 
+  it("repairs an identity mapping on a running instance before execution", async () => {
+    mockedSpawn.mockImplementation((_command, args) => {
+      const argsList = Array.isArray(args) ? args : [];
+      if (argsList.includes("list")) {
+        return fakeChildProcess('[{"status":"Running"}]');
+      }
+      if (argsList.includes("get")) {
+        return fakeChildProcess("uid 1 1\ngid 1 1");
+      }
+      if (argsList.includes("show")) {
+        return fakeChildProcess("{}");
+      }
+      if (argsList.includes("exec")) {
+        return fakeChildProcess("hello\n");
+      }
+      return fakeChildProcess();
+    });
+
+    const result = await execIncus({
+      agentSlug: "identity-agent",
+      args: [],
+      command: "hostname",
+      envVars: [],
+      incus: { image: "images:fedora/43", profiles: [] },
+      mounts: [],
+      timeout: 5000,
+    });
+
+    expect(result.type).toBe("output");
+    const uid = process.getuid?.() ?? 1000;
+    const gid = process.getgid?.() ?? 1000;
+    const calls = mockedSpawn.mock.calls.map(([, args]) => args);
+    expect(calls).toContainEqual(["stop", "cireilclaw-identity-agent", "--timeout", "30"]);
+    expect(calls).toContainEqual([
+      "config",
+      "set",
+      "cireilclaw-identity-agent",
+      "raw.idmap",
+      `uid ${uid} ${uid}\ngid ${gid} ${gid}`,
+    ]);
+    expect(calls).toContainEqual(["start", "cireilclaw-identity-agent"]);
+  });
+
+  it("destroys a newly created instance when initialization fails", async () => {
+    mockedSpawn.mockImplementation((_command, args) => {
+      const argsList = Array.isArray(args) ? args : [];
+      if (argsList.includes("list")) {
+        return fakeChildProcess("[]");
+      }
+      if (argsList.includes("exec") && argsList.includes("hostname")) {
+        return fakeChildProcess("", "hostname failed", 1);
+      }
+      if (argsList.includes("exec")) {
+        return fakeChildProcess("hello\n");
+      }
+      return fakeChildProcess();
+    });
+
+    const result = await execIncus({
+      agentSlug: "failed-agent",
+      args: [],
+      command: "hostname",
+      envVars: [],
+      incus: { image: "images:fedora/43", profiles: [] },
+      mounts: [],
+      timeout: 5000,
+    });
+
+    expect(result).toEqual({
+      error:
+        "Failed to set hostname inside Incus instance 'cireilclaw-failed-agent': hostname failed",
+      type: "error",
+    });
+    const calls = mockedSpawn.mock.calls.map(([, args]) => args);
+    expect(calls).toContainEqual(["delete", "--force", "cireilclaw-failed-agent"]);
+  });
+
   it("reconciles configured mounts on an existing instance", async () => {
     mockedSpawn.mockImplementation((_command, args) => {
       const argsList = Array.isArray(args) ? args : [];
       if (argsList.includes("list")) {
         return fakeChildProcess('[{"status":"Running"}]');
+      }
+      if (argsList.includes("get")) {
+        const uid = process.getuid?.() ?? 1000;
+        const gid = process.getgid?.() ?? 1000;
+        return fakeChildProcess(`uid ${uid} ${uid}\ngid ${gid} ${gid}`);
       }
       if (argsList.includes("show")) {
         return fakeChildProcess(
