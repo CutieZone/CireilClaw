@@ -453,7 +453,7 @@ async function parseCodexResponse(response: Response): Promise<unknown> {
     }
 
     if (type === "response.failed") {
-      debug("OpenAI Codex failed stream event", { type });
+      debug("OpenAI Codex failed stream event", { event: event.output });
       fallbackResponse = unwrapCodexResponse(event.output);
       continue;
     }

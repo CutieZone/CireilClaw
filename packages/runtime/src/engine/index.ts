@@ -742,9 +742,7 @@ async function runTurnImpl(
       for (const call of toolCalls) {
         const def = getToolRegistry()[call.name];
 
-        debug("Tool call", colors.keyword(call.name), {
-          inputType: Array.isArray(call.input) ? "array" : typeof call.input,
-        });
+        debug("Tool call", colors.keyword(call.name), call);
         let result: Record<string, unknown> = {};
         if (disabledTools.has(call.name) || !tools.some((tool) => tool.name === call.name)) {
           result = {
@@ -779,9 +777,7 @@ async function runTurnImpl(
             }
           }
         }
-        debug("Tool result", colors.keyword(call.name), {
-          success: result["success"],
-        });
+        debug("Tool result", colors.keyword(call.name), result);
 
         // Assign Discord message IDs to the assistant history entry immediately
         // after respond sends, so agentic-loop entries carry proper snowflakes

@@ -82,7 +82,8 @@ function rotate(filePth: string): void {
 }
 
 function writeToFile(level: Level, data: unknown[]): void {
-  if (!isEnabled(level) || fd === undefined || filePath === undefined) {
+  // The file is a complete event log; console verbosity must not discard events.
+  if (fd === undefined || filePath === undefined) {
     return;
   }
   try {
