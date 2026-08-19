@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -18,17 +17,33 @@ function binaryList(value: unknown): string[] | undefined {
   return value;
 }
 
+function isErrno(error: unknown, code: string): boolean {
+  return error instanceof Error && "code" in error && error.code === code;
+}
+
+async function readOptionalFile(filePath: string): Promise<string | undefined> {
+  try {
+    return await readFile(filePath, "utf8");
+  } catch (error: unknown) {
+    if (isErrno(error, "ENOENT")) {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
 const migration: ConfigMigration = {
   description: "Move Bubblewrap executable allowlists from tools.toml to sandbox.toml",
   id: "20260811000000_move_exec_binaries_to_bwrap",
 
   async migrateAgent(_agentSlug, agentPath, context): Promise<void> {
     const toolsPath = path.join(agentPath, "config", "tools.toml");
-    if (!existsSync(toolsPath)) {
+    const toolsContent = await readOptionalFile(toolsPath);
+    if (toolsContent === undefined) {
       return;
     }
 
-    const tools = parse(await readFile(toolsPath, "utf8"));
+    const tools = parse(toolsContent);
     if (!isTable(tools["exec"])) {
       return;
     }
@@ -38,9 +53,9 @@ const migration: ConfigMigration = {
     }
 
     const sandboxPath = path.join(agentPath, "config", "sandbox.toml");
-    const sandbox = existsSync(sandboxPath)
-      ? parse(await readFile(sandboxPath, "utf8"))
-      : ({ mounts: [] } satisfies TomlTable);
+    const sandboxContent = await readOptionalFile(sandboxPath);
+    const sandbox =
+      sandboxContent === undefined ? ({ mounts: [] } satisfies TomlTable) : parse(sandboxContent);
     const { bwrap: configuredBwrap } = sandbox;
     const bwrap = isTable(configuredBwrap) ? configuredBwrap : {};
     if (!isTable(configuredBwrap)) {
@@ -53,9 +68,7 @@ const migration: ConfigMigration = {
     delete tools["exec"]["binaries"];
     await context.backupFile(toolsPath);
     await writeFile(toolsPath, stringify(tools), "utf8");
-    if (existsSync(sandboxPath)) {
-      await context.backupFile(sandboxPath);
-    }
+    await context.backupFile(sandboxPath);
     await writeFile(sandboxPath, stringify(sandbox), "utf8");
   },
 

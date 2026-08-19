@@ -95,22 +95,18 @@ async function ensureStateRoot(agentSlug: string, pluginId: string): Promise<str
   if (verifiedRoots.has(realRoot)) {
     return realRoot;
   }
-  if (existsSync(sentinelPath)) {
-    verifySentinel(sentinelPath, realRoot, pluginId);
-  } else {
+  try {
+    const handle = openSync(sentinelPath, "wx", 0o600);
     try {
-      const handle = openSync(sentinelPath, "wx", 0o600);
-      try {
-        writeFileSync(handle, pluginId, "utf8");
-      } finally {
-        closeSync(handle);
-      }
-    } catch (error: unknown) {
-      if (errnoCode(error) !== "EEXIST") {
-        throw error;
-      }
-      verifySentinel(sentinelPath, realRoot, pluginId);
+      writeFileSync(handle, pluginId, "utf8");
+    } finally {
+      closeSync(handle);
     }
+  } catch (error: unknown) {
+    if (errnoCode(error) !== "EEXIST") {
+      throw error;
+    }
+    verifySentinel(sentinelPath, realRoot, pluginId);
   }
   verifiedRoots.add(realRoot);
   return realRoot;
