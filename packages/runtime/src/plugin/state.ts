@@ -19,6 +19,17 @@ const DEFAULT_PLUGIN_STATE_QUOTA_BYTES = 16 * 1024 * 1024;
 const STATE_SENTINEL = ".id";
 
 const verifiedRoots = new Set<string>();
+const stateLocks = new Map<string, Promise<void>>();
+
+function errnoCode(error: unknown): string | undefined {
+  if (error instanceof Error && "code" in error) {
+    const { code } = error as { code: unknown };
+    if (typeof code === "string") {
+      return code;
+    }
+  }
+  return undefined;
+}
 
 function pluginStateFolderSlug(pluginId: string): string {
   if (typeof pluginId !== "string") {
@@ -43,43 +54,101 @@ function stateRoot(agentSlug: string, pluginId: string): string {
   return path.join(agentRoot(agentSlug), "state", pluginStateFolderSlug(pluginId));
 }
 
+function verifySentinel(sentinelPath: string, realRoot: string, pluginId: string): void {
+  let existing: string | undefined = undefined;
+  try {
+    existing = readFileSync(sentinelPath, "utf8");
+  } catch {
+    throw new Error(`pluginState: ${STATE_SENTINEL} sentinel at ${realRoot} is unreadable`);
+  }
+  if (existing !== pluginId) {
+    throw new Error(
+      `pluginState: state folder at ${realRoot} is owned by another plugin id ` +
+        `(existing: '${existing}', requested: '${pluginId}')`,
+    );
+  }
+}
+
 async function ensureStateRoot(agentSlug: string, pluginId: string): Promise<string> {
+  const stateDir = path.join(agentRoot(agentSlug), "state");
+  await mkdir(stateDir, { mode: 0o700, recursive: true });
+  await chmod(stateDir, 0o700);
+  const stateDirStats = await lstat(stateDir);
+  if (stateDirStats.isSymbolicLink()) {
+    throw new Error(`pluginState: state directory is a symlink: ${stateDir}`);
+  }
+
   const root = stateRoot(agentSlug, pluginId);
+  const rootStats = existsSync(root) ? await lstat(root) : undefined;
+  if (rootStats?.isSymbolicLink() === true) {
+    throw new Error(`pluginState: state folder is a symlink: ${root}`);
+  }
   await mkdir(root, { mode: 0o700, recursive: true });
   await chmod(root, 0o700);
   const realRoot = realpathSync(root);
+  const realStateDir = realpathSync(stateDir);
+  const relativeToState = path.relative(realStateDir, realRoot);
+  if (relativeToState.startsWith("..") || path.isAbsolute(relativeToState)) {
+    throw new Error(`pluginState: state folder resolves outside the agent state directory`);
+  }
   const sentinelPath = path.join(realRoot, STATE_SENTINEL);
   if (verifiedRoots.has(realRoot)) {
     return realRoot;
   }
   if (existsSync(sentinelPath)) {
-    // oxlint-disable-next-line eslint/init-declarations -- assigned in try, error path throws
-    let existing: string;
-    try {
-      existing = readFileSync(sentinelPath, "utf8");
-    } catch {
-      throw new Error(`pluginState: ${STATE_SENTINEL} sentinel at ${realRoot} is unreadable`);
-    }
-    if (existing !== pluginId) {
-      throw new Error(
-        `pluginState: state folder at ${realRoot} is owned by another plugin id ` +
-          `(existing: '${existing}', requested: '${pluginId}')`,
-      );
-    }
+    verifySentinel(sentinelPath, realRoot, pluginId);
   } else {
-    const handle = openSync(sentinelPath, "wx", 0o600);
     try {
-      writeFileSync(handle, pluginId, "utf8");
-    } finally {
-      closeSync(handle);
+      const handle = openSync(sentinelPath, "wx", 0o600);
+      try {
+        writeFileSync(handle, pluginId, "utf8");
+      } finally {
+        closeSync(handle);
+      }
+    } catch (error: unknown) {
+      if (errnoCode(error) !== "EEXIST") {
+        throw error;
+      }
+      verifySentinel(sentinelPath, realRoot, pluginId);
     }
   }
   verifiedRoots.add(realRoot);
   return realRoot;
 }
 
+async function withStateLock<Result>(
+  stateRootPath: string,
+  operation: () => Promise<Result>,
+): Promise<Result> {
+  const previous = stateLocks.get(stateRootPath) ?? Promise.resolve();
+  const release = {
+    resolve(): void {
+      // The executor replaces this before the lock can be released.
+    },
+  };
+  function setRelease(resolveLock: (value: void | PromiseLike<void>) => void): void {
+    function releaseLock(): void {
+      resolveLock();
+    }
+    release.resolve = releaseLock;
+  }
+  const current = new Promise<void>(setRelease);
+  stateLocks.set(stateRootPath, current);
+
+  await previous;
+  try {
+    return await operation();
+  } finally {
+    release.resolve();
+    if (stateLocks.get(stateRootPath) === current) {
+      stateLocks.delete(stateRootPath);
+    }
+  }
+}
+
 function resetVerifiedStateRoots(): void {
   verifiedRoots.clear();
+  stateLocks.clear();
 }
 
 function validateRelativeName(name: string): string[] {
@@ -172,16 +241,6 @@ async function directoryByteUsage(rootDir: string): Promise<number> {
   return total;
 }
 
-function errnoCode(error: unknown): string | undefined {
-  if (error instanceof Error && "code" in error) {
-    const { code } = error as { code: unknown };
-    if (typeof code === "string") {
-      return code;
-    }
-  }
-  return undefined;
-}
-
 async function readPluginStateFile(
   agentSlug: string,
   pluginId: string,
@@ -210,32 +269,34 @@ async function writePluginStateFile(
     throw new TypeError("pluginState: 'content' must be a string");
   }
   const root = await ensureStateRoot(agentSlug, pluginId);
-  const target = await resolveStatePath(root, name);
-  const segments = validateRelativeName(name);
-  const parentDir = path.dirname(target);
-  if (!existsSync(parentDir)) {
-    await mkdir(parentDir, { mode: 0o700, recursive: true });
-    await chmod(parentDir, 0o700);
-  }
-  const existingSize = existsSync(target) ? statSync(target).size : 0;
-  const usage = await directoryByteUsage(root);
-  const projected = usage - existingSize + Buffer.byteLength(content, "utf8");
-  if (projected > quotaBytes) {
-    throw new Error(
-      `pluginState: writing '${name}' would exceed the plugin quota ` +
-        `(${projected} > ${quotaBytes} bytes)`,
-    );
-  }
-  const baseName = segments.at(-1) ?? "state";
-  const tempName = `.tmp-${baseName}-${randomBytes(8).toString("hex")}`;
-  const tempPath = path.join(parentDir, tempName);
-  const handle = openSync(tempPath, "wx", 0o600);
-  try {
-    writeFileSync(handle, content, "utf8");
-  } finally {
-    closeSync(handle);
-  }
-  await rename(tempPath, target);
+  await withStateLock(root, async () => {
+    const target = await resolveStatePath(root, name);
+    const segments = validateRelativeName(name);
+    const parentDir = path.dirname(target);
+    if (!existsSync(parentDir)) {
+      await mkdir(parentDir, { mode: 0o700, recursive: true });
+      await chmod(parentDir, 0o700);
+    }
+    const existingSize = existsSync(target) ? statSync(target).size : 0;
+    const usage = await directoryByteUsage(root);
+    const projected = usage - existingSize + Buffer.byteLength(content, "utf8");
+    if (projected > quotaBytes) {
+      throw new Error(
+        `pluginState: writing '${name}' would exceed the plugin quota ` +
+          `(${projected} > ${quotaBytes} bytes)`,
+      );
+    }
+    const baseName = segments.at(-1) ?? "state";
+    const tempName = `.tmp-${baseName}-${randomBytes(8).toString("hex")}`;
+    const tempPath = path.join(parentDir, tempName);
+    const handle = openSync(tempPath, "wx", 0o600);
+    try {
+      writeFileSync(handle, content, "utf8");
+    } finally {
+      closeSync(handle);
+    }
+    await rename(tempPath, target);
+  });
 }
 
 async function removePluginStateFile(
@@ -244,21 +305,25 @@ async function removePluginStateFile(
   name: string,
 ): Promise<void> {
   const root = await ensureStateRoot(agentSlug, pluginId);
-  const target = await resolveStatePath(root, name);
-  // oxlint-disable-next-line eslint/init-declarations -- assigned in try, ENOENT returns early
-  let stats: Stats;
-  try {
-    stats = await lstat(target);
-  } catch (error: unknown) {
-    if (errnoCode(error) === "ENOENT") {
-      return;
+  await withStateLock(root, async () => {
+    const target = await resolveStatePath(root, name);
+    // oxlint-disable-next-line eslint/init-declarations -- assigned in try, ENOENT returns early
+    let stats: Stats;
+    try {
+      stats = await lstat(target);
+    } catch (error: unknown) {
+      if (errnoCode(error) === "ENOENT") {
+        return;
+      }
+      throw error;
     }
-    throw error;
-  }
-  if (stats.isDirectory()) {
-    throw new Error(`pluginState: refusing to remove directory via pluginState.remove: '${name}'`);
-  }
-  await rm(target, { force: true });
+    if (stats.isDirectory()) {
+      throw new Error(
+        `pluginState: refusing to remove directory via pluginState.remove: '${name}'`,
+      );
+    }
+    await rm(target, { force: true });
+  });
 }
 
 export {

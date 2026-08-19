@@ -90,6 +90,13 @@ describe("withTimeout", () => {
     expect(result).toBe("ok");
   });
 
+  it("clears the timeout after the inner promise settles", async () => {
+    vi.useFakeTimers();
+    await expect(withTimeout(Promise.resolve("ok"), 2000, "test")).resolves.toBe("ok");
+    expect(vi.getTimerCount()).toBe(0);
+    vi.useRealTimers();
+  });
+
   it("rejects when the inner promise throws", async () => {
     await expect(withTimeout(Promise.reject(new Error("oops")), 2000, "test")).rejects.toThrow(
       "oops",

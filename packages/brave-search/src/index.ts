@@ -72,7 +72,7 @@ const braveSearch = {
   name: "brave-search",
   parameters: vb.strictObject({
     count: vb.pipe(
-      vb.exactOptional(vb.pipe(vb.number(), vb.minValue(1), vb.maxValue(20)), 5),
+      vb.exactOptional(vb.pipe(vb.number(), vb.integer(), vb.minValue(1), vb.maxValue(20)), 5),
       vb.description("Number of results to return (1-20, default 5)"),
     ),
     query: vb.pipe(vb.string(), vb.nonEmpty(), vb.description("The search query")),

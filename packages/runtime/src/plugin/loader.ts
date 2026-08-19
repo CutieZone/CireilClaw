@@ -36,6 +36,14 @@ import type { CtxData, InvokeArgs, ManifestPayload } from "./worker-main.js";
 // Generous to accommodate long scrapes / network work; worker crashes already reject immediately.
 const INVOKE_TIMEOUT_MS = 10 * 60 * 1000;
 
+function isRpcTimeout(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message.startsWith("RPC call ") &&
+    error.message.includes(" timed out after ")
+  );
+}
+
 const runtimeRequire = createRequire(import.meta.url);
 const RUNTIME_SDK_PKG = realpathSync(runtimeRequire.resolve("@cireilclaw/sdk/package.json"));
 const WORKER_URL = new URL("worker.ts", import.meta.url);
@@ -43,6 +51,46 @@ const WORKER_URL = new URL("worker.ts", import.meta.url);
 const SdkPackageJsonSchema = vb.looseObject({
   version: vb.pipe(vb.string(), vb.nonEmpty()),
 });
+
+function requireString(value: unknown, name: string): string {
+  if (typeof value !== "string") {
+    throw new TypeError(`${name} must be a string`);
+  }
+  return value;
+}
+
+function optionalString(value: unknown, name: string): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return requireString(value, name);
+}
+
+function requireStringArray(value: unknown, name: string): string[] {
+  if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
+    throw new TypeError(`${name} must be an array of strings`);
+  }
+  return value;
+}
+
+function requireBytes(value: unknown, name: string): Uint8Array {
+  if (!(value instanceof Uint8Array)) {
+    throw new TypeError(`${name} must be a byte array`);
+  }
+  return value;
+}
+
+function requireToolResult(value: unknown): Record<string, unknown> {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value) ||
+    typeof (value as Record<string, unknown>)["success"] !== "boolean"
+  ) {
+    throw new TypeError("Plugin tool must return an object with a boolean success field");
+  }
+  return value as Record<string, unknown>;
+}
 
 function readSdkVersion(pkgPath: string): string {
   const pkg: unknown = runtimeRequire(pkgPath);
@@ -226,11 +274,8 @@ class PluginProcess {
             };
             const args: InvokeArgs = { ctx: ctxData, input, invocationId, toolName };
             try {
-              return await this.rpc.call<Record<string, unknown>>(
-                "invoke-tool",
-                [args],
-                INVOKE_TIMEOUT_MS,
-              );
+              const result = await this.callWithTimeout("invoke-tool", [args]);
+              return requireToolResult(result);
             } catch (error: unknown) {
               // Re-hydrate ToolError across the RPC boundary so the engine's instanceof check works.
               if (error instanceof Error && error.name === "ToolError") {
@@ -253,12 +298,23 @@ class PluginProcess {
   }
 
   public async extract(filePath: string, content: string): Promise<Section[]> {
-    return await this.rpc.call<Section[]>("extract", [filePath, content]);
+    return await this.callWithTimeout<Section[]>("extract", [filePath, content]);
   }
 
   public async terminate(): Promise<void> {
     this.rpc.close();
     await this.worker.terminate();
+  }
+
+  private async callWithTimeout<Result>(method: string, args: unknown[]): Promise<Result> {
+    try {
+      return await this.rpc.call<Result>(method, args, INVOKE_TIMEOUT_MS);
+    } catch (error: unknown) {
+      if (isRpcTimeout(error)) {
+        await this.terminate();
+      }
+      throw error;
+    }
   }
 
   private requireCtx(invocationId: unknown): ToolContext {
@@ -276,8 +332,8 @@ class PluginProcess {
     this.rpc.handle("reply.send", async (args) => {
       const [invocationId, content, attachments] = args;
       await this.requireCtx(invocationId).reply.send(
-        content as string,
-        attachments as string[] | undefined,
+        requireString(content, "content"),
+        attachments === undefined ? undefined : requireStringArray(attachments, "attachments"),
       );
       return undefined;
     });
@@ -287,12 +343,14 @@ class PluginProcess {
       if (react === undefined) {
         throw new Error("react not supported on this channel");
       }
-      await react(emoji as string, messageId as string | undefined);
+      await react(requireString(emoji, "emoji"), optionalString(messageId, "messageId"));
       return undefined;
     });
     this.rpc.handle("channel.resolveChannel", async (args) => {
       const [invocationId, spec] = args;
-      const resolved = await this.requireCtx(invocationId).channel.resolveChannel(spec as string);
+      const resolved = await this.requireCtx(invocationId).channel.resolveChannel(
+        requireString(spec, "spec"),
+      );
       if ("error" in resolved) {
         return { error: resolved.error };
       }
@@ -300,26 +358,32 @@ class PluginProcess {
     });
     this.rpc.handle("cfg.globalPlugin", async (args) => {
       const [invocationId, name] = args;
-      return await this.requireCtx(invocationId).cfg.globalPlugin(name as string);
+      return await this.requireCtx(invocationId).cfg.globalPlugin(requireString(name, "name"));
     });
     this.rpc.handle("cfg.agentPlugin", async (args) => {
       const [invocationId, name] = args;
-      return await this.requireCtx(invocationId).cfg.agentPlugin(name as string);
+      return await this.requireCtx(invocationId).cfg.agentPlugin(requireString(name, "name"));
     });
     this.rpc.handle("addImage", (args) => {
       const [invocationId, data, mediaType] = args;
-      this.requireCtx(invocationId).addImage(data as Uint8Array, mediaType as string);
+      this.requireCtx(invocationId).addImage(
+        requireBytes(data, "data"),
+        requireString(mediaType, "mediaType"),
+      );
       return Promise.resolve(undefined);
     });
     this.rpc.handle("addVideo", (args) => {
       const [invocationId, data, mediaType] = args;
-      this.requireCtx(invocationId).addVideo(data as Uint8Array, mediaType as string);
+      this.requireCtx(invocationId).addVideo(
+        requireBytes(data, "data"),
+        requireString(mediaType, "mediaType"),
+      );
       return Promise.resolve(undefined);
     });
     this.rpc.handle("addToolMessage", (args) => {
       const [invocationId, content] = args;
       try {
-        this.requireCtx(invocationId).addToolMessage(content as string);
+        this.requireCtx(invocationId).addToolMessage(requireString(content, "content"));
       } catch (error: unknown) {
         // Only buffer when the invocationId is a valid string with no
         // matching pending context (late arrival after cleanup).
@@ -330,7 +394,7 @@ class PluginProcess {
           error instanceof Error &&
           error.message.startsWith("Unknown invocationId")
         ) {
-          this.orphanedAddToolMessages.push(content as string);
+          this.orphanedAddToolMessages.push(requireString(content, "content"));
         } else {
           throw error;
         }
@@ -340,49 +404,59 @@ class PluginProcess {
     this.rpc.handle("paths.resolve", (args) => {
       const [invocationId, sandboxPath] = args;
       const ctx = this.requireCtx(invocationId);
-      return Promise.resolve(sandboxToReal(sandboxPath as string, ctx.agentSlug, ctx.mounts));
+      return Promise.resolve(
+        sandboxToReal(requireString(sandboxPath, "sandboxPath"), ctx.agentSlug, ctx.mounts),
+      );
     });
     this.rpc.handle("paths.checkWriteAccess", (args) => {
       const [invocationId, sandboxPath] = args;
       const ctx = this.requireCtx(invocationId);
-      checkMountWriteAccess(sandboxPath as string, ctx.mounts ?? []);
+      checkMountWriteAccess(requireString(sandboxPath, "sandboxPath"), ctx.mounts ?? []);
       return Promise.resolve(undefined);
     });
     this.rpc.handle("paths.checkConditionalAccess", (args) => {
       const [invocationId, sandboxPath] = args;
       const ctx = this.requireCtx(invocationId);
       if (ctx.conditions !== undefined) {
-        checkConditionalAccess(sandboxPath as string, ctx.agentSlug, ctx.conditions, ctx.session);
+        checkConditionalAccess(
+          requireString(sandboxPath, "sandboxPath"),
+          ctx.agentSlug,
+          ctx.conditions,
+          ctx.session,
+        );
       }
       return Promise.resolve(undefined);
     });
     this.rpc.handle("fs.readTextFile", async (args) => {
       const [invocationId, sandboxPath] = args;
       const ctx = this.requireCtx(invocationId);
-      const realPath = sandboxToReal(sandboxPath as string, ctx.agentSlug, ctx.mounts);
+      const sandboxPathValue = requireString(sandboxPath, "sandboxPath");
+      const realPath = sandboxToReal(sandboxPathValue, ctx.agentSlug, ctx.mounts);
       if (ctx.conditions !== undefined) {
-        checkConditionalAccess(sandboxPath as string, ctx.agentSlug, ctx.conditions, ctx.session);
+        checkConditionalAccess(sandboxPathValue, ctx.agentSlug, ctx.conditions, ctx.session);
       }
       return await readFile(realPath, "utf8");
     });
     this.rpc.handle("fs.writeTextFile", async (args) => {
       const [invocationId, sandboxPath, content] = args;
       const ctx = this.requireCtx(invocationId);
-      const realPath = sandboxToReal(sandboxPath as string, ctx.agentSlug, ctx.mounts);
-      checkMountWriteAccess(sandboxPath as string, ctx.mounts ?? []);
+      const sandboxPathValue = requireString(sandboxPath, "sandboxPath");
+      const realPath = sandboxToReal(sandboxPathValue, ctx.agentSlug, ctx.mounts);
+      checkMountWriteAccess(sandboxPathValue, ctx.mounts ?? []);
       if (ctx.conditions !== undefined) {
-        checkConditionalAccess(sandboxPath as string, ctx.agentSlug, ctx.conditions, ctx.session);
+        checkConditionalAccess(sandboxPathValue, ctx.agentSlug, ctx.conditions, ctx.session);
       }
       await mkdir(path.dirname(realPath), { recursive: true });
-      await writeFile(realPath, content as string, "utf8");
+      await writeFile(realPath, requireString(content, "content"), "utf8");
       return undefined;
     });
     this.rpc.handle("fs.stat", async (args) => {
       const [invocationId, sandboxPath] = args;
       const ctx = this.requireCtx(invocationId);
-      const realPath = sandboxToReal(sandboxPath as string, ctx.agentSlug, ctx.mounts);
+      const sandboxPathValue = requireString(sandboxPath, "sandboxPath");
+      const realPath = sandboxToReal(sandboxPathValue, ctx.agentSlug, ctx.mounts);
       if (ctx.conditions !== undefined) {
-        checkConditionalAccess(sandboxPath as string, ctx.agentSlug, ctx.conditions, ctx.session);
+        checkConditionalAccess(sandboxPathValue, ctx.agentSlug, ctx.conditions, ctx.session);
       }
       const stats = await stat(realPath);
       return {
@@ -396,9 +470,10 @@ class PluginProcess {
     this.rpc.handle("fs.listDir", async (args) => {
       const [invocationId, sandboxPath] = args;
       const ctx = this.requireCtx(invocationId);
-      const realPath = sandboxToReal(sandboxPath as string, ctx.agentSlug, ctx.mounts);
+      const sandboxPathValue = requireString(sandboxPath, "sandboxPath");
+      const realPath = sandboxToReal(sandboxPathValue, ctx.agentSlug, ctx.mounts);
       if (ctx.conditions !== undefined) {
-        checkConditionalAccess(sandboxPath as string, ctx.agentSlug, ctx.conditions, ctx.session);
+        checkConditionalAccess(sandboxPathValue, ctx.agentSlug, ctx.conditions, ctx.session);
       }
       const entries = await readdir(realPath, { withFileTypes: true });
       return entries.map((entry) => ({
@@ -410,20 +485,24 @@ class PluginProcess {
     this.rpc.handle("crypto.loadNormalizedKey", async (args) => {
       const [invocationId, opts] = args;
       const ctx = this.requireCtx(invocationId);
-      const raw = opts as { path?: string; data?: string; kind?: string };
+      if (typeof opts !== "object" || opts === null || Array.isArray(opts)) {
+        throw new TypeError("crypto.loadNormalizedKey options must be an object");
+      }
+      const raw = opts as Record<string, unknown>;
 
       let rawKey = "";
-      if (typeof raw.path === "string") {
+      if (typeof raw["path"] === "string") {
+        const keyPath = raw["path"];
         const realPath =
-          raw.kind === "host"
-            ? path.normalize(raw.path)
-            : sandboxToReal(raw.path, ctx.agentSlug, ctx.mounts);
+          raw["kind"] === "host"
+            ? path.normalize(keyPath)
+            : sandboxToReal(keyPath, ctx.agentSlug, ctx.mounts);
         if (ctx.conditions !== undefined) {
-          checkConditionalAccess(raw.path, ctx.agentSlug, ctx.conditions, ctx.session);
+          checkConditionalAccess(keyPath, ctx.agentSlug, ctx.conditions, ctx.session);
         }
         rawKey = await readFile(realPath, "utf8");
-      } else if (typeof raw.data === "string") {
-        rawKey = raw.data;
+      } else if (typeof raw["data"] === "string") {
+        rawKey = raw["data"];
       } else {
         throw new TypeError("crypto.loadNormalizedKey requires either `path` or `data`");
       }
@@ -448,7 +527,7 @@ class PluginProcess {
     this.rpc.handle("pluginState.readText", async (args) => {
       const [invocationId, name] = args;
       const ctx = this.requireCtx(invocationId);
-      return await readPluginStateFile(ctx.agentSlug, this.id, name as string);
+      return await readPluginStateFile(ctx.agentSlug, this.id, requireString(name, "name"));
     });
     this.rpc.handle("pluginState.writeText", async (args) => {
       const [invocationId, name, content] = args;
@@ -456,8 +535,8 @@ class PluginProcess {
       await writePluginStateFile(
         ctx.agentSlug,
         this.id,
-        name as string,
-        content as string,
+        requireString(name, "name"),
+        requireString(content, "content"),
         this.stateQuotaBytes,
       );
       return undefined;
@@ -465,7 +544,7 @@ class PluginProcess {
     this.rpc.handle("pluginState.remove", async (args) => {
       const [invocationId, name] = args;
       const ctx = this.requireCtx(invocationId);
-      await removePluginStateFile(ctx.agentSlug, this.id, name as string);
+      await removePluginStateFile(ctx.agentSlug, this.id, requireString(name, "name"));
       return undefined;
     });
   }
@@ -492,9 +571,11 @@ async function spawnPluginProcess(entry: PluginEntry): Promise<PluginProcess> {
 async function loadPlugins(): Promise<PluginLoadResult[]> {
   const config = await loadPluginsConfig();
   const results: PluginLoadResult[] = [];
-  for (const entry of config.plugins) {
-    const proc = await spawnPluginProcess(entry);
-    try {
+  const loaded: PluginProcess[] = [];
+  try {
+    for (const entry of config.plugins) {
+      const proc = await spawnPluginProcess(entry);
+      loaded.push(proc);
       const manifest = await proc.ready;
       if (manifest.extractors !== undefined) {
         proc.extractorEntries = manifest.extractors.map((ext) => ({
@@ -502,13 +583,13 @@ async function loadPlugins(): Promise<PluginLoadResult[]> {
           priority: ext.priority ?? 0,
         }));
       }
-      activePlugins.push(proc);
       results.push(proc.buildStubs(manifest, entry.allowOverride));
-    } catch (error) {
-      await proc.terminate().catch(() => undefined);
-      throw error;
     }
+  } catch (error) {
+    await Promise.all(loaded.map((proc) => proc.terminate().catch(() => undefined)));
+    throw error;
   }
+  activePlugins.push(...loaded);
   return results;
 }
 
@@ -541,31 +622,37 @@ function mergeToolRegistries(
 }
 
 async function initializePlugins(): Promise<void> {
-  const pluginResults = await loadPlugins();
-  if (pluginResults.length > 0) {
-    const merged = mergeToolRegistries(builtinToolRegistry, pluginResults);
-    setToolRegistry(merged);
-    const toolNames = pluginResults.flatMap((plugin) => Object.keys(plugin.tools));
-    info(
-      "Loaded",
-      colors.number(pluginResults.length),
-      "plugins with",
-      colors.number(toolNames.length),
-      "tools:",
-      toolNames.join(", "),
-    );
+  try {
+    const pluginResults = await loadPlugins();
+    if (pluginResults.length > 0) {
+      const merged = mergeToolRegistries(builtinToolRegistry, pluginResults);
+      setToolRegistry(merged);
+      const toolNames = pluginResults.flatMap((plugin) => Object.keys(plugin.tools));
+      info(
+        "Loaded",
+        colors.number(pluginResults.length),
+        "plugins with",
+        colors.number(toolNames.length),
+        "tools:",
+        toolNames.join(", "),
+      );
 
-    // Register plugin extractors — forward extraction calls to the worker via RPC.
-    for (const proc of activePlugins) {
-      for (const extractor of proc.extractorEntries) {
-        registerExtractor({
-          extract: async (filePath: string, content: string) =>
-            await proc.extract(filePath, content),
-          glob: extractor.glob,
-          priority: extractor.priority ?? 0,
-        });
+      // Register plugin extractors — forward extraction calls to the worker via RPC.
+      for (const proc of activePlugins) {
+        for (const extractor of proc.extractorEntries) {
+          registerExtractor({
+            extract: async (filePath: string, content: string) =>
+              await proc.extract(filePath, content),
+            glob: extractor.glob,
+            priority: extractor.priority ?? 0,
+          });
+        }
       }
     }
+  } catch (error) {
+    // oxlint-disable-next-line eslint/no-use-before-define
+    await destroyPlugins();
+    throw error;
   }
 }
 

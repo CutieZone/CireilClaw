@@ -11,11 +11,10 @@ export const sessionInfo: ToolDef = {
   description:
     "Get information about the current session context.\n\n" +
     "Returns:\n" +
-    '- `platform`: The platform type ("discord", "matrix", "tui", or "internal")\n' +
+    '- `platform`: The platform type ("discord", "tui", or "internal")\n' +
     "- `channel_id` (Discord only): The Discord channel ID\n" +
     "- `guild_id` (Discord only, optional): The Discord guild/server ID (undefined for DMs)\n" +
     "- `parent_channel_id` (Discord only, optional): The parent channel ID for threads/forum posts\n" +
-    "- `room_id` (Matrix only): The Matrix room ID\n" +
     "- `is_nsfw` (Discord only): Whether the channel is marked NSFW\n\n" +
     "Use this to get the IDs needed for other platform-specific operations.",
   // oxlint-disable-next-line typescript/require-await

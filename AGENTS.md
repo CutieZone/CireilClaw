@@ -4,7 +4,7 @@ This file provides guidance to AI Agents when working with code in this reposito
 
 ## What is CireilClaw?
 
-An opinionated, security-focused agent system for running sandboxed AI assistants across multiple channels (Discord, Matrix). Emphasizes safety (least privilege, bubblewrap sandboxing), sanity (debuggable code), speed, and composability (hot-reloadable config, no code edits needed). Features multi-agent orchestration, persistent session management, vision API support with image preprocessing, and extensible tool system.
+An opinionated, security-focused agent system for running sandboxed AI assistants across Discord and TUI. Emphasizes safety (least privilege, bubblewrap sandboxing), sanity (debuggable code), speed, and composability (hot-reloadable config, no code edits needed). Features multi-agent orchestration, persistent session management, vision API support with image preprocessing, and extensible tool system.
 
 ## Commands
 
@@ -53,7 +53,7 @@ External tools are shipped as plugins using `@cireilclaw/sdk`. Plugins run in is
 
 - **Discord** — Full integration via oceanic.js with message handling, image attachments, typing indicators, and automatic message chunking.
 - **TUI** — Interactive terminal UI built with Ink (React). Single-agent mode via `tui` CLI command. No attachment or reaction support.
-- **Matrix** — Stub only (`MatrixSession` class exists but no channel handler).
+- **Matrix** — Not supported; legacy session/config types remain only for persistence compatibility.
 - **Internal** — Ephemeral sessions for heartbeat and isolated cron jobs. Never persisted to DB.
 
 ### Turn Execution

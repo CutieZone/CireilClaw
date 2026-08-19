@@ -7,6 +7,7 @@ import { saveSession } from "#db/sessions.js";
 import { InternalSession } from "#harness/session.js";
 import colors from "#output/colors.js";
 import { debug, warning } from "#output/log.js";
+import { fetchWithTimeout, WEBHOOK_TIMEOUT_MS } from "#util/network.js";
 import { sanitizeError } from "#util/paths.js";
 
 async function deliverOutput(
@@ -14,39 +15,52 @@ async function deliverOutput(
   job: CronJobConfig,
   content: string,
   flags?: number,
-): Promise<void> {
+): Promise<boolean> {
   const { delivery } = job;
 
   if (delivery === "none") {
     debug("Cron: job", colors.keyword(job.id), "delivery=none — discarding output");
-    return;
+    return true;
   }
 
   if (delivery === "webhook") {
     if (job.webhookUrl === undefined) {
       warning("Cron: job", colors.keyword(job.id), "has delivery=webhook but no webhookUrl");
-      return;
+      return false;
     }
     try {
-      await fetch(job.webhookUrl, {
-        body: JSON.stringify({ agentSlug: agent.slug, content, jobId: job.id }),
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
-      });
+      const response = await fetchWithTimeout(
+        job.webhookUrl,
+        {
+          body: JSON.stringify({ agentSlug: agent.slug, content, jobId: job.id }),
+          headers: { "Content-Type": "application/json" },
+          method: "POST",
+        },
+        WEBHOOK_TIMEOUT_MS,
+      );
+      if (!response.ok) {
+        warning(
+          "Cron: webhook delivery failed for job",
+          colors.keyword(job.id),
+          `HTTP ${response.status}`,
+        );
+        return false;
+      }
     } catch (error) {
       warning(
         "Cron: webhook delivery failed for job",
         colors.keyword(job.id),
         error instanceof Error ? error.message : String(error),
       );
+      return false;
     }
-    return;
+    return true;
   }
 
   const target = await agent.resolveTarget(job.target);
   if (target === undefined) {
     debug("Cron: no target session to announce for job", colors.keyword(job.id));
-    return;
+    return false;
   }
 
   try {
@@ -57,7 +71,9 @@ async function deliverOutput(
       colors.keyword(job.id),
       error instanceof Error ? error.message : String(error),
     );
+    return false;
   }
+  return true;
 }
 
 async function runMainSession(agent: Agent, job: CronJobConfig): Promise<boolean> {
@@ -139,8 +155,7 @@ async function runIsolatedSession(agent: Agent, job: CronJobConfig): Promise<boo
     return true;
   }
 
-  await deliverOutput(agent, job, cc);
-  return true;
+  return await deliverOutput(agent, job, cc);
 }
 
 async function runCronJob(agent: Agent, job: CronJobConfig): Promise<boolean> {

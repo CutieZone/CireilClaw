@@ -35,8 +35,17 @@ const downloadAttachments: ToolDef = {
 
     const saved: string[] = [];
     for (const { filename, data } of files) {
-      const sandboxPath = path.join(to, `${message_id}-${filename}`).replaceAll("\\", "/");
+      const normalizedFilename = filename.replaceAll("\\", "/");
+      const safeFilename = path.posix.basename(normalizedFilename);
+      if (safeFilename === "." || safeFilename === ".." || safeFilename.length === 0) {
+        throw new ToolError(`Attachment has an invalid filename: ${filename}`);
+      }
+      const sandboxPath = path.posix.join(
+        to.replaceAll("\\", "/"),
+        `${message_id}-${safeFilename}`,
+      );
 
+      await ctx.paths.checkWriteAccess(sandboxPath);
       await ctx.paths.checkConditionalAccess(sandboxPath);
 
       const realPath = await ctx.paths.resolve(sandboxPath);

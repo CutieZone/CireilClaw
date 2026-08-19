@@ -59,6 +59,7 @@ class Scheduler {
   private readonly agent: Agent;
   private readonly signal: AbortSignal;
   private heartbeatHandle: StopHandle | undefined = undefined;
+  private heartbeatGeneration = 0;
   private readonly cronHandles = new Map<string, StopHandle>();
 
   public constructor(agent: Agent, signal: AbortSignal) {
@@ -105,6 +106,7 @@ class Scheduler {
   }
 
   public stop(): void {
+    this.heartbeatGeneration++;
     this.heartbeatHandle?.stop();
     this.heartbeatHandle = undefined;
 
@@ -132,11 +134,12 @@ class Scheduler {
 
     const intervalMs = cfg.interval * 1000;
     const { agent, signal } = this;
+    const generation = ++this.heartbeatGeneration;
     // oxlint-disable-next-line no-this-alias no-this-assignment
     const parent = this;
 
     function fire(): void {
-      if (signal.aborted) {
+      if (signal.aborted || parent.heartbeatGeneration !== generation) {
         return;
       }
 
@@ -153,7 +156,7 @@ class Scheduler {
           );
         }
 
-        if (!signal.aborted) {
+        if (!signal.aborted && parent.heartbeatGeneration === generation) {
           const timer = setTimeout(fire, intervalMs);
           parent.heartbeatHandle = fromTimeout(timer);
         }

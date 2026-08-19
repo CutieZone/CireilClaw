@@ -193,6 +193,18 @@ describe("writePluginStateFile — rejections", () => {
     );
   });
 
+  it("rejects a symlinked state directory", async () => {
+    const agentDir = path.join(homeDir, ".cireilclaw", "agents", "bot");
+    const outsideDir = path.join(homeDir, "outside-state");
+    mkdirSync(agentDir, { recursive: true });
+    mkdirSync(outsideDir, { recursive: true });
+    symlinkSync(outsideDir, path.join(agentDir, "state"));
+
+    await expect(readPluginStateFile("bot", "github", "state.txt")).rejects.toThrow(
+      "state directory is a symlink",
+    );
+  });
+
   it("rejects non-string content", async () => {
     await expect(
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion

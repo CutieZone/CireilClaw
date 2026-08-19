@@ -1,7 +1,7 @@
 import type { ToolDef, ToolResult } from "@cireilclaw/sdk";
-import { ToolError, vb } from "@cireilclaw/sdk";
+import { vb } from "@cireilclaw/sdk";
 
-import { gh, ghParse, parseLinkNext } from "./api.js";
+import { ghParse, ghParsePage } from "./api.js";
 import type { GHRepo } from "./types.js";
 
 // ── github-list-repos ───────────────────────────────────────────────
@@ -11,27 +11,33 @@ interface GHInstallationReposPage {
   total_count: number;
 }
 
+const listReposSchema = vb.strictObject({
+  page: vb.exactOptional(
+    vb.pipe(vb.number(), vb.integer(), vb.minValue(1), vb.description("Page number (default: 1)")),
+    1,
+  ),
+  perPage: vb.exactOptional(
+    vb.pipe(
+      vb.number(),
+      vb.integer(),
+      vb.minValue(1),
+      vb.maxValue(100),
+      vb.description("Results per page (max 100, default: 20)"),
+    ),
+    20,
+  ),
+});
+
 const githubListRepos: ToolDef = {
-  description: "List repositories the GitHub App installation has access to.",
-  async execute(_raw: unknown, ctx): Promise<ToolResult> {
-    const allRepos: GHRepo[] = [];
-    let nextUrl: string | undefined = "/installation/repositories?per_page=100";
-
-    while (nextUrl !== undefined) {
-      const response = await gh(ctx, "GET", nextUrl);
-      if (!response.ok) {
-        const text = await response.text();
-        throw new ToolError(`GitHub API error (${response.status}): ${text}`);
-      }
-
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      const data = (await response.json()) as GHInstallationReposPage;
-      allRepos.push(...data.repositories);
-
-      nextUrl = parseLinkNext(response.headers.get("link") ?? undefined);
-    }
-
-    const repos = allRepos.map((repo) => ({
+  description: "List one bounded page of repositories the GitHub App installation can access.",
+  async execute(raw: unknown, ctx): Promise<ToolResult> {
+    const { page, perPage } = vb.parse(listReposSchema, raw);
+    const result = await ghParsePage<GHInstallationReposPage>(
+      ctx,
+      "GET",
+      `/installation/repositories?page=${String(page)}&per_page=${String(perPage)}`,
+    );
+    const repos = result.data.repositories.map((repo) => ({
       defaultBranch: repo.default_branch,
       description: repo.description,
       fullName: repo.full_name,
@@ -42,10 +48,16 @@ const githubListRepos: ToolDef = {
       private: repo.private,
       updatedAt: repo.updated_at,
     }));
-    return { repos, success: true };
+    return {
+      hasMore: result.hasMore,
+      page,
+      repos,
+      success: true,
+      totalCount: result.data.total_count,
+    };
   },
   name: "github-list-repos",
-  parameters: vb.strictObject({}),
+  parameters: listReposSchema,
 };
 
 // ── github-read-repo ────────────────────────────────────────────────

@@ -95,13 +95,21 @@ function withTimeout<Result>(
   timeoutMs: number,
   label: string,
 ): Promise<Result> {
-  return Promise.race([
-    promise,
-    (async () => {
-      await sleep(timeoutMs);
-      throw new Error(`Discord REST operation timed out (>${timeoutMs}ms) on ${label}`);
-    })(),
-  ]);
+  let rejectTimeout: ((reason: Error) => void) | undefined = undefined;
+  const timeout = new Promise<Result>((_resolve, reject) => {
+    rejectTimeout = reject;
+  });
+  const timer = setTimeout(() => {
+    rejectTimeout?.(new Error(`Discord REST operation timed out (>${timeoutMs}ms) on ${label}`));
+  }, timeoutMs);
+
+  return (async (): Promise<Result> => {
+    try {
+      return await Promise.race([promise, timeout]);
+    } finally {
+      clearTimeout(timer);
+    }
+  })();
 }
 
 async function runDiscordRestWithRetries<Result>(

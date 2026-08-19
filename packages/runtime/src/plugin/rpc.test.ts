@@ -81,6 +81,18 @@ describe("RpcChannel", () => {
     expect(result).toBe("ok");
   });
 
+  it("ignores malformed response payloads", async () => {
+    const mc = new MessageChannel();
+    const client = new RpcChannel(mc.port1);
+    channels.push(client);
+
+    const pending = client.call("malformed", [], 20);
+    mc.port2.postMessage({ error: undefined, id: 1, kind: "res", ok: false });
+
+    await expect(pending).rejects.toThrow("timed out after 20ms");
+    mc.port2.close();
+  });
+
   it("close() rejects all pending calls", async () => {
     const [client, server] = pair();
     server.handle("hang", async () => await hangForever());

@@ -3,18 +3,22 @@ import type { JsonSchema } from "@valibot/to-json-schema";
 import type { GenericSchema } from "valibot";
 
 /**
- * Recursively clones a value, replacing any `RegExp` instance with an
- * equivalent one without flags. Needed because `@valibot/to-json-schema`
- * throws on regex flags — JSON Schema's `pattern` keyword does not support
- * them.
+ * Recursively clones a value, rejecting regex flags that JSON Schema patterns
+ * cannot represent. The `u` flag is implicit in JSON Schema's Unicode-aware
+ * pattern semantics and is therefore safe to discard.
  *
  * This is a structural clone: known valibot schema shapes are walked so the
  * result stays isomorphic to the input for valibot's purposes.
  */
 function stripRegexFlags(value: unknown): unknown {
   if (value instanceof RegExp) {
-    // Flags like /u are meaningless for JSON Schema pattern. The source is
-    // all that matters.
+    const unsupportedFlags = value.flags.replaceAll("u", "");
+    if (unsupportedFlags.length > 0) {
+      throw new Error(
+        `Cannot convert regex /${value.source}/${value.flags} to JSON Schema: ` +
+          `unsupported flags '${unsupportedFlags}'`,
+      );
+    }
     // oxlint-disable-next-line eslint/require-unicode-regexp
     return new RegExp(value.source);
   }
@@ -34,8 +38,8 @@ function stripRegexFlags(value: unknown): unknown {
 }
 
 /**
- * Converts a Valibot schema to JSON Schema, safely handling any regex
- * actions that carry flags (which `@valibot/to-json-schema` rejects).
+ * Converts a Valibot schema to JSON Schema without silently changing regex
+ * validation semantics.
  */
 export function toJsonSchemaSafe(
   schema: GenericSchema,

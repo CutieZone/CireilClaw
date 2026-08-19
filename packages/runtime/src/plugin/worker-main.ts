@@ -255,7 +255,10 @@ async function main(parent: NonNullable<typeof parentPort>, init: WorkerInit): P
       throw new TypeError("extract called with invalid args");
     }
     const fileName = filePath.split("/").pop() ?? filePath;
-    for (const extractor of plugin.extractors ?? []) {
+    const extractors = [...(plugin.extractors ?? [])].toSorted(
+      (left, right) => (right.priority ?? 0) - (left.priority ?? 0),
+    );
+    for (const extractor of extractors) {
       if (matchesGlob(fileName, extractor.glob)) {
         return await extractor.extract(filePath, content);
       }

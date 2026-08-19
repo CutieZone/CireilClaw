@@ -11,6 +11,7 @@ import type { Tool } from "#engine/tool.js";
 import { debug, warning } from "#output/log.js";
 import { encode } from "#util/base64.js";
 import { scaleForAnthropic } from "#util/image.js";
+import { SINGLE_REQUEST_TIMEOUT_MS } from "#util/network.js";
 import { toJsonSchemaSafe } from "#util/schema.js";
 
 interface AnthropicTextBlock {
@@ -330,6 +331,7 @@ export async function generate(
         ...customHeaders,
       },
       method: "POST",
+      signal: AbortSignal.timeout(SINGLE_REQUEST_TIMEOUT_MS),
     });
     debug("Finished Anthropic message generation...");
 

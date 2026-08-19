@@ -650,12 +650,10 @@ async function runRaw(
   timeout: number,
   envVars?: EnvVar[],
 ): Promise<ExecOutput> {
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined) {
-      env[key] = value;
-    }
-  }
+  // Keep the explicit bypass subject to the same environment allowlist as the
+  // sandboxed backend. The bypass removes filesystem isolation, not secret
+  // isolation.
+  const env: Record<string, string> = { PATH: process.env["PATH"] ?? "" };
   for (const { key, value } of envVars ?? []) {
     env[key] = value;
   }

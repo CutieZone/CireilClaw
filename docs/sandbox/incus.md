@@ -42,6 +42,7 @@ CireilClaw adds these disk devices to the instance:
 - `/tasks` — read-write agent tasks
 
 Configured custom mounts appear below `/workspace/` with their selected `ro` or `rw` mode.
+Mount targets must not overlap; configure sibling targets rather than nesting one mount target below another.
 Custom mount sources must be permitted by the selected Incus project.
 
 The runtime maps the host process UID and GID into the instance with `raw.idmap` and executes the agent command using those numeric IDs.

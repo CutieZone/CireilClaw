@@ -258,6 +258,8 @@ Each plugin runs in a dedicated Node worker thread. The runtime talks to it over
 
 **Fire-and-forget callbacks (`addImage`/`addVideo`/`addToolMessage`) don't await.** The RPC fires, you move on. If delivery matters, call them early in `execute`, not in a `finally`.
 
+**Invocation timeouts terminate the worker.** Tool and extractor calls have a ten-minute deadline. If one times out, the runtime terminates that plugin worker; the plugin remains unavailable until the process restarts.
+
 **`instanceof ToolError` does not cross the boundary.** Every module has its own copy of SDK classes inside the worker's module cache (even at the same real path, Node workers have separate module state). Throw a `ToolError` inside `execute`; the runtime decodes the serialized form on the other side. Don't build logic on `err instanceof ToolError` in plugin code that catches its own errors. Instead, check `err.name === "ToolError"` if you must, or just re-throw.
 
 ## Publishing a Plugin

@@ -248,7 +248,10 @@ describe("exec", () => {
     expect(mockedSpawn).toHaveBeenCalledWith(
       "/usr/bin/echo",
       ["hello"],
-      expect.objectContaining({ stdio: ["ignore", "pipe", "pipe"] }),
+      expect.objectContaining({
+        env: { PATH: "/usr/bin" },
+        stdio: ["ignore", "pipe", "pipe"],
+      }),
     );
     expect(result).toEqual({
       exitCode: 0,
@@ -256,6 +259,31 @@ describe("exec", () => {
       stdout: "hello",
       type: "output",
     });
+  });
+
+  it("does not inherit undeclared host environment variables in bypass mode", async () => {
+    vi.stubEnv(
+      "CIREILCLAW_RUNTIME_INSECURE_DISABLE_SANDBOX_I_AM_100_PERCENT_SURE",
+      "i-am-in-a-container",
+    );
+    vi.stubEnv("UNDECLARED_SECRET", "must-not-leak");
+    mockedExistsSync.mockImplementation((path) => path === "/usr/bin/echo");
+    mockedSpawn.mockReturnValue(fakeChildProcess("ok", "", 0));
+
+    await exec({
+      agentSlug: "test",
+      args: [],
+      binaries: ["echo"],
+      command: "echo",
+      hostEnvPassthrough: [],
+      timeout: 5000,
+    });
+
+    expect(mockedSpawn).toHaveBeenCalledWith(
+      "/usr/bin/echo",
+      [],
+      expect.objectContaining({ env: { PATH: "/usr/bin" } }),
+    );
   });
 
   it("bypasses sandbox with alternative undocumented value", async () => {

@@ -37,6 +37,34 @@ const IncusConfigSchema = vb.strictObject({
 
 type Mount = vb.InferOutput<typeof MountSchema>;
 
+function validateMountTargets(mounts: readonly Mount[], agentSlug: string): void {
+  for (let index = 0; index < mounts.length; index++) {
+    const mount = mounts[index];
+    if (mount === undefined) {
+      continue;
+    }
+    for (let previousIndex = 0; previousIndex < index; previousIndex++) {
+      const previous = mounts[previousIndex];
+      if (previous === undefined) {
+        continue;
+      }
+      if (mount.target === previous.target) {
+        throw new Error(
+          `Duplicate mount target '${mount.target}' in sandbox.toml for agent '${agentSlug}'`,
+        );
+      }
+      if (
+        mount.target.startsWith(`${previous.target}/`) ||
+        previous.target.startsWith(`${mount.target}/`)
+      ) {
+        throw new Error(
+          `Overlapping mount targets '${previous.target}' and '${mount.target}' in sandbox.toml for agent '${agentSlug}'`,
+        );
+      }
+    }
+  }
+}
+
 const SandboxConfigSchema = vb.object({
   backend: vb.pipe(vb.exactOptional(vb.picklist(["bwrap", "incus"]), "bwrap")),
   bwrap: vb.optional(BwrapConfigSchema),
@@ -48,5 +76,11 @@ const SandboxConfigSchema = vb.object({
 type SandboxConfig = vb.InferOutput<typeof SandboxConfigSchema>;
 type IncusConfig = vb.InferOutput<typeof IncusConfigSchema>;
 
-export { BwrapConfigSchema, IncusConfigSchema, SandboxConfigSchema, MountSchema };
+export {
+  BwrapConfigSchema,
+  IncusConfigSchema,
+  MountSchema,
+  SandboxConfigSchema,
+  validateMountTargets,
+};
 export type { IncusConfig, SandboxConfig, Mount };
