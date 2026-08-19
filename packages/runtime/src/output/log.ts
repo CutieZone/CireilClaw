@@ -2,7 +2,7 @@ import {
   appendFileSync,
   chmodSync,
   closeSync,
-  existsSync,
+  fchmodSync,
   mkdirSync,
   openSync,
   renameSync,
@@ -61,23 +61,34 @@ function isEnabled(callLevel: Level): boolean {
   return LEVEL_RANK[callLevel] >= LEVEL_RANK[config.level];
 }
 
+function isErrno(failure: unknown, code: string): boolean {
+  return failure instanceof Error && "code" in failure && failure.code === code;
+}
+
+function renameIfPresent(from: string, to: string): void {
+  try {
+    renameSync(from, to);
+    // oxlint-disable-next-line eslint/no-shadow -- catch errors are checked by errno
+  } catch (error: unknown) {
+    if (!isErrno(error, "ENOENT")) {
+      throw error;
+    }
+  }
+}
+
 function rotate(filePth: string): void {
   for (let idx = MAX_BACKUPS - 1; idx >= 1; idx--) {
     const from = `${filePth}.${idx}`;
     const to = `${filePth}.${idx + 1}`;
-    if (existsSync(from)) {
-      renameSync(from, to);
-    }
+    renameIfPresent(from, to);
   }
   if (fd !== undefined) {
     closeSync(fd);
     fd = undefined;
   }
-  if (existsSync(filePth)) {
-    renameSync(filePth, `${filePth}.1`);
-  }
+  renameIfPresent(filePth, `${filePth}.1`);
   fd = openSync(filePth, "a", 0o600);
-  chmodSync(filePth, 0o600);
+  fchmodSync(fd, 0o600);
   bytesWritten = 0;
 }
 
@@ -112,7 +123,7 @@ function setLogFile(filePth: string): void {
   }
   filePath = filePth;
   fd = openSync(filePth, "a", 0o600);
-  chmodSync(filePth, 0o600);
+  fchmodSync(fd, 0o600);
   // Seed bytesWritten from any pre-existing file size so rotation triggers correctly.
   try {
     bytesWritten = statSync(filePth).size;

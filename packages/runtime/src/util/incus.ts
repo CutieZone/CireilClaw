@@ -363,7 +363,8 @@ async function ensureContainerUser(
   identity: HostIdentity,
 ): Promise<void> {
   const account = await execAsRoot(incus, name, "getent", ["passwd", String(identity.uid)]);
-  let username = agentSlug;
+  // oxlint-disable-next-line eslint/init-declarations -- assigned in each branch before use
+  let username: string;
   if (account.exitCode === 0) {
     username = parseAccountName(account.stdout, "user", identity.uid);
   } else {
@@ -514,7 +515,6 @@ async function ensureRunning(
     }
     if (state !== "running") {
       await startInstance(incus, name);
-      state = "running";
       startedByUs = true;
     }
     await setHostname(incus, name, agentSlug);
