@@ -3,6 +3,7 @@ import * as vb from "valibot";
 import type { ProviderConfig } from "#config/schemas/engine.js";
 import { nonEmptyString } from "#config/schemas/shared.js";
 import { warning } from "#output/log.js";
+import { INITIAL_RESPONSE_TIMEOUT_MS } from "#util/network.js";
 
 import { OPENAI_CODEX_MODELS } from "./openai-codex.js";
 
@@ -100,7 +101,10 @@ async function fetchOpenAIModelMetadata(provider: ProviderConfig): Promise<Model
   const headers = new Headers({ Authorization: `Bearer ${firstApiKey(provider)}` });
   applyCustomHeaders(headers, provider);
 
-  const response = await fetch(modelsUrl(provider.apiBase), { headers });
+  const response = await fetch(modelsUrl(provider.apiBase), {
+    headers,
+    signal: AbortSignal.timeout(INITIAL_RESPONSE_TIMEOUT_MS),
+  });
   if (!response.ok) {
     throw new Error(`model metadata request failed with HTTP ${response.status}`);
   }
@@ -117,7 +121,10 @@ async function fetchAnthropicModelMetadata(provider: ProviderConfig): Promise<Mo
   });
   applyCustomHeaders(headers, provider);
 
-  const response = await fetch(modelsUrl(provider.apiBase), { headers });
+  const response = await fetch(modelsUrl(provider.apiBase), {
+    headers,
+    signal: AbortSignal.timeout(INITIAL_RESPONSE_TIMEOUT_MS),
+  });
   if (!response.ok) {
     throw new Error(`model metadata request failed with HTTP ${response.status}`);
   }

@@ -23,6 +23,7 @@ import { debug, warning } from "#output/log.js";
 import { encode } from "#util/base64.js";
 import { toJpeg } from "#util/image.js";
 import { fingerprintArguments, parseRepairedJSON } from "#util/json.js";
+import { SINGLE_REQUEST_TIMEOUT_MS } from "#util/network.js";
 import { toJsonSchemaSafe } from "#util/schema.js";
 
 // Per-apiBase JPEG requirement flag. Set on first WebP rejection so subsequent
@@ -89,6 +90,7 @@ async function uploadKimiFile(
     body: formData,
     headers: { Authorization: `Bearer ${apiKey}` },
     method: "POST",
+    signal: AbortSignal.timeout(SINGLE_REQUEST_TIMEOUT_MS),
   });
 
   if (!resp.ok) {
@@ -477,6 +479,7 @@ async function generate(
         "X-OpenRouter-Title": "CireilClaw",
         ...customHeaders,
       },
+      timeout: SINGLE_REQUEST_TIMEOUT_MS,
     });
 
     let resp: Awaited<ReturnType<typeof client.chat.completions.create>> | undefined = undefined;
@@ -555,7 +558,7 @@ async function generate(
 
     try {
       if (!Array.isArray(resp.choices)) {
-        debug("Got unexpected response", resp);
+        debug("Got unexpected response", { choicesType: typeof resp.choices });
         throw new TypeError(
           `Unexpected API response: 'choices' is ${String(resp.choices)} — the model may not support vision, or the request was rejected`,
         );
@@ -575,12 +578,10 @@ async function generate(
       }
 
       if (reason !== "tool_calls") {
-        debug("Failing due to wrong end reason.");
-        debug("Message object:", choice.message);
-
-        if (choice.message.tool_calls !== undefined && choice.message.tool_calls.length > 0) {
-          debug("Had at least one tool call.");
-        }
+        debug("Failing due to wrong end reason", {
+          hasToolCalls: (choice.message.tool_calls?.length ?? 0) > 0,
+          reason,
+        });
 
         const rawText =
           typeof choice.message.content === "string" ? choice.message.content : undefined;

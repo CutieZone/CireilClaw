@@ -10,12 +10,19 @@ import { debug, warning } from "#output/log.js";
 import { encode } from "#util/base64.js";
 import { toJpeg } from "#util/image.js";
 import { fingerprintArguments, parseRepairedJSON } from "#util/json.js";
+import {
+  fetchWithTimeout,
+  INITIAL_RESPONSE_TIMEOUT_MS,
+  SINGLE_REQUEST_TIMEOUT_MS,
+  STREAM_IDLE_TIMEOUT_MS,
+} from "#util/network.js";
 import { toJsonSchemaSafe } from "#util/schema.js";
 
 import { getChatGptAccountId, getValidCodexAuth } from "./openai-codex-auth.js";
 
 const OPENAI_BETA_RESPONSES = "responses=experimental";
 const ORIGINATOR_CODEX = "codex_cli_rs";
+type StreamReadResult = Awaited<ReturnType<ReadableStreamDefaultReader<Uint8Array>["read"]>>;
 
 const GPT5_MINOR_VERSIONS = ["5.1", "5.2", "5.3", "5.4", "5.5"] as const;
 const GENERAL_REASONING_VARIANTS = ["none", "low", "medium", "high", "xhigh"] as const;
@@ -402,10 +409,14 @@ function parseSseEventData(line: string): unknown {
 async function parseCodexResponse(response: Response): Promise<unknown> {
   const contentType = response.headers.get("content-type") ?? "";
   if (contentType.includes("application/json")) {
-    return unwrapCodexResponse(await response.json());
+    return unwrapCodexResponse(
+      // oxlint-disable-next-line eslint/no-use-before-define
+      JSON.parse(await readTextWithDeadline(response, SINGLE_REQUEST_TIMEOUT_MS)),
+    );
   }
 
-  const text = await response.text();
+  // oxlint-disable-next-line eslint/no-use-before-define
+  const text = await readStreamText(response);
   const outputItems: Record<string, unknown>[] = [];
   const eventTypes: string[] = [];
   let fallbackResponse: unknown = undefined;
@@ -442,7 +453,7 @@ async function parseCodexResponse(response: Response): Promise<unknown> {
     }
 
     if (type === "response.failed") {
-      debug("OpenAI Codex failed stream event", { event: event.output });
+      debug("OpenAI Codex failed stream event", { type });
       fallbackResponse = unwrapCodexResponse(event.output);
       continue;
     }
@@ -469,8 +480,75 @@ async function parseCodexResponse(response: Response): Promise<unknown> {
     return fallbackResponse;
   }
 
-  debug("OpenAI Codex stream ended without final response", { contentType, eventTypes, text });
+  debug("OpenAI Codex stream ended without final response", { contentType, eventTypes });
   throw new Error("OpenAI Codex response stream ended without a final response event.");
+}
+
+async function readTextWithDeadline(response: Response, timeoutMs: number): Promise<string> {
+  let rejectTimeout: ((reason: Error) => void) | undefined = undefined;
+  const timeout = new Promise<string>((_resolve, reject) => {
+    rejectTimeout = reject;
+  });
+  const timer = setTimeout(() => {
+    rejectTimeout?.(new Error(`Response body timed out after ${timeoutMs}ms`));
+  }, timeoutMs);
+
+  try {
+    return await Promise.race([response.text(), timeout]);
+  } catch (error) {
+    if (response.body !== null) {
+      await response.body.cancel(error).catch(() => undefined);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function readStreamText(response: Response): Promise<string> {
+  if (response.body === null) {
+    return await response.text();
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+
+  try {
+    for (;;) {
+      // oxlint-disable-next-line eslint/no-use-before-define
+      const { done, value } = await readChunkWithTimeout(reader);
+      if (done) {
+        break;
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    text += decoder.decode();
+    return text;
+  } catch (error) {
+    await reader.cancel(error).catch(() => undefined);
+    throw error;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+async function readChunkWithTimeout(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+): Promise<StreamReadResult> {
+  let rejectTimeout: ((reason: Error) => void) | undefined = undefined;
+  const timeout = new Promise<StreamReadResult>((_resolve, reject) => {
+    rejectTimeout = reject;
+  });
+  const timer = setTimeout(() => {
+    rejectTimeout?.(new Error(`Stream idle timeout after ${STREAM_IDLE_TIMEOUT_MS}ms`));
+  }, STREAM_IDLE_TIMEOUT_MS);
+
+  try {
+    return await Promise.race([reader.read(), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function fetchCodexResponse(
@@ -491,11 +569,15 @@ async function fetchCodexResponse(
   }
 
   for (let attempt = 0; attempt < 2; attempt++) {
-    const response = await fetch(`${apiBase}/codex/responses`, {
-      body: JSON.stringify(body),
-      headers: createCodexHeaders(auth.accessToken, accountId, sessionId, customHeaders),
-      method: "POST",
-    });
+    const response = await fetchWithTimeout(
+      `${apiBase}/codex/responses`,
+      {
+        body: JSON.stringify(body),
+        headers: createCodexHeaders(auth.accessToken, accountId, sessionId, customHeaders),
+        method: "POST",
+      },
+      INITIAL_RESPONSE_TIMEOUT_MS,
+    );
 
     if (response.status === 401 && attempt === 0) {
       auth = await getValidCodexAuth(authId, { forceRefresh: true });

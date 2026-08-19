@@ -1,7 +1,7 @@
 import type { ToolDef, ToolResult } from "@cireilclaw/sdk";
 import { vb } from "@cireilclaw/sdk";
 
-import { ghParse } from "./api.js";
+import { ghParse, ghParsePage } from "./api.js";
 import type { GHIssue, GHSearchResult } from "./types.js";
 
 // ── github-create-issue ─────────────────────────────────────────────
@@ -90,6 +90,10 @@ const listIssuesSchema = vb.strictObject({
     vb.pipe(vb.string(), vb.description("Comma-separated list of label names to filter by")),
   ),
   owner: vb.pipe(vb.string(), vb.nonEmpty()),
+  page: vb.exactOptional(
+    vb.pipe(vb.number(), vb.integer(), vb.minValue(1), vb.description("Page number (default: 1)")),
+    1,
+  ),
   perPage: vb.exactOptional(
     vb.pipe(
       vb.number(),
@@ -118,13 +122,19 @@ const listIssuesSchema = vb.strictObject({
 });
 
 const githubListIssues: ToolDef = {
-  description: "List issues in a repository with optional filters.",
+  description: "List one bounded page of issues in a repository with optional filters.",
   async execute(raw: unknown, ctx): Promise<ToolResult> {
-    const { owner, repo, state, labels, assignee, sort, direction, perPage } = vb.parse(
+    const { owner, repo, state, labels, assignee, sort, direction, page, perPage } = vb.parse(
       listIssuesSchema,
       raw,
     );
-    const params = new URLSearchParams({ direction, per_page: String(perPage), sort, state });
+    const params = new URLSearchParams({
+      direction,
+      page: String(page),
+      per_page: String(perPage),
+      sort,
+      state,
+    });
     if (labels !== undefined) {
       params.set("labels", labels);
     }
@@ -132,12 +142,12 @@ const githubListIssues: ToolDef = {
       params.set("assignee", assignee);
     }
 
-    const items = await ghParse<GHIssue[]>(
+    const result = await ghParsePage<GHIssue[]>(
       ctx,
       "GET",
       `/repos/${owner}/${repo}/issues?${String(params)}`,
     );
-    const issues = items
+    const issues = result.data
       .filter((item) => item.pull_request === undefined)
       .map((item) => ({
         assignees: item.assignees.map((user) => user.login),
@@ -151,7 +161,7 @@ const githubListIssues: ToolDef = {
         updatedAt: item.updated_at,
         user: item.user?.login ?? undefined,
       }));
-    return { issues, success: true };
+    return { hasMore: result.hasMore, issues, page, success: true };
   },
   name: "github-list-issues",
   parameters: listIssuesSchema,

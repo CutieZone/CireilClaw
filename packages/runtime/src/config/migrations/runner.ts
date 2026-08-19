@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { confirm, select } from "@inquirer/prompts";
@@ -82,7 +82,7 @@ async function loadMigrations(): Promise<ConfigMigration[]> {
 
       migrations.push(imported.migration);
     } catch (error) {
-      console.error(`Failed to load migration from ${entry.name}:`, error);
+      throw new Error(`Failed to load migration from ${entry.name}`, { cause: error });
     }
   }
 
@@ -156,12 +156,20 @@ function getBackupFilename(filePath: string): string {
 async function createBackup(migrationId: string, filePath: string, content: string): Promise<void> {
   const backupDir = path.join(BACKUPS_DIR, migrationId);
   if (!existsSync(backupDir)) {
-    await mkdir(backupDir, { recursive: true });
+    await mkdir(backupDir, { mode: 0o700, recursive: true });
   }
+  await chmod(backupDir, 0o700);
 
   const backupFilename = getBackupFilename(filePath);
   const backupPath = path.join(backupDir, backupFilename);
-  await writeFile(backupPath, content, { encoding: "utf8" });
+  try {
+    await writeFile(backupPath, content, { encoding: "utf8", flag: "wx", mode: 0o600 });
+  } catch (error: unknown) {
+    if (!(error instanceof Error) || !("code" in error) || error.code !== "EEXIST") {
+      throw error;
+    }
+  }
+  await chmod(backupPath, 0o600);
 }
 
 async function applyMigrationToFile(

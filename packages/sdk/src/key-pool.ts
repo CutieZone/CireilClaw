@@ -6,9 +6,9 @@ interface KeyFailure {
   timestamp: number;
 }
 
-function poolKeyForKeys(keys: string | string[]): string {
+function poolKeyForKeys(keys: string | string[], cooldownMs: number): string {
   const normalized = Array.isArray(keys) ? keys : [keys];
-  const input = new TextEncoder().encode(normalized.join("|"));
+  const input = new TextEncoder().encode(JSON.stringify([cooldownMs, normalized]));
   return Buffer.from(blake3(input)).toString("hex");
 }
 
@@ -100,7 +100,7 @@ class KeyPoolManagerClass {
   private readonly pools = new Map<string, KeyPool>();
 
   public getPool(keys: string | string[], cooldownMs = DEFAULT_COOLDOWN_MS): KeyPool {
-    const key = poolKeyForKeys(keys);
+    const key = poolKeyForKeys(keys, cooldownMs);
     let pool = this.pools.get(key);
 
     if (pool === undefined) {

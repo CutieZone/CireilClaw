@@ -128,6 +128,13 @@ describe("KeyPoolManager", () => {
     expect(pool1).not.toBe(pool2);
   });
 
+  it("does not share pools with different cooldowns", () => {
+    const pool1 = KeyPoolManager.getPool(["a"], 1000);
+    const pool2 = KeyPoolManager.getPool(["a"], 2000);
+    expect(pool1).not.toBe(pool2);
+    expect(KeyPoolManager.size).toBe(2);
+  });
+
   it("tracks pool count", () => {
     expect(KeyPoolManager.size).toBe(0);
     KeyPoolManager.getPool("key1");

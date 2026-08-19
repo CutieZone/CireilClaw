@@ -56,14 +56,12 @@ function stripPem(pem: string): Uint8Array {
  * Base64url-encode a byte array (no padding).
  */
 function b64urlEncode(data: Uint8Array): string {
-  const codePoints: number[] = [];
-  for (const byte of data) {
-    codePoints.push(byte);
+  const chunks: string[] = [];
+  const chunkSize = 32_768;
+  for (let start = 0; start < data.length; start += chunkSize) {
+    chunks.push(String.fromCodePoint(...data.slice(start, start + chunkSize)));
   }
-  return btoa(String.fromCodePoint(...codePoints))
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replaceAll("=", "");
+  return btoa(chunks.join("")).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
 /**

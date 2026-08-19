@@ -18,7 +18,7 @@ import { DiscordConfigSchema } from "./schemas/discord.js";
 import type { DiscordConfig } from "./schemas/discord.js";
 import { ProvidersConfigSchema } from "./schemas/engine.js";
 import type { ProvidersConfig } from "./schemas/engine.js";
-import { SandboxConfigSchema } from "./schemas/sandbox.js";
+import { SandboxConfigSchema, validateMountTargets } from "./schemas/sandbox.js";
 import type { SandboxConfig } from "./schemas/sandbox.js";
 import { SystemConfigSchema } from "./schemas/system.js";
 import { ToolsConfigSchema } from "./schemas/tools.js";
@@ -208,15 +208,8 @@ async function loadSandboxConfig(agentSlug: string): Promise<SandboxConfig> {
     throw new Error(`sandbox.toml for agent '${agentSlug}' selects Incus without an [incus] table`);
   }
 
-  const targets = new Set<string>();
+  validateMountTargets(config.mounts, agentSlug);
   for (const mount of config.mounts) {
-    if (targets.has(mount.target)) {
-      throw new Error(
-        `Duplicate mount target '${mount.target}' in sandbox.toml for agent '${agentSlug}'`,
-      );
-    }
-    targets.add(mount.target);
-
     mount.source = expandTilde(mount.source);
   }
 

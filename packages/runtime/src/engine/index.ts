@@ -102,7 +102,57 @@ function builtinPluginStateError(): never {
   throw new Error("pluginState is only available to plugins, not to builtin tools");
 }
 
-export async function runTurn(
+interface TurnSnapshot {
+  activeFileSections: Map<string, Set<string>>;
+  history: Message[];
+  historyBarrier: number | undefined;
+  historyCursor: number;
+  lastContextWarningCursor: number | undefined;
+  lastSentMessageIds: string[] | undefined;
+  openedFiles: Set<string>;
+  pendingImages: Session["pendingImages"];
+  pendingToolMessages: Message[];
+  pendingVideos: Session["pendingVideos"];
+  stopRequested: boolean;
+  summaries: Session["summaries"];
+}
+
+function snapshotSession(session: Session): TurnSnapshot {
+  return {
+    activeFileSections: new Map(
+      [...session.activeFileSections].map(([filePath, sections]) => [filePath, new Set(sections)]),
+    ),
+    history: [...session.history],
+    historyBarrier: session.historyBarrier,
+    historyCursor: session.historyCursor,
+    lastContextWarningCursor: session.lastContextWarningCursor,
+    lastSentMessageIds:
+      session.lastSentMessageIds === undefined ? undefined : [...session.lastSentMessageIds],
+    openedFiles: new Set(session.openedFiles),
+    pendingImages: [...session.pendingImages],
+    pendingToolMessages: [...session.pendingToolMessages],
+    pendingVideos: [...session.pendingVideos],
+    stopRequested: session.stopRequested,
+    summaries: [...session.summaries],
+  };
+}
+
+function restoreSession(session: Session, snapshot: TurnSnapshot): void {
+  session.activeFileSections = snapshot.activeFileSections;
+  session.history = snapshot.history;
+  session.historyBarrier = snapshot.historyBarrier;
+  session.historyCursor = snapshot.historyCursor;
+  session.lastContextWarningCursor = snapshot.lastContextWarningCursor;
+  session.lastSentMessageIds = snapshot.lastSentMessageIds;
+  session.openedFiles = snapshot.openedFiles;
+  session.pendingImages = snapshot.pendingImages;
+  session.pendingToolMessages = snapshot.pendingToolMessages;
+  session.pendingVideos = snapshot.pendingVideos;
+  session.stopRequested = snapshot.stopRequested;
+  session.summaries = snapshot.summaries;
+}
+
+async function runTurnImpl(
   session: Session,
   agentSlug: string,
   override: {
@@ -692,7 +742,9 @@ export async function runTurn(
       for (const call of toolCalls) {
         const def = getToolRegistry()[call.name];
 
-        debug("Tool call", colors.keyword(call.name), call);
+        debug("Tool call", colors.keyword(call.name), {
+          inputType: Array.isArray(call.input) ? "array" : typeof call.input,
+        });
         let result: Record<string, unknown> = {};
         if (disabledTools.has(call.name) || !tools.some((tool) => tool.name === call.name)) {
           result = {
@@ -727,7 +779,9 @@ export async function runTurn(
             }
           }
         }
-        debug("Tool result", colors.keyword(call.name), result);
+        debug("Tool result", colors.keyword(call.name), {
+          success: result["success"],
+        });
 
         // Assign Discord message IDs to the assistant history entry immediately
         // after respond sends, so agentic-loop entries carry proper snowflakes
@@ -845,5 +899,19 @@ export async function runTurn(
         toolMessagesCommitted = true;
       }
     }
+  }
+}
+
+type RunTurnArgs = Parameters<typeof runTurnImpl>;
+
+export async function runTurn(...args: RunTurnArgs): Promise<void> {
+  const [session] = args;
+  const snapshot = snapshotSession(session);
+
+  try {
+    await runTurnImpl(...args);
+  } catch (error) {
+    restoreSession(session, snapshot);
+    throw error;
   }
 }

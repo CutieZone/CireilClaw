@@ -1,5 +1,6 @@
 import {
   appendFileSync,
+  chmodSync,
   closeSync,
   existsSync,
   mkdirSync,
@@ -54,6 +55,12 @@ function serializeArgs(level: Level, data: unknown[]): Record<string, unknown> {
   return { level, msg, ts: new Date().toISOString(), ...extra };
 }
 
+const LEVEL_RANK: Record<Level, number> = { debug: 0, error: 3, info: 1, warning: 2 };
+
+function isEnabled(callLevel: Level): boolean {
+  return LEVEL_RANK[callLevel] >= LEVEL_RANK[config.level];
+}
+
 function rotate(filePth: string): void {
   for (let idx = MAX_BACKUPS - 1; idx >= 1; idx--) {
     const from = `${filePth}.${idx}`;
@@ -69,12 +76,13 @@ function rotate(filePth: string): void {
   if (existsSync(filePth)) {
     renameSync(filePth, `${filePth}.1`);
   }
-  fd = openSync(filePth, "a");
+  fd = openSync(filePth, "a", 0o600);
+  chmodSync(filePth, 0o600);
   bytesWritten = 0;
 }
 
 function writeToFile(level: Level, data: unknown[]): void {
-  if (fd === undefined || filePath === undefined) {
+  if (!isEnabled(level) || fd === undefined || filePath === undefined) {
     return;
   }
   try {
@@ -89,14 +97,10 @@ function writeToFile(level: Level, data: unknown[]): void {
   }
 }
 
-const LEVEL_RANK: Record<Level, number> = { debug: 0, error: 3, info: 1, warning: 2 };
-
-function isEnabled(callLevel: Level): boolean {
-  return LEVEL_RANK[callLevel] >= LEVEL_RANK[config.level];
-}
-
 function setLogFile(filePth: string): void {
-  mkdirSync(path.dirname(filePth), { recursive: true });
+  const directory = path.dirname(filePth);
+  mkdirSync(directory, { mode: 0o700, recursive: true });
+  chmodSync(directory, 0o700);
   if (fd !== undefined) {
     try {
       closeSync(fd);
@@ -106,7 +110,8 @@ function setLogFile(filePth: string): void {
     fd = undefined;
   }
   filePath = filePth;
-  fd = openSync(filePth, "a");
+  fd = openSync(filePth, "a", 0o600);
+  chmodSync(filePth, 0o600);
   // Seed bytesWritten from any pre-existing file size so rotation triggers correctly.
   try {
     bytesWritten = statSync(filePth).size;

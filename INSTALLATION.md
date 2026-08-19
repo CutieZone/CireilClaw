@@ -159,6 +159,10 @@ Per-guild model overrides are supported:
 "guild-id" = { model = "gpt-4o-mini" }
 ```
 
+Provider requests use fixed internal deadlines rather than configuration fields.
+Single-response requests have a ten-minute hard deadline.
+Codex streaming requests have a 30-second initial-response deadline and a 120-second idle deadline between stream chunks, so long-running reasoning streams are not cut off by a total duration limit.
+
 </details>
 
 <details>

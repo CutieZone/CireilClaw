@@ -1,7 +1,7 @@
 import * as vb from "valibot";
 import { describe, expect, it } from "vitest";
 
-import { SandboxConfigSchema } from "./sandbox.js";
+import { SandboxConfigSchema, validateMountTargets } from "./sandbox.js";
 
 describe("SandboxConfigSchema", () => {
   describe("MountSchema", () => {
@@ -59,6 +59,18 @@ describe("SandboxConfigSchema", () => {
         mounts: [{ mode: "rw", source: "/home/user/project", target: "" }],
       };
       expect(() => vb.parse(SandboxConfigSchema, input)).toThrow();
+    });
+
+    it("rejects overlapping mount targets", () => {
+      expect(() => {
+        validateMountTargets(
+          [
+            { mode: "rw", source: "/home/user/project", target: "project" },
+            { mode: "ro", source: "/home/user/src", target: "project/src" },
+          ],
+          "test",
+        );
+      }).toThrow("Overlapping mount targets");
     });
 
     it("rejects invalid mode", () => {

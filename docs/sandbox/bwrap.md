@@ -25,6 +25,7 @@ Arguments are passed separately; commands containing shell metacharacters or spa
 
 Mount sources must be absolute paths or begin with `~/`.
 Mount targets are relative paths below `/workspace/` and can be read-only (`ro`) or read-write (`rw`).
+Mount targets must not overlap; configure sibling targets rather than nesting one mount target below another.
 
 ## Filesystem
 

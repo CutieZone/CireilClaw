@@ -1,7 +1,7 @@
 import type { ToolDef, ToolResult } from "@cireilclaw/sdk";
 import { vb } from "@cireilclaw/sdk";
 
-import { ghPaginate, ghParse } from "./api.js";
+import { ghParse, ghParsePage } from "./api.js";
 import type { GHPullRequest, GHPrFile } from "./types.js";
 
 // ── github-read-pr ──────────────────────────────────────────────────
@@ -63,6 +63,10 @@ const listPrsSchema = vb.strictObject({
   ),
   head: vb.exactOptional(vb.pipe(vb.string(), vb.description("Filter by head branch name"))),
   owner: vb.pipe(vb.string(), vb.nonEmpty()),
+  page: vb.exactOptional(
+    vb.pipe(vb.number(), vb.integer(), vb.minValue(1), vb.description("Page number (default: 1)")),
+    1,
+  ),
   perPage: vb.exactOptional(
     vb.pipe(
       vb.number(),
@@ -91,13 +95,19 @@ const listPrsSchema = vb.strictObject({
 });
 
 const githubListPrs: ToolDef = {
-  description: "List pull requests in a repository with optional filters.",
+  description: "List one bounded page of pull requests in a repository with optional filters.",
   async execute(raw: unknown, ctx): Promise<ToolResult> {
-    const { owner, repo, state, head, base, sort, direction, perPage } = vb.parse(
+    const { owner, repo, state, head, base, sort, direction, page, perPage } = vb.parse(
       listPrsSchema,
       raw,
     );
-    const params = new URLSearchParams({ direction, per_page: String(perPage), sort, state });
+    const params = new URLSearchParams({
+      direction,
+      page: String(page),
+      per_page: String(perPage),
+      sort,
+      state,
+    });
     if (head !== undefined) {
       params.set("head", head);
     }
@@ -105,12 +115,12 @@ const githubListPrs: ToolDef = {
       params.set("base", base);
     }
 
-    const items = await ghParse<GHPullRequest[]>(
+    const result = await ghParsePage<GHPullRequest[]>(
       ctx,
       "GET",
       `/repos/${owner}/${repo}/pulls?${params.toString()}`,
     );
-    const prs = items.map((pr) => ({
+    const prs = result.data.map((pr) => ({
       createdAt: pr.created_at,
       draft: pr.draft,
       head: pr.head.ref,
@@ -121,7 +131,7 @@ const githubListPrs: ToolDef = {
       updatedAt: pr.updated_at,
       user: pr.user?.login ?? undefined,
     }));
-    return { prs, success: true };
+    return { hasMore: result.hasMore, page, prs, success: true };
   },
   name: "github-list-prs",
   parameters: listPrsSchema,
@@ -132,18 +142,33 @@ const githubListPrs: ToolDef = {
 const listPrFilesSchema = vb.strictObject({
   number: vb.pipe(vb.number(), vb.integer(), vb.minValue(1)),
   owner: vb.pipe(vb.string(), vb.nonEmpty()),
+  page: vb.exactOptional(
+    vb.pipe(vb.number(), vb.integer(), vb.minValue(1), vb.description("Page number (default: 1)")),
+    1,
+  ),
+  perPage: vb.exactOptional(
+    vb.pipe(
+      vb.number(),
+      vb.integer(),
+      vb.minValue(1),
+      vb.maxValue(100),
+      vb.description("Results per page (max 100, default: 20)"),
+    ),
+    20,
+  ),
   repo: vb.pipe(vb.string(), vb.nonEmpty()),
 });
 
 const githubListPrFiles: ToolDef = {
-  description: "List files changed in a pull request.",
+  description: "List one bounded page of files changed in a pull request.",
   async execute(raw: unknown, ctx): Promise<ToolResult> {
-    const { owner, repo, number } = vb.parse(listPrFilesSchema, raw);
-    const items = await ghPaginate<GHPrFile>(
+    const { owner, repo, number, page, perPage } = vb.parse(listPrFilesSchema, raw);
+    const result = await ghParsePage<GHPrFile[]>(
       ctx,
-      `/repos/${owner}/${repo}/pulls/${String(number)}/files?per_page=100`,
+      "GET",
+      `/repos/${owner}/${repo}/pulls/${String(number)}/files?page=${String(page)}&per_page=${String(perPage)}`,
     );
-    const files = items.map((file) => ({
+    const files = result.data.map((file) => ({
       additions: file.additions,
       blobUrl: file.blob_url,
       changes: file.changes,
@@ -154,7 +179,7 @@ const githubListPrFiles: ToolDef = {
       rawUrl: file.raw_url,
       status: file.status,
     }));
-    return { files, success: true };
+    return { files, hasMore: result.hasMore, page, success: true };
   },
   name: "github-list-pr-files",
   parameters: listPrFilesSchema,

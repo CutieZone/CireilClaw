@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, rename, writeFile } from "node:fs/promises";
+import { chmod, mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { confirm, input, password, select } from "@inquirer/prompts";
@@ -34,6 +34,16 @@ async function renameOld(pth: string): Promise<void> {
   await rename(pth, dest);
   warning("Moved", colors.path(pth));
   warning("To", colors.path(dest));
+}
+
+async function mkdirPrivate(pth: string): Promise<void> {
+  await mkdir(pth, { mode: 0o700, recursive: true });
+  await chmod(pth, 0o700);
+}
+
+async function writePrivateFile(pth: string, content: string): Promise<void> {
+  await writeFile(pth, content, { encoding: "utf8", mode: 0o600 });
+  await chmod(pth, 0o600);
 }
 
 function baseInstructionStub(): string {
@@ -332,7 +342,9 @@ async function run(flags: Flags): Promise<void> {
 
   const base = root();
 
-  await mkdir(path.join(base, "config"), { recursive: true });
+  await mkdirPrivate(base);
+  await mkdirPrivate(path.join(base, "config"));
+  await mkdirPrivate(path.join(base, "agents"));
 
   // Resolve slug before asking anything else so we can catch conflicts early.
   const name = await input({ message: "Agent name:" });
@@ -494,59 +506,53 @@ async function run(flags: Flags): Promise<void> {
 
   const writeSpinner = ora("Writing agent files...").start();
 
+  await mkdirPrivate(agentRoot);
   for (const dir of ["blocks", "config", "memories", "skills", "tasks", "workspace"]) {
-    await mkdir(path.join(agentRoot, dir), { recursive: true });
+    await mkdirPrivate(path.join(agentRoot, dir));
   }
 
-  await mkdir(path.join(agentRoot, "skills", "create-skill"), { recursive: true });
-  await writeFile(
+  await mkdirPrivate(path.join(agentRoot, "skills", "create-skill"));
+  await writePrivateFile(
     path.join(agentRoot, "skills", "create-skill", "SKILL.md"),
     createSkillStub(),
-    "utf8",
   );
 
   for (const label of blockLabels) {
-    await writeFile(
+    await writePrivateFile(
       path.join(agentRoot, "blocks", `${label}.md`),
       blockStub(label, name, description),
-      "utf8",
     );
   }
 
-  await writeFile(path.join(agentRoot, "core.md"), baseInstructionStub(), "utf8");
-  await writeFile(
+  await writePrivateFile(path.join(agentRoot, "core.md"), baseInstructionStub());
+  await writePrivateFile(
     path.join(agentRoot, "config", "engine.toml"),
     stringify({
       default: { apiBase, apiKey, defaultModel: model, isGlobalDefault: true, kind: apiKind },
     }),
-    "utf8",
   );
-  await writeFile(
+  await writePrivateFile(
     path.join(agentRoot, "config", "tools.toml"),
     stringify(buildToolsConfig(preset)),
-    "utf8",
   );
-  await writeFile(
+  await writePrivateFile(
     path.join(agentRoot, "config", "sandbox.toml"),
     stringify({ backend: "bwrap", bwrap: { binaries: execBinaries }, mounts: [] }),
-    "utf8",
   );
 
   if (braveApiKey !== undefined) {
-    await mkdir(path.join(base, "config", "plugins"), { recursive: true });
-    await writeFile(
+    await mkdirPrivate(path.join(base, "config", "plugins"));
+    await writePrivateFile(
       path.join(base, "config", "plugins", "brave-search.toml"),
       stringify({ apiKey: braveApiKey }),
-      "utf8",
     );
   }
 
   if (discordConfig !== undefined) {
-    await mkdir(path.join(agentRoot, "config", "channels"), { recursive: true });
-    await writeFile(
+    await mkdirPrivate(path.join(agentRoot, "config", "channels"));
+    await writePrivateFile(
       path.join(agentRoot, "config", "channels", "discord.toml"),
       stringify(discordConfig),
-      "utf8",
     );
   }
 

@@ -41,12 +41,35 @@ type RpcMessage = RpcRequest | RpcResponseOk | RpcResponseErr;
 
 type Handler = (args: unknown[]) => Promise<unknown>;
 
-function isRpcMessage(value: unknown): value is RpcMessage {
-  if (typeof value !== "object" || value === null) {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isRpcError(value: unknown): value is RpcError {
+  if (!isRecord(value) || typeof value["message"] !== "string") {
     return false;
   }
-  const { kind, id } = value as { kind?: unknown; id?: unknown };
-  return (kind === "req" || kind === "res") && typeof id === "number";
+  return (
+    (value["name"] === undefined || typeof value["name"] === "string") &&
+    (value["hint"] === undefined || typeof value["hint"] === "string") &&
+    (value["stack"] === undefined || typeof value["stack"] === "string")
+  );
+}
+
+function isRpcMessage(value: unknown): value is RpcMessage {
+  if (!isRecord(value) || !Number.isSafeInteger(value["id"])) {
+    return false;
+  }
+  if (value["kind"] === "req") {
+    return typeof value["method"] === "string" && Array.isArray(value["args"]);
+  }
+  if (value["kind"] !== "res") {
+    return false;
+  }
+  if (value["ok"] === true) {
+    return "value" in value;
+  }
+  return value["ok"] === false && isRpcError(value["error"]);
 }
 
 function extractHint(error: Error): string | undefined {

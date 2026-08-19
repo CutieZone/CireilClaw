@@ -1,3 +1,4 @@
+import { chmodSync } from "node:fs";
 import path from "node:path";
 
 import BetterSqlite3 from "better-sqlite3";
@@ -29,8 +30,11 @@ function initDb(agentSlug: string): Database {
     return existing;
   }
 
-  const dbPath = path.join(agentRoot(agentSlug), "sessions.db");
+  const agentPath = agentRoot(agentSlug);
+  chmodSync(agentPath, 0o700);
+  const dbPath = path.join(agentPath, "sessions.db");
   const sqlite = new BetterSqlite3(dbPath);
+  chmodSync(dbPath, 0o600);
 
   // WAL mode: better concurrent read performance and crash safety.
   sqlite.pragma("journal_mode = WAL");
@@ -50,6 +54,8 @@ function initDb(agentSlug: string): Database {
     } else {
       warning("Failed to migrate agent", colors.keyword(agentSlug), "and their database:", error);
     }
+    sqlite.close();
+    throw error;
   }
 
   databases.set(agentSlug, db);

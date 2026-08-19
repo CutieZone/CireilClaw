@@ -13,8 +13,8 @@ interface Summary {
   createdAt: number;
 }
 
-const channelTypes = ["discord", "matrix", "internal", "tui"] as const;
-type ChannelType = (typeof channelTypes)[number];
+const channelTypes = ["discord", "internal", "tui"] as const;
+type ChannelType = (typeof channelTypes)[number] | "matrix";
 
 // Canonical session ID for a Discord channel. Must match the format parsed by
 // Agent.resolveTarget ("discord:{channelId}|{guildId}"). Normalizes null so

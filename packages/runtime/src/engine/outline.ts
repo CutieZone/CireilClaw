@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 
 import type { Section } from "@cireilclaw/sdk";
 
+import { warning } from "#output/log.js";
 import { sandboxToReal } from "#util/paths.js";
 import { matchesGlob, toSlug } from "#util/string.js";
 
@@ -189,7 +190,17 @@ async function generateOutlineFromContent(
 
   for (const extractor of extractors) {
     if (matchesGlob(fileName, extractor.glob)) {
-      const sections = await extractor.extract(sandboxPath, content);
+      let sections: Section[] = [];
+      try {
+        sections = await extractor.extract(sandboxPath, content);
+      } catch (error: unknown) {
+        warning(
+          "Outline extractor failed",
+          extractor.glob,
+          error instanceof Error ? error.message : String(error),
+        );
+        continue;
+      }
       if (sections.length > 0) {
         return { estTokens, lines, path: sandboxPath, sections };
       }
