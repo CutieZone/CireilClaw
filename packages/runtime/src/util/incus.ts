@@ -308,6 +308,22 @@ async function configureInstanceIdentity(
   }
 }
 
+async function instanceIdentityMatches(
+  incus: IncusConfig,
+  name: string,
+  identity: HostIdentity,
+): Promise<boolean> {
+  const result = await capture([...projectArgs(incus), "config", "get", name, "raw.idmap"], 10_000);
+  if (result.exitCode !== 0) {
+    throw new Error(`Failed to query Incus identity mapping for '${name}': ${result.stderr}`);
+  }
+  const mappings = new Set(result.stdout.split(/\r?\n/u).map((line) => line.trim()));
+  return (
+    mappings.has(`uid ${identity.uid} ${identity.uid}`) &&
+    mappings.has(`gid ${identity.gid} ${identity.gid}`)
+  );
+}
+
 async function execAsRoot(
   incus: IncusConfig,
   name: string,
@@ -332,10 +348,10 @@ async function execAsRoot(
   );
 }
 
-function parseAccountName(entry: string, kind: "group" | "user"): string {
+function parseAccountName(entry: string, kind: "group" | "user", id: number): string {
   const [name] = entry.trim().split(":", 1);
   if (name === undefined || !/^[a-z_][a-z0-9_-]*[$]?$/iu.test(name)) {
-    throw new Error(`Incus returned an invalid ${kind} entry for uid/gid 1000`);
+    throw new Error(`Incus returned an invalid ${kind} entry for uid/gid ${id}`);
   }
   return name;
 }
@@ -344,15 +360,20 @@ async function ensureContainerUser(
   incus: IncusConfig,
   name: string,
   agentSlug: string,
+  identity: HostIdentity,
 ): Promise<void> {
-  const account = await execAsRoot(incus, name, "getent", ["passwd", "1000"]);
+  const account = await execAsRoot(incus, name, "getent", ["passwd", String(identity.uid)]);
   let username = agentSlug;
   if (account.exitCode === 0) {
-    username = parseAccountName(account.stdout, "user");
+    username = parseAccountName(account.stdout, "user", identity.uid);
   } else {
-    const group = await execAsRoot(incus, name, "getent", ["group", "1000"]);
+    const group = await execAsRoot(incus, name, "getent", ["group", String(identity.gid)]);
     if (group.exitCode !== 0) {
-      const createGroup = await execAsRoot(incus, name, "groupadd", ["--gid", "1000", agentSlug]);
+      const createGroup = await execAsRoot(incus, name, "groupadd", [
+        "--gid",
+        String(identity.gid),
+        agentSlug,
+      ]);
       if (createGroup.exitCode !== 0) {
         throw new Error(
           `Failed to create container group for '${agentSlug}': ${createGroup.stderr}`,
@@ -361,9 +382,9 @@ async function ensureContainerUser(
     }
     const createUser = await execAsRoot(incus, name, "useradd", [
       "--uid",
-      "1000",
+      String(identity.uid),
       "--gid",
-      "1000",
+      String(identity.gid),
       "--home-dir",
       "/workspace",
       "--no-create-home",
@@ -409,6 +430,36 @@ async function setHostname(incus: IncusConfig, name: string, agentSlug: string):
   }
 }
 
+async function startInstance(incus: IncusConfig, name: string): Promise<void> {
+  const start = await capture([...projectArgs(incus), "start", name], 30_000);
+  if (start.exitCode !== 0) {
+    const log = await capture([...projectArgs(incus), "info", "--show-log", name], 10_000);
+    const details = log.stdout.trim() || log.stderr.trim();
+    throw new Error(
+      `Failed to start Incus instance '${name}': ${start.stderr}${
+        details.length > 0 ? `\n${details}` : ""
+      }`,
+    );
+  }
+}
+
+async function stopInstance(incus: IncusConfig, name: string, timeout = 30_000): Promise<void> {
+  const result = await capture(
+    [...projectArgs(incus), "stop", name, "--timeout", String(Math.ceil(timeout / 1000))],
+    timeout + 10_000,
+  );
+  if (result.exitCode !== 0) {
+    throw new Error(`Failed to stop Incus instance '${name}': ${result.stderr}`);
+  }
+}
+
+async function deleteInstance(incus: IncusConfig, name: string): Promise<void> {
+  const result = await capture([...projectArgs(incus), "delete", "--force", name], 60_000);
+  if (result.exitCode !== 0) {
+    throw new Error(`Failed to destroy Incus instance '${name}': ${result.stderr}`);
+  }
+}
+
 async function ensureRunning(
   incus: IncusConfig,
   agentSlug: string,
@@ -416,39 +467,79 @@ async function ensureRunning(
   identity: HostIdentity,
 ): Promise<void> {
   const name = instanceName(agentSlug);
-  const state = await instanceState(incus, name);
-  if (state === "missing") {
-    const profiles = incus.profiles.flatMap((profile) => ["--profile", profile]);
-    const create = await capture(
-      [...projectArgs(incus), "init", incus.image, name, ...profiles],
-      120_000,
-    );
-    if (create.exitCode !== 0) {
-      throw new Error(`Failed to create Incus instance '${name}': ${create.stderr}`);
+  let state = await instanceState(incus, name);
+  let created = false;
+  let startedByUs = false;
+  let stoppedForIdentity = false;
+
+  try {
+    if (state === "missing") {
+      const profiles = incus.profiles.flatMap((profile) => ["--profile", profile]);
+      const create = await capture(
+        [...projectArgs(incus), "init", incus.image, name, ...profiles],
+        120_000,
+      );
+      if (create.exitCode !== 0) {
+        throw new Error(`Failed to create Incus instance '${name}': ${create.stderr}`);
+      }
+      created = true;
+      await configureInstanceIdentity(incus, name, identity);
+      await addDiskDevices(incus, name, diskDevices(agentSlug, mounts));
+    } else if (state === "running") {
+      if (!(await instanceIdentityMatches(incus, name, identity))) {
+        await stopInstance(incus, name);
+        stoppedForIdentity = true;
+        state = "stopped";
+        await configureInstanceIdentity(incus, name, identity);
+        await disableShiftOnExistingDevices(
+          incus,
+          name,
+          diskDevices(agentSlug, mounts).filter(({ name: deviceName }) =>
+            deviceName.startsWith("cireilclaw-"),
+          ),
+        );
+      }
+    } else {
+      await configureInstanceIdentity(incus, name, identity);
+      await disableShiftOnExistingDevices(
+        incus,
+        name,
+        diskDevices(agentSlug, mounts).filter(({ name: deviceName }) =>
+          deviceName.startsWith("cireilclaw-"),
+        ),
+      );
     }
-    await configureInstanceIdentity(incus, name, identity);
-    await addDiskDevices(incus, name, diskDevices(agentSlug, mounts));
-  } else if (state === "stopped") {
-    await configureInstanceIdentity(incus, name, identity);
-    await disableShiftOnExistingDevices(
-      incus,
-      name,
-      diskDevices(agentSlug, mounts).filter(({ name: deviceName }) =>
-        deviceName.startsWith("cireilclaw-"),
-      ),
-    );
-  }
-  if (state !== "missing") {
-    await reconcileMounts(incus, name, mounts);
-  }
-  if (state !== "running") {
-    const start = await capture([...projectArgs(incus), "start", name], 30_000);
-    if (start.exitCode !== 0) {
-      throw new Error(`Failed to start Incus instance '${name}': ${start.stderr}`);
+    if (state !== "missing") {
+      await reconcileMounts(incus, name, mounts);
     }
+    if (state !== "running") {
+      await startInstance(incus, name);
+      state = "running";
+      startedByUs = true;
+    }
+    await setHostname(incus, name, agentSlug);
+    await ensureContainerUser(incus, name, agentSlug, identity);
+  } catch (error) {
+    try {
+      if (created) {
+        await deleteInstance(incus, name);
+      } else if (stoppedForIdentity) {
+        await startInstance(incus, name);
+      } else if (startedByUs) {
+        await stopInstance(incus, name);
+      }
+    } catch (cleanupError) {
+      const message = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+      const original = error instanceof Error ? error.message : String(error);
+      throw new Error(`${original}; Incus cleanup also failed: ${message}`, {
+        cause: cleanupError,
+      });
+    }
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error(String(error), { cause: error });
   }
-  await setHostname(incus, name, agentSlug);
-  await ensureContainerUser(incus, name, agentSlug);
 }
 
 function activeInstanceKey(incus: IncusConfig, name: string): string {
@@ -459,15 +550,8 @@ async function stopActiveIncusInstances(): Promise<void> {
   const instances = [...activeInstances.values()];
   await Promise.all(
     instances.map(async ({ incus, name }) => {
-      const result = await capture(
-        [...projectArgs(incus), "stop", name, "--timeout", "10"],
-        20_000,
-      );
-      if (result.exitCode !== 0) {
-        throw new Error(
-          `Failed to stop Incus instance '${name}' during shutdown: ${result.stderr}`,
-        );
-      }
+      await stopInstance(incus, name, 10_000);
+      activeInstances.delete(activeInstanceKey(incus, name));
     }),
   );
 }
@@ -525,19 +609,7 @@ async function execIncus(cfg: IncusExecConfig): Promise<ExecResult> {
 }
 
 async function stopIncus(incus: IncusConfig, agentSlug: string, timeout = 30_000): Promise<void> {
-  const result = await capture(
-    [
-      ...projectArgs(incus),
-      "stop",
-      instanceName(agentSlug),
-      "--timeout",
-      String(Math.ceil(timeout / 1000)),
-    ],
-    timeout + 10_000,
-  );
-  if (result.exitCode !== 0) {
-    throw new Error(`Failed to stop Incus instance '${instanceName(agentSlug)}': ${result.stderr}`);
-  }
+  await stopInstance(incus, instanceName(agentSlug), timeout);
   activeInstances.delete(activeInstanceKey(incus, instanceName(agentSlug)));
 }
 
@@ -564,15 +636,7 @@ async function restartIncus(
 }
 
 async function destroyIncus(incus: IncusConfig, agentSlug: string): Promise<void> {
-  const result = await capture(
-    [...projectArgs(incus), "delete", "--force", instanceName(agentSlug)],
-    60_000,
-  );
-  if (result.exitCode !== 0) {
-    throw new Error(
-      `Failed to destroy Incus instance '${instanceName(agentSlug)}': ${result.stderr}`,
-    );
-  }
+  await deleteInstance(incus, instanceName(agentSlug));
   activeInstances.delete(activeInstanceKey(incus, instanceName(agentSlug)));
 }
 

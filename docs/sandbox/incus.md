@@ -61,6 +61,18 @@ The runtime user must be allowed to access the Incus Unix socket, normally throu
 For a restricted user project, the project must allow `raw.idmap` and permit the runtime UID and GID with `restricted.idmap.uid` and `restricted.idmap.gid`.
 These settings should be limited to the one runtime identity.
 
+## Integration Test
+
+The Incus integration test is opt-in and creates a uniquely named instance, mounts temporary agent directories, verifies the host UID, reconciles a changed mount, restarts the instance, and destroys it afterward.
+
+Run it with an accessible Incus project and image:
+
+```bash
+CIREILCLAW_INCUS_PROJECT=user-1000 pnpm test:incus
+```
+
+Use `CIREILCLAW_INCUS_IMAGE` and `CIREILCLAW_INCUS_PROFILES` (comma-separated) to override the defaults. The test uses `images:debian/12` and no profiles when those variables are unset. The selected project must permit the runtime UID/GID, raw ID maps, and disk sources below the user home directory. If using `newgrp incus`, check `id -g` in that shell because it changes the primary GID; the project must permit that new GID as well.
+
 Use an explicit `project` only when the runtime is intentionally allowed to use an operator-managed project.
 Profiles and project policy determine the container's root disk, network, device policy, and other container capabilities.
 

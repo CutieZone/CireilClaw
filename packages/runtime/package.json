@@ -11,6 +11,7 @@
     "prestart": "pnpm install --frozen-lockfile",
     "start": "tsx ./src/entrypoint.ts",
     "test": "vitest run",
+    "test:incus": "vitest run src/util/incus.integration.test.ts",
     "test:watch": "vitest"
   },
   "dependencies": {
