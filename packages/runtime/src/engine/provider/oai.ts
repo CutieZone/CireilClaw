@@ -558,7 +558,7 @@ async function generate(
 
     try {
       if (!Array.isArray(resp.choices)) {
-        debug("Got unexpected response", { choicesType: typeof resp.choices });
+        debug("Got unexpected response", resp);
         throw new TypeError(
           `Unexpected API response: 'choices' is ${String(resp.choices)} — the model may not support vision, or the request was rejected`,
         );
@@ -578,10 +578,12 @@ async function generate(
       }
 
       if (reason !== "tool_calls") {
-        debug("Failing due to wrong end reason", {
-          hasToolCalls: (choice.message.tool_calls?.length ?? 0) > 0,
-          reason,
-        });
+        debug("Failing due to wrong end reason.");
+        debug("Message object:", choice.message);
+
+        if (choice.message.tool_calls !== undefined && choice.message.tool_calls.length > 0) {
+          debug("Had at least one tool call.");
+        }
 
         const rawText =
           typeof choice.message.content === "string" ? choice.message.content : undefined;
