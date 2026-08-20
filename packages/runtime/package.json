@@ -17,6 +17,7 @@
   "dependencies": {
     "@cireilclaw/sdk": "workspace:*",
     "@inquirer/prompts": "^8.5.2",
+    "@noble/ciphers": "^2.2.0",
     "@noble/hashes": "^2.2.0",
     "@stricli/core": "^1.2.8",
     "@valibot/to-json-schema": "^1.7.1",
@@ -35,6 +36,7 @@
     "react": "^19.2.7",
     "sharp": "^0.35.3",
     "smol-toml": "^1.7.0",
+    "ulid": "^3.0.2",
     "valibot": "^1.4.2",
     "yaml": "^2.9.0"
   },

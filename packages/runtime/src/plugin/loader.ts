@@ -23,6 +23,7 @@ import colors from "#output/colors.js";
 import { info, warning } from "#output/log.js";
 import { checkConditionalAccess, checkMountWriteAccess, root, sandboxToReal } from "#util/paths.js";
 
+import { hostCrypto, hostIds } from "./crypto.js";
 import { RpcChannel } from "./rpc.js";
 import {
   DEFAULT_PLUGIN_STATE_QUOTA_BYTES,
@@ -71,6 +72,13 @@ function requireStringArray(value: unknown, name: string): string[] {
     throw new TypeError(`${name} must be an array of strings`);
   }
   return value;
+}
+
+function requireSafeInteger(value: unknown, name: string): number {
+  if (!Number.isSafeInteger(value)) {
+    throw new TypeError(`${name} must be a safe integer`);
+  }
+  return value as number;
 }
 
 function requireBytes(value: unknown, name: string): Uint8Array {
@@ -523,6 +531,77 @@ class PluginProcess {
         data: pubKey.export({ format: "pem", type: "spki" }),
         format: "spki",
       };
+    });
+    this.rpc.handle("crypto.randomBytes", async (args) => {
+      const [invocationId, length] = args;
+      this.requireCtx(invocationId);
+      return await hostCrypto.randomBytes(requireSafeInteger(length, "length"));
+    });
+    this.rpc.handle("crypto.xchacha20poly1305", async (args) => {
+      const [invocationId, key, nonce, aad, operation, data] = args;
+      this.requireCtx(invocationId);
+      const operationValue = requireString(operation, "operation");
+      if (operationValue !== "encrypt" && operationValue !== "decrypt") {
+        throw new TypeError("operation must be `encrypt` or `decrypt`");
+      }
+      const cipher = hostCrypto.xchacha20poly1305(
+        requireBytes(key, "key"),
+        requireBytes(nonce, "nonce"),
+        aad === undefined ? undefined : requireBytes(aad, "aad"),
+      );
+      return operationValue === "encrypt"
+        ? await cipher.encrypt(requireBytes(data, "plaintext"))
+        : await cipher.decrypt(requireBytes(data, "ciphertext"));
+    });
+    this.rpc.handle("crypto.ed25519.generateKeyPair", async (args) => {
+      const [invocationId] = args;
+      this.requireCtx(invocationId);
+      return await hostCrypto.ed25519.generateKeyPair();
+    });
+    this.rpc.handle("crypto.ed25519.sign", async (args) => {
+      const [invocationId, privateKeyPkcs8, data] = args;
+      this.requireCtx(invocationId);
+      return await hostCrypto.ed25519.sign(
+        requireBytes(privateKeyPkcs8, "privateKeyPkcs8"),
+        requireBytes(data, "data"),
+      );
+    });
+    this.rpc.handle("crypto.ed25519.verify", async (args) => {
+      const [invocationId, publicKey, signature, data] = args;
+      this.requireCtx(invocationId);
+      return await hostCrypto.ed25519.verify(
+        requireBytes(publicKey, "publicKey"),
+        requireBytes(signature, "signature"),
+        requireBytes(data, "data"),
+      );
+    });
+    this.rpc.handle("crypto.x25519.generateKeyPair", async (args) => {
+      const [invocationId] = args;
+      this.requireCtx(invocationId);
+      return await hostCrypto.x25519.generateKeyPair();
+    });
+    this.rpc.handle("crypto.x25519.derive", async (args) => {
+      const [invocationId, privateKeyPkcs8, publicKey] = args;
+      this.requireCtx(invocationId);
+      return await hostCrypto.x25519.derive(
+        requireBytes(privateKeyPkcs8, "privateKeyPkcs8"),
+        requireBytes(publicKey, "publicKey"),
+      );
+    });
+    this.rpc.handle("crypto.hkdf", async (args) => {
+      const [invocationId, ikm, salt, infoBytes, length] = args;
+      this.requireCtx(invocationId);
+      return await hostCrypto.hkdf(
+        requireBytes(ikm, "ikm"),
+        requireBytes(salt, "salt"),
+        requireBytes(infoBytes, "info"),
+        requireSafeInteger(length, "length"),
+      );
+    });
+    this.rpc.handle("ids.ulid", async (args) => {
+      const [invocationId] = args;
+      this.requireCtx(invocationId);
+      return await hostIds.ulid();
     });
     this.rpc.handle("pluginState.readText", async (args) => {
       const [invocationId, name] = args;

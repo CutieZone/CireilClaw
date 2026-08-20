@@ -44,6 +44,7 @@ import type {
 import type { Session } from "#harness/session.js";
 import colors from "#output/colors.js";
 import { debug, warning } from "#output/log.js";
+import { hostCrypto, hostIds } from "#plugin/crypto.js";
 import type { Scheduler } from "#scheduler/index.js";
 import { formatDate } from "#util/date.js";
 import { getDefaultProviderAndModel } from "#util/default-provider-and-model.js";
@@ -236,6 +237,7 @@ async function runTurnImpl(
     conditions,
     createKeyPool: (keys, cooldownMs) => KeyPoolManager.getPool(keys, cooldownMs),
     crypto: {
+      ...hostCrypto,
       loadNormalizedKey: async (
         opts: { path: string } | { data: string },
       ): Promise<{ format: "pkcs8" | "spki"; data: string }> => {
@@ -322,6 +324,7 @@ async function runTurnImpl(
         await writeFile(realPath, content, "utf8");
       },
     },
+    ids: hostIds,
     mounts: sandboxConfig.mounts,
     net: {
       fetch: globalThis.fetch.bind(globalThis),

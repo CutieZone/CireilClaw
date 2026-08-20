@@ -8,6 +8,7 @@ import { KeyPoolManager } from "@cireilclaw/sdk";
 import type {
   BasicSession,
   ChannelResolution,
+  CryptoKeyPairBytes,
   KeyPool,
   Mount,
   Plugin,
@@ -143,8 +144,46 @@ function buildCtx(rpc: RpcChannel, invocationId: string, data: CtxData): PluginT
     // key, failure tracking is per-worker and will drift.
     createKeyPool: (keys, cooldownMs): KeyPool => KeyPoolManager.getPool(keys, cooldownMs),
     crypto: {
+      ed25519: {
+        generateKeyPair: async (): Promise<CryptoKeyPairBytes> =>
+          await rpc.call("crypto.ed25519.generateKeyPair", [invocationId]),
+        sign: async (privateKeyPkcs8, message): Promise<Uint8Array> =>
+          await rpc.call("crypto.ed25519.sign", [invocationId, privateKeyPkcs8, message]),
+        verify: async (publicKey, signature, message): Promise<boolean> =>
+          await rpc.call("crypto.ed25519.verify", [invocationId, publicKey, signature, message]),
+      },
+      hkdf: async (ikm, salt, info, length): Promise<Uint8Array> =>
+        await rpc.call("crypto.hkdf", [invocationId, ikm, salt, info, length]),
       loadNormalizedKey: async (opts): Promise<{ format: "pkcs8" | "spki"; data: string }> =>
         await rpc.call("crypto.loadNormalizedKey", [invocationId, opts]),
+      randomBytes: async (length): Promise<Uint8Array> =>
+        await rpc.call("crypto.randomBytes", [invocationId, length]),
+      x25519: {
+        derive: async (privateKeyPkcs8, publicKey): Promise<Uint8Array> =>
+          await rpc.call("crypto.x25519.derive", [invocationId, privateKeyPkcs8, publicKey]),
+        generateKeyPair: async (): Promise<CryptoKeyPairBytes> =>
+          await rpc.call("crypto.x25519.generateKeyPair", [invocationId]),
+      },
+      xchacha20poly1305: (key, nonce, aad) => ({
+        decrypt: async (ciphertext): Promise<Uint8Array> =>
+          await rpc.call("crypto.xchacha20poly1305", [
+            invocationId,
+            key,
+            nonce,
+            aad,
+            "decrypt",
+            ciphertext,
+          ]),
+        encrypt: async (plaintext): Promise<Uint8Array> =>
+          await rpc.call("crypto.xchacha20poly1305", [
+            invocationId,
+            key,
+            nonce,
+            aad,
+            "encrypt",
+            plaintext,
+          ]),
+      }),
     },
     fs: {
       listDir: async (
@@ -165,6 +204,9 @@ function buildCtx(rpc: RpcChannel, invocationId: string, data: CtxData): PluginT
       writeTextFile: async (sandboxPath, content): Promise<void> => {
         await rpc.call("fs.writeTextFile", [invocationId, sandboxPath, content]);
       },
+    },
+    ids: {
+      ulid: async (): Promise<string> => await rpc.call("ids.ulid", [invocationId]),
     },
     mounts: data.mounts,
     net: {
