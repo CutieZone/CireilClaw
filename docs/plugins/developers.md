@@ -37,9 +37,9 @@ Or start from scratch with the minimal `package.json`:
       ".": { "types": "./dist/index.d.mts", "default": "./dist/index.mjs" }
     }
   },
-  "peerDependencies": { "@cireilclaw/sdk": "^0.6.0" },
+  "peerDependencies": { "@cireilclaw/sdk": "^0.7.0" },
   "devDependencies": {
-    "@cireilclaw/sdk": "^0.6.0",
+    "@cireilclaw/sdk": "^0.7.0",
     "tsdown": "^0.21.7",
     "typescript": "^6.0.2"
   }
@@ -186,7 +186,29 @@ interface PluginToolContext {
   };
   createKeyPool(keys: string | string[], cooldownMs?: number): KeyPool;
   crypto: {
+    randomBytes(length: number): Promise<Uint8Array>;
+    xchacha20poly1305(
+      key: Uint8Array,
+      nonce: Uint8Array,
+      aad?: Uint8Array,
+    ): {
+      encrypt(plaintext: Uint8Array): Promise<Uint8Array>;
+      decrypt(ciphertext: Uint8Array): Promise<Uint8Array>;
+    };
+    hkdf(ikm: Uint8Array, salt: Uint8Array, info: Uint8Array, length: number): Promise<Uint8Array>;
+    ed25519: {
+      generateKeyPair(): Promise<CryptoKeyPairBytes>;
+      sign(privateKeyPkcs8: Uint8Array, data: Uint8Array): Promise<Uint8Array>;
+      verify(publicKey: Uint8Array, signature: Uint8Array, data: Uint8Array): Promise<boolean>;
+    };
+    x25519: {
+      generateKeyPair(): Promise<CryptoKeyPairBytes>;
+      derive(privateKeyPkcs8: Uint8Array, publicKey: Uint8Array): Promise<Uint8Array>;
+    };
     loadNormalizedKey(opts: { path: string } | { data: string }): Promise<WebCryptoFormat>;
+  };
+  ids: {
+    ulid(): Promise<string>;
   };
   fs: {
     readTextFile(sandboxPath: string): Promise<string>;
@@ -220,7 +242,9 @@ Notes:
 - `paths.resolve` converts a sandbox path (e.g. `/workspace/file.txt`) to the real filesystem path, applying mount mappings. Use this when you need to interact with files outside the RPC boundary.
 - `paths.checkWriteAccess` validates whether a sandbox path is writable under the current mount configuration. Throws if the path is read-only or outside allowed mounts.
 - `paths.checkConditionalAccess` validates whether a sandbox path is accessible in the current session context according to `conditions.toml` rules. Throws if access is denied. No-op when no conditions are configured.
-- `crypto.loadNormalizedKey` normalizes a key (PEM or DER, given as inline data or a sandbox path) to a Web-Crypto-compatible PKCS#8 private key or SPKI public key. It auto-detects PKCS#1, SEC1, and other legacy formats. Useful before calling `crypto.subtle.importKey` in plugins that need JWT signing or cryptographic operations.
+- `crypto.randomBytes`, `crypto.xchacha20poly1305`, `crypto.ed25519`, `crypto.x25519`, and `crypto.hkdf` are host-mediated cryptographic primitives. They use byte arrays; generated private keys are PKCS#8 DER and generated public keys are raw 32-byte values. XChaCha20-Poly1305 follows the familiar `encrypt`/`decrypt` operation shape, and HKDF is SHA-256.
+- `crypto.loadNormalizedKey` normalizes a key (PEM or DER, given as inline data or a sandbox path) to a Web-Crypto-compatible PKCS#8 private key or SPKI public key. It auto-detects PKCS#1, SEC1, and other legacy formats. It remains available for plugins that need Web Crypto APIs not covered by the host primitives.
+- `ids.ulid()` returns a host-generated ULID. These capabilities are available through the SDK ABI, so plugins do not need to ship separate crypto or ULID dependencies.
 - `pluginState` is private, persistent per-`(agent, plugin)` storage. Use it for identity keys, cursors, dedupe records, and other runtime-private data. Paths are relative (nested paths allowed). Reads of missing files return `undefined`; `remove` is a no-op for missing files. Files are written atomically (mode `0o600`), the folder is `0o700`, and total usage is capped by a per-plugin quota (default 16 MiB, overridable via `stateQuotaBytes` in `plugins.toml`). The plugin never sees the host path; the runtime derives both the agent namespace and the plugin namespace. Absolute paths, traversal, symlinks, and the reserved top-level name `.id` are rejected. State is not reachable from `ctx.fs` and not visible to exec'd commands.
 
 ## SDK Exports
@@ -231,6 +255,7 @@ From `@cireilclaw/sdk`:
 - `Plugin`, `PluginFactory`, `ExtractorDef`: the factory's return shape.
 - `ToolDef`, `Tool`, `ToolResult`, `ToolErrorResult`: tool definition types.
 - `PluginToolContext`, `BasicSession`, `ChannelResolution`, `Mount`: context types.
+- `PluginCryptoApi`, `PluginIdsApi`, `CryptoKeyPairBytes`: host-mediated capability types.
 - `KeyPool`, `KeyPoolManager`: API key rotation with cooldown.
 - `ToolError`: semantic tool-failure exception.
 - `toWebp`, `toJpeg`, `scaleForAnthropic`: image helpers for vision-capable agents.
