@@ -9,6 +9,7 @@ import {
   statSync,
 } from "node:fs";
 import path from "node:path";
+import { inspect } from "node:util";
 
 import color from "#output/colors.js";
 
@@ -31,6 +32,12 @@ let bytesWritten = 0;
 const ANSI_RE = /\u001B\[[0-9;]*m/gu;
 function stripAnsi(str: string): string {
   return str.replace(ANSI_RE, "");
+}
+
+function formatConsoleArgs(data: unknown[]): unknown[] {
+  return data.map((item) =>
+    typeof item === "object" ? inspect(item, { depth: Number.POSITIVE_INFINITY }) : item,
+  );
 }
 
 function serializeArgs(level: Level, data: unknown[]): Record<string, unknown> {
@@ -135,27 +142,27 @@ function setLogFile(filePth: string): void {
 function debug(...data: unknown[]): void {
   writeToFile("debug", data);
   if (isEnabled("debug")) {
-    console.debug(color.debug("[DEBUG]"), ...data);
+    console.debug(color.debug("[DEBUG]"), ...formatConsoleArgs(data));
   }
 }
 
 function info(...data: unknown[]): void {
   writeToFile("info", data);
   if (isEnabled("info")) {
-    console.info(color.info("[ INFO]"), ...data);
+    console.info(color.info("[ INFO]"), ...formatConsoleArgs(data));
   }
 }
 
 function warning(...data: unknown[]): void {
   writeToFile("warning", data);
   if (isEnabled("warning")) {
-    console.warn(color.warning("[ WARN]"), ...data);
+    console.warn(color.warning("[ WARN]"), ...formatConsoleArgs(data));
   }
 }
 
 function error(...data: unknown[]): void {
   writeToFile("error", data);
-  console.error(color.error("[ERROR]"), ...data);
+  console.error(color.error("[ERROR]"), ...formatConsoleArgs(data));
 }
 
 export { config, debug, error, info, setLogFile, warning };
