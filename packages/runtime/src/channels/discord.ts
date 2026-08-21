@@ -49,6 +49,7 @@ import type {
   TextContent,
   VideoContent,
 } from "#engine/content.js";
+import { renderTextContent } from "#engine/content.js";
 import { cascadeRemoveToolResponses, getToolCallIds } from "#engine/history-validate.js";
 import type { Message } from "#engine/message.js";
 import type { ChannelHandler } from "#harness/channel-handler.js";
@@ -1336,7 +1337,7 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
             authorId: msg.author.id,
             authorName: msg.author.username,
             content: msg.content,
-            formatted: formatted.content,
+            formatted: renderTextContent(formatted),
             id: msg.id,
             timestamp: msg.createdAt.toISOString(),
           };
