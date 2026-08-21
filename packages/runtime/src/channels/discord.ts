@@ -1256,6 +1256,7 @@ async function startDiscord(owner: Harness, agentSlug: string): Promise<OceanicC
     gateway: {
       intents:
         Intents.GUILD_MESSAGES |
+        Intents.GUILD_MEMBERS |
         Intents.DIRECT_MESSAGES |
         Intents.MESSAGE_CONTENT |
         Intents.GUILD_MESSAGE_REACTIONS |
