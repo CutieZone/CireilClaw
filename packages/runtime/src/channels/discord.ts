@@ -139,15 +139,16 @@ function writeCommandsHash(agentSlug: string, hash: string): void {
 
 // Resolves the best display name for a message author. Prefers the guild
 // nickname, then the global display name, then the username. Falls back to the
-// cached guild member when `msg.member` is missing; if the member isn't cached,
-// fetches it via REST (which also populates the cache).
+// cached guild member when `msg.member` is missing; if the member is missing or
+// has no nickname, fetches it via REST (which also populates the cache).
 async function resolveDisplayName(msg: DiscordMessage): Promise<string> {
   const { member: msgMember, guildID, author, client } = msg;
   let member = msgMember;
   if (member === undefined && guildID !== null) {
     member = client.guilds.get(guildID)?.members.get(author.id);
   }
-  if (member === undefined && guildID !== null) {
+  const memberNeedsFetch = member === undefined ? true : member.nick === null;
+  if (memberNeedsFetch && guildID !== null) {
     try {
       member = await runDiscordRestWithRetries(
         `GET /guilds/${guildID}/members/${author.id}`,
