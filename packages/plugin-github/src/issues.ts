@@ -121,47 +121,95 @@ const listIssuesSchema = vb.strictObject({
   ),
 });
 
+function mapIssue(item: GHIssue): {
+  assignees: string[];
+  comments: number;
+  createdAt: string;
+  htmlUrl: string;
+  labels: string[];
+  number: number;
+  state: string;
+  title: string;
+  updatedAt: string;
+  user: string | undefined;
+} {
+  return {
+    assignees: item.assignees.map((user) => user.login),
+    comments: item.comments,
+    createdAt: item.created_at,
+    htmlUrl: item.html_url,
+    labels: item.labels.map((label) => (typeof label === "string" ? label : label.name)),
+    number: item.number,
+    state: item.state,
+    title: item.title,
+    updatedAt: item.updated_at,
+    user: item.user?.login ?? undefined,
+  };
+}
+
 const githubListIssues: ToolDef = {
-  description: "List one bounded page of issues in a repository with optional filters.",
+  description:
+    "List up to one page of issues (pull requests excluded) in a repository with optional filters. " +
+    "Transparently pages through the underlying API to skip pull requests, so results stay accurate " +
+    "even on repositories where recent items are mostly PRs.",
   async execute(raw: unknown, ctx): Promise<ToolResult> {
     const { owner, repo, state, labels, assignee, sort, direction, page, perPage } = vb.parse(
       listIssuesSchema,
       raw,
     );
-    const params = new URLSearchParams({
+    const baseParams = new URLSearchParams({
       direction,
-      page: String(page),
       per_page: String(perPage),
       sort,
       state,
     });
     if (labels !== undefined) {
-      params.set("labels", labels);
+      baseParams.set("labels", labels);
     }
     if (assignee !== undefined) {
-      params.set("assignee", assignee);
+      baseParams.set("assignee", assignee);
     }
 
-    const result = await ghParsePage<GHIssue[]>(
-      ctx,
-      "GET",
-      `/repos/${owner}/${repo}/issues?${String(params)}`,
-    );
-    const issues = result.data
-      .filter((item) => item.pull_request === undefined)
-      .map((item) => ({
-        assignees: item.assignees.map((user) => user.login),
-        comments: item.comments,
-        createdAt: item.created_at,
-        htmlUrl: item.html_url,
-        labels: item.labels.map((label) => (typeof label === "string" ? label : label.name)),
-        number: item.number,
-        state: item.state,
-        title: item.title,
-        updatedAt: item.updated_at,
-        user: item.user?.login ?? undefined,
-      }));
-    return { hasMore: result.hasMore, issues, page, success: true };
+    // The REST list-issues endpoint returns pull requests too, so `hasMore` from the Link
+    // header reflects pre-filter pagination and a page can be short or empty due to PRs.
+    // Re-page until we collect `perPage` real issues (or run out of pages) so callers never
+    // get misleadingly empty or short results on PR-heavy pages.
+    const issues: ReturnType<typeof mapIssue>[] = [];
+    let currentPage = page;
+    let hasMore = false;
+    while (issues.length < perPage) {
+      const pageParams = new URLSearchParams(baseParams);
+      pageParams.set("page", String(currentPage));
+      const { data, hasMore: pageHasMore } = await ghParsePage<GHIssue[]>(
+        ctx,
+        "GET",
+        `/repos/${owner}/${repo}/issues?${String(pageParams)}`,
+      );
+      const mapped = data
+        .filter((item) => item.pull_request === undefined)
+        .map((item) => mapIssue(item));
+      issues.push(...mapped);
+      hasMore = pageHasMore;
+
+      if (!pageHasMore) {
+        break; // Underlying pages exhausted.
+      }
+      if (mapped.length < perPage) {
+        currentPage += 1; // Page came back short because of PR filtering; keep going.
+        continue;
+      }
+      break; // Page was already full of real issues.
+    }
+
+    // Trim to the requested page size. If a single page came back with more real issues than
+    // `perPage` (possible when earlier pages were short but a later one was full), the leftover
+    // issues we sliced away still count as "more" for the caller.
+    const returned = issues.slice(0, perPage);
+    if (issues.length > perPage) {
+      hasMore = true;
+    }
+
+    return { hasMore, issues: returned, page, success: true };
   },
   name: "github-list-issues",
   parameters: listIssuesSchema,
