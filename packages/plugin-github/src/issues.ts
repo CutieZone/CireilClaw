@@ -175,9 +175,10 @@ const githubListIssues: ToolDef = {
     // Re-page until we collect `perPage` real issues (or run out of pages) so callers never
     // get misleadingly empty or short results on PR-heavy pages.
     const issues: ReturnType<typeof mapIssue>[] = [];
-    let currentPage = page;
+    const endIndex = page * perPage;
+    let currentPage = 1;
     let hasMore = false;
-    while (issues.length < perPage) {
+    while (issues.length < endIndex) {
       const pageParams = new URLSearchParams(baseParams);
       pageParams.set("page", String(currentPage));
       const { data, hasMore: pageHasMore } = await ghParsePage<GHIssue[]>(
@@ -194,20 +195,14 @@ const githubListIssues: ToolDef = {
       if (!pageHasMore) {
         break; // Underlying pages exhausted.
       }
-      if (mapped.length < perPage) {
-        currentPage += 1; // Page came back short because of PR filtering; keep going.
-        continue;
-      }
-      break; // Page was already full of real issues.
+      currentPage += 1;
     }
 
-    // Trim to the requested page size. If a single page came back with more real issues than
-    // `perPage` (possible when earlier pages were short but a later one was full), the leftover
-    // issues we sliced away still count as "more" for the caller.
-    const returned = issues.slice(0, perPage);
-    if (issues.length > perPage) {
-      hasMore = true;
-    }
+    // Trim the accumulated issue list to the requested page. Any collected issues beyond the
+    // requested end still count as more, even when the underlying API has no next page.
+    const startIndex = (page - 1) * perPage;
+    const returned = issues.slice(startIndex, endIndex);
+    hasMore ||= issues.length > endIndex;
 
     return { hasMore, issues: returned, page, success: true };
   },
