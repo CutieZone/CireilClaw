@@ -40,24 +40,33 @@ describe("read tool media handling", () => {
     vi.clearAllMocks();
   });
 
-  it("queues an MP4 as video bytes instead of decoding it as text", async () => {
-    const bytes = Buffer.from([0, 1, 2, 3, 4]);
-    mockFsPromises.stat.mockResolvedValue({ size: bytes.length });
-    mockFsPromises.readFile.mockResolvedValue(bytes);
-    const ctx = makeToolContext();
+  it.each([
+    { extension: ".m4v", mediaType: "video/mp4" },
+    { extension: ".mov", mediaType: "video/quicktime" },
+    { extension: ".mp4", mediaType: "video/mp4" },
+    { extension: ".webm", mediaType: "video/webm" },
+  ])(
+    "queues $extension as video bytes instead of decoding it as text",
+    async ({ extension, mediaType }) => {
+      const bytes = Buffer.from([0, 1, 2, 3, 4]);
+      const filePath = `/workspace/clip${extension}`;
+      mockFsPromises.stat.mockResolvedValue({ size: bytes.length });
+      mockFsPromises.readFile.mockResolvedValue(bytes);
+      const ctx = makeToolContext();
 
-    const result = await read.execute({ path: "/workspace/clip.mp4" }, ctx);
+      const result = await read.execute({ path: filePath }, ctx);
 
-    expect(result).toEqual({
-      mediaType: "video/mp4",
-      path: "/workspace/clip.mp4",
-      size: bytes.length,
-      success: true,
-      type: "video",
-    });
-    expect(ctx.addVideo).toHaveBeenCalledWith(bytes, "video/mp4");
-    expect(mockFsPromises.readFile).toHaveBeenCalledWith("/real/path");
-  });
+      expect(result).toEqual({
+        mediaType,
+        path: filePath,
+        size: bytes.length,
+        success: true,
+        type: "video",
+      });
+      expect(ctx.addVideo).toHaveBeenCalledWith(bytes, mediaType);
+      expect(mockFsPromises.readFile).toHaveBeenCalledWith("/real/path");
+    },
+  );
 
   it("rejects MP4 files over the video size limit", async () => {
     mockFsPromises.stat.mockResolvedValue({ size: VIDEO_SIZE_CAP + 1 });

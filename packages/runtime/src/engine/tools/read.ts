@@ -53,13 +53,13 @@ export const read: ToolDef = {
   description:
     "Read the full contents of a file at the given sandbox path and return it as text.\n\n" +
     "Image files are automatically converted to WebP and injected into your next turn as a visual — you will see the image, not raw bytes.\n\n" +
-    "MP4 files are injected into your next turn as video — you will see the video, not raw bytes.\n\n" +
+    "Supported video files are injected into your next turn as video — you will see the video, not raw bytes.\n\n" +
     "Binary files are rejected instead of being decoded as text.\n\n" +
     "Allowed path roots: /workspace/, /memories/, /blocks/, /skills/.\n" +
     "Note that paths used here *must* be absolute.\n" +
     "When to use:\n" +
     "- Inspecting or reviewing file contents before editing.\n" +
-    "- Viewing images or MP4 videos the user has placed in the workspace.\n\n" +
+    "- Viewing images or supported video files the user has placed in the workspace.\n\n" +
     "When NOT to use:\n" +
     "- To load a skill by its slug — use `read-skill` instead.\n" +
     "- For files you plan to edit repeatedly — use `open-file` to pin them to context.",

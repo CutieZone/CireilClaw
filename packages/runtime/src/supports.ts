@@ -40,7 +40,10 @@ const IMAGE_EXT_TO_MEDIA_TYPE: Record<string, string> = {
 // File extensions recognised as videos and their corresponding MIME types.
 // Used by the `read` tool to detect videos on disk.
 const VIDEO_EXT_TO_MEDIA_TYPE: Record<string, string> = {
+  ".m4v": "video/mp4",
+  ".mov": "video/quicktime",
   ".mp4": "video/mp4",
+  ".webm": "video/webm",
 };
 
 export {
