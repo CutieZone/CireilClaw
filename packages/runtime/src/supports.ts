@@ -37,5 +37,16 @@ const IMAGE_EXT_TO_MEDIA_TYPE: Record<string, string> = {
   ".tiff": "image/tiff",
   ".webp": "image/webp",
 };
+// File extensions recognised as videos and their corresponding MIME types.
+// Used by the `read` tool to detect videos on disk.
+const VIDEO_EXT_TO_MEDIA_TYPE: Record<string, string> = {
+  ".mp4": "video/mp4",
+};
 
-export { SUPPORTED_IMAGE_TYPES, SUPPORTED_VIDEO_TYPES, VIDEO_SIZE_CAP, IMAGE_EXT_TO_MEDIA_TYPE };
+export {
+  SUPPORTED_IMAGE_TYPES,
+  SUPPORTED_VIDEO_TYPES,
+  VIDEO_EXT_TO_MEDIA_TYPE,
+  VIDEO_SIZE_CAP,
+  IMAGE_EXT_TO_MEDIA_TYPE,
+};
